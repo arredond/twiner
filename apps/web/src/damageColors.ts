@@ -19,3 +19,6 @@ export type DamageState = (typeof DAMAGE_STATES)[number];
 // own separate "Load debris on map" toggle, docs/merisur.md §5), not a
 // restatement of it.
 export const DEBRIS_COLOR = "#5c4433";
+
+// QAFI active faults: dashed on the map, solid and thicker when selected.
+export const FAULT_COLOR = "#7209b7";

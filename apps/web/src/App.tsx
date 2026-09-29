@@ -109,6 +109,7 @@ export default function App() {
   // infrastructure (ADR-0025) off until asked for. Both of the latter are
   // fetched per scenario either way.
   const [showDamage, setShowDamage] = useState(true);
+  const [showFaults, setShowFaults] = useState(true);
   const [intensityBands, setIntensityBands] = useState<IntensityBands | null>(null);
   const [showIntensity, setShowIntensity] = useState(false);
   const [infrastructure, setInfrastructure] = useState<InfrastructureResult[] | null>(null);
@@ -250,6 +251,8 @@ export default function App() {
     setResult(null);
     setSelectedFaultId(null);
     setError(null);
+    // The legend opened with the run; it closes with it.
+    setLegendOpen(false);
   }
 
   // Sidebar asset click: switch its category's layer on (the legend shows
@@ -295,6 +298,7 @@ export default function App() {
           onMapClick={handleMapClick}
           runPopup={runPopup}
           onRunPopupClose={(key) => setPending((p) => (p?.key === key ? null : p))}
+          showFaults={showFaults}
           showDamage={showDamage}
           intensityBands={intensityBands}
           showIntensity={showIntensity}
@@ -345,7 +349,9 @@ export default function App() {
           </label>
           <p style={{ fontSize: "0.75rem", color: "#666", margin: "0.4rem 0 0" }}>
             {mode === "automatic"
-              ? "Click a fault (dashed purple line) to run its maximum-magnitude earthquake."
+              ? showFaults
+                ? "Click a fault (dashed purple line) to run its maximum-magnitude earthquake."
+                : "Turn faults on in the legend to pick one."
               : "Click anywhere on the map to place an earthquake."}
           </p>
           {isRunning && <p style={{ fontSize: "0.8rem", margin: "0.4rem 0 0" }}>Running scenario…</p>}
@@ -370,6 +376,8 @@ export default function App() {
           <summary style={{ cursor: "pointer", fontWeight: 600 }}>Legend</summary>
           <div style={{ marginTop: "0.5rem" }}>
             <DamageLegend
+              showFaults={showFaults}
+              onShowFaultsChange={setShowFaults}
               damageStatus={isRunning ? "loading" : result ? "ready" : "idle"}
               showDamage={showDamage}
               onShowDamageChange={setShowDamage}

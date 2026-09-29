@@ -1,4 +1,4 @@
-import { DAMAGE_COLORS, DAMAGE_STATES, DEBRIS_COLOR } from "../damageColors";
+import { DAMAGE_COLORS, DAMAGE_STATES, DEBRIS_COLOR, FAULT_COLOR } from "../damageColors";
 import {
   INFRA_CATEGORIES,
   INFRA_CATEGORY_KEYS,
@@ -66,6 +66,10 @@ function LayerSection({
 }
 
 export interface DamageLegendProps {
+  // QAFI active faults: on by default; Automatic mode runs a scenario by
+  // clicking one.
+  showFaults: boolean;
+  onShowFaultsChange: (show: boolean) => void;
   // Buildings, the municipality/section choropleths and debris: one
   // section and one toggle, since they're all the same result.
   damageStatus?: LayerStatus;
@@ -84,6 +88,8 @@ export interface DamageLegendProps {
 }
 
 export function DamageLegend({
+  showFaults,
+  onShowFaultsChange,
   damageStatus = "idle",
   showDamage,
   onShowDamageChange,
@@ -99,6 +105,19 @@ export function DamageLegend({
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem", minWidth: "13.5rem" }}>
+      <LayerSection
+        title="Faults"
+        status="idle"
+        toggle={<Switch label="Show faults" checked={showFaults} onChange={onShowFaultsChange} />}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", opacity: showFaults ? 1 : 0.4 }}>
+          {/* The map's own dash pattern (2 on, 1 off at width 2). */}
+          <svg width="0.9rem" height="0.9rem" viewBox="0 0 18 18" aria-hidden style={{ flex: "none" }}>
+            <line x1="0" y1="9" x2="18" y2="9" stroke={FAULT_COLOR} strokeWidth="3" strokeDasharray="6 3" />
+          </svg>
+          <span>Active fault (QAFI)</span>
+        </div>
+      </LayerSection>
       <LayerSection
         title="Damage"
         status={damageStatus}

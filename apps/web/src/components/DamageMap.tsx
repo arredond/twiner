@@ -6,7 +6,7 @@ import maplibreWorkerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?worker&ur
 import type { Feature, FeatureCollection, Geometry } from "geojson";
 import { Protocol } from "pmtiles";
 import "maplibre-gl/dist/maplibre-gl.css";
-import { DAMAGE_COLORS, DAMAGE_STATES, DEBRIS_COLOR } from "../damageColors";
+import { DAMAGE_COLORS, DAMAGE_STATES, DEBRIS_COLOR, FAULT_COLOR } from "../damageColors";
 import { staticDataUrl } from "../staticData";
 import { impactRows, meanSeverity } from "../impactFormat";
 import { escapeHtml, renderProbabilityBarHtml } from "../popupHtml";
@@ -260,6 +260,9 @@ interface Props {
   // close, so App must only clear the popup whose key matches.
   runPopup: { key: number; lat: number; lon: number; content: ReactNode } | null;
   onRunPopupClose: (key: number) => void;
+  // The legend's faults toggle: off hides the fault lines (so Automatic
+  // mode has nothing to click until they're back).
+  showFaults: boolean;
   // The legend's damage toggle: off hides the municipality/section
   // choropleths and debris and draws buildings uncoloured.
   showDamage: boolean;
@@ -637,6 +640,7 @@ export function DamageMap({
   onMapClick,
   runPopup,
   onRunPopupClose,
+  showFaults,
   showDamage,
   intensityBands,
   showIntensity,
@@ -845,14 +849,14 @@ export function DamageMap({
         id: FAULTS_LAYER_ID,
         type: "line",
         source: FAULTS_SOURCE_ID,
-        paint: { "line-color": "#7209b7", "line-width": 2, "line-dasharray": [2, 1] },
+        paint: { "line-color": FAULT_COLOR, "line-width": 2, "line-dasharray": [2, 1] },
       });
       map.addLayer({
         id: FAULTS_SELECTED_LAYER_ID,
         type: "line",
         source: FAULTS_SOURCE_ID,
         filter: ["==", ["get", "fault_id"], "__none__"],
-        paint: { "line-color": "#7209b7", "line-width": 4 },
+        paint: { "line-color": FAULT_COLOR, "line-width": 4 },
       });
 
       // Automatic mode: hovering a fault names it; clicking opens its run
@@ -1441,6 +1445,18 @@ export function DamageMap({
     if (!map || !mapLoadedRef.current) return;
     applyDamageLayers(map);
   }, [showDamage]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    const apply = () => {
+      for (const layerId of [FAULTS_LAYER_ID, FAULTS_SELECTED_LAYER_ID]) {
+        map.setLayoutProperty(layerId, "visibility", showFaults ? "visible" : "none");
+      }
+    };
+    if (mapLoadedRef.current) apply();
+    else map.once("load", apply);
+  }, [showFaults]);
 
   // Sidebar asset pick: fly there (at least building zoom, so its building
   // and shape show) and open the same popup a map click would.
