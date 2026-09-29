@@ -4,7 +4,8 @@ Thin adapter only (see docs/decisions/0001-compute-and-iac.md) -- all
 domain logic lives in engine.py/rupture.py/ground_motion.py/damage.py/
 faults.py/building_lookup.py, shared with the local dev server in
 local.py. Mirrors local.py's five routes (`/scenarios/manual`, `/faults`,
-`/scenarios/fault`, `/buildings/{id}`, `/warmup`) plus `/health`.
+`/scenarios/fault`, `/buildings/{id}`, `/warmup`) plus `/health` and the
+`/results/{id}/...` reads.
 
 A Lambda Function URL has no *routing rules* the way API Gateway does (no
 per-route Lambda mapping, no path-parameter extraction), but the event
@@ -79,6 +80,9 @@ def handler(event: dict, context) -> dict:
             body = json.loads(event.get("body") or "{}")
             return _manual_scenario(body)
 
+        artifact_route = _ARTIFACT_ROUTE.fullmatch(path)
+        if method == "GET" and artifact_route:
+            return _artifact_results(artifact_route["scenario_id"], artifact_route["kind"], query)
         section_route = _SECTION_ROUTE.fullmatch(path)
         if method == "GET" and section_route:
             return _section_results(section_route["scenario_id"], section_route["kind"], query)
@@ -95,6 +99,30 @@ def handler(event: dict, context) -> dict:
 _SECTION_ROUTE = re.compile(
     r"/results/(?P<scenario_id>[^/]+)/(?P<kind>section_stats|section_severity)"
 )
+
+
+_ARTIFACT_ROUTE = re.compile(r"/results/(?P<scenario_id>[^/]+)/(?P<kind>infrastructure|intensity)")
+
+
+def _artifact_results(scenario_id: str, kind: str, query: dict) -> dict:
+    """Mirrors local.py's GET /results/{id}/infrastructure and
+    /results/{id}/intensity (ADR-0025)."""
+    if RESULTS_BUCKET is None:
+        return _response(404, {"error": "no results bucket configured"})
+    from tiles.results_store import read_artifact
+
+    from .results_store import INFRASTRUCTURE_FILE, INTENSITY_FILE
+
+    filename = INFRASTRUCTURE_FILE if kind == "infrastructure" else INTENSITY_FILE
+    body = read_artifact(RESULTS_BUCKET, scenario_id, filename)
+    if body is None:
+        return _response(404, {"error": f"no {kind} for {scenario_id!r}"})
+    municipality_code = query.get("municipality_code")
+    if kind == "infrastructure" and municipality_code is not None:
+        assert isinstance(body, list)
+        body = [r for r in body if r["municipality_code"] == municipality_code]
+    assert isinstance(body, (dict, list))
+    return _response(200, body)
 
 
 def _section_results(scenario_id: str, kind: str, query: dict) -> dict:
@@ -260,6 +288,7 @@ def _run_and_respond(
     t0 = time.monotonic()
     from .engine import summarize_scenario
     from .ground_motion import estimate_significant_distance_km
+    from .infrastructure import summarize_assets, summarize_infrastructure
 
     t_import = time.monotonic()
     level_params = resolve_probability_level(probability_level)
@@ -274,6 +303,11 @@ def _run_and_respond(
         max_distance_km=radius_km,
         sigma_multiplier=level_params.sigma_multiplier,
         damage_percentile=level_params.damage_percentile,
+    )
+    # ADR-0025: after the buildings, since facilities take their
+    # building's damage state.
+    infrastructure, bands = summarize_infrastructure(
+        rupture, radius_km, level_params.sigma_multiplier, summary.shipped
     )
     t_compute = time.monotonic()
     municipality_stats = summary.areas.municipality_stats()
@@ -298,6 +332,9 @@ def _run_and_respond(
         "n_evaluated": summary.n_evaluated,
         "n_damaged": summary.n_damaged,
         "municipality_stats": municipality_stats,
+        "infrastructure_summary": (
+            summarize_assets(infrastructure) if infrastructure is not None else None
+        ),
     }
 
     if RESULTS_BUCKET is not None:
@@ -314,6 +351,7 @@ def _run_and_respond(
         # pandas/pyarrow to fit Lambda's 250MB zip-package limit.
         from tiles.results_store import (
             init_scenario,
+            write_artifact,
             write_buildings,
             write_municipality_stats,
             write_response,
@@ -324,6 +362,11 @@ def _run_and_respond(
         write_municipality_stats(RESULTS_BUCKET, scenario_id, municipality_stats)
         write_section_stats(RESULTS_BUCKET, scenario_id, summary.areas.section_stats())
         write_buildings(RESULTS_BUCKET, scenario_id, stored_results_columns(summary.shipped))
+        from .results_store import INFRASTRUCTURE_FILE, INTENSITY_FILE
+
+        write_artifact(RESULTS_BUCKET, scenario_id, INTENSITY_FILE, bands)
+        if infrastructure is not None:
+            write_artifact(RESULTS_BUCKET, scenario_id, INFRASTRUCTURE_FILE, infrastructure)
         # Last: marks this id as a complete, reusable result (the cache).
         write_response(RESULTS_BUCKET, scenario_id, payload)
 

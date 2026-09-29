@@ -87,6 +87,23 @@ def _site_batches(
     (measured on the 2026-09 cache-warm sweep, 49 of 603 scenarios). Batch
     by batch, peak memory tracks `batch_rows` instead of the building
     count."""
+    lon_lo, lon_hi, lat_lo, lat_hi = site_box(rupture, max_distance_km)
+    reader = _query_sites(
+        con,
+        buildings_path,
+        exposure_path,
+        (lon_lo, lon_hi, lat_lo, lat_hi),
+        batch_rows,
+    )
+    return iter(reader), (lat_lo + lat_hi) / 2
+
+
+def site_box(rupture: Rupture, max_distance_km: float) -> tuple[float, float, float, float]:
+    """(lon_lo, lon_hi, lat_lo, lat_hi): the box everything a scenario
+    evaluates is drawn from -- buildings (`_site_batches`), and the
+    infrastructure assets and intensity grid (infrastructure.py), so all
+    three agree on what "in range" means.
+    """
     # A simple lat/lon degree bounding box, not a true geodesic radius --
     # cheap to evaluate and generous enough (longitude degrees narrow
     # towards the poles, so this box is always at least as wide as a true
@@ -117,15 +134,7 @@ def _site_batches(
         _KM_PER_DEGREE_LAT * max(0.1, abs(_cos_deg((lat_min + lat_max) / 2)))
     )
 
-    lat_lo, lat_hi = lat_min - lat_pad, lat_max + lat_pad
-    reader = _query_sites(
-        con,
-        buildings_path,
-        exposure_path,
-        (lon_min - lon_pad, lon_max + lon_pad, lat_lo, lat_hi),
-        batch_rows,
-    )
-    return iter(reader), (lat_lo + lat_hi) / 2
+    return (lon_min - lon_pad, lon_max + lon_pad, lat_min - lat_pad, lat_max + lat_pad)
 
 
 def _query_sites(

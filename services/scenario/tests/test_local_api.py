@@ -164,6 +164,23 @@ def data_dir(tmp_path: Path) -> Path:
     exposure.to_parquet(d / "exposure" / "exposure.parquet", index=False)
     fragility.to_parquet(d / "fragility" / "fragility.parquet", index=False)
     faults.to_parquet(d / "faults" / "qafi_faults.parquet")
+    # ADR-0025 critical infrastructure: a hospital on b1 (takes b1's damage
+    # state), a bridge beside it (intensity only), and a school ~430km away,
+    # outside any near scenario's site box (its radius is capped at 300km).
+    (d / "infrastructure").mkdir(parents=True)
+    pd.DataFrame(
+        {
+            "asset_id": [1, 2, 3],
+            "category": ["health", "bridge", "education"],
+            "subtype": ["hospital", "bridge", "school"],
+            "name": ["Test Hospital", None, "Far School"],
+            "lon": [NEAR_LON, NEAR_LON + 0.002, NEAR_LON],
+            "lat": [NEAR_LAT, NEAR_LAT, NEAR_LAT + 3.9],
+            "municipality_code": ["30024", "30024", "02003"],
+            "vs30": [800.0, None, 800.0],
+            "building_id": ["b1", None, None],
+        }
+    ).to_parquet(d / "infrastructure" / "infrastructure_sites.parquet", index=False)
     return d
 
 
@@ -626,3 +643,51 @@ def test_fault_scenario_completes_quickly(client):
         )
     )
     assert resp.status_code == 200
+
+
+def test_scenario_stores_affected_infrastructure(client):
+    body = client.post(
+        "/scenarios/manual",
+        json={"lat": NEAR_LAT, "lon": NEAR_LON, "mag": 6.5, "rake": 20.0},
+    ).json()
+    rows = client.get(f"/results/{body['scenario_id']}/infrastructure").json()
+    by_id = {r["asset_id"]: r for r in rows}
+    # The far school sits outside this scenario's site box.
+    assert set(by_id) == {1, 2}
+    assert body["infrastructure_summary"] == {"health": 1, "bridge": 1}
+    # The hospital reports its building's damage state from this same run;
+    # the bridge has no damage model.
+    b1 = next(b for b in _joined_buildings(body) if b["building_id"] == "b1")
+    assert by_id[1]["damage_state_code"] == b1["damage_state_code"]
+    assert by_id[2]["damage_state_code"] is None
+    assert all(r["intensity"] >= 6.0 for r in rows)
+    one = client.get(
+        f"/results/{body['scenario_id']}/infrastructure", params={"municipality_code": "02003"}
+    ).json()
+    assert one == []
+
+
+def test_scenario_stores_intensity_bands(client):
+    body = client.post(
+        "/scenarios/manual", json={"lat": NEAR_LAT, "lon": NEAR_LON, "mag": 6.5, "rake": 20.0}
+    ).json()
+    bands = client.get(f"/results/{body['scenario_id']}/intensity").json()
+    assert bands["type"] == "FeatureCollection"
+    levels = [f["properties"]["intensity"] for f in bands["features"]]
+    assert levels == sorted(levels) and levels[0] == 4
+
+
+def test_no_infrastructure_data_leaves_buildings_untouched(client, data_dir):
+    # Removed before the first request: the asset table is cached per
+    # process once read.
+    (data_dir / "infrastructure" / "infrastructure_sites.parquet").unlink()
+    body = client.post(
+        "/scenarios/manual", json={"lat": NEAR_LAT, "lon": NEAR_LON, "mag": 6.5, "rake": 20.0}
+    ).json()
+    assert body["infrastructure_summary"] is None
+    # All three fixture buildings (the far one is ~48km out, inside an M6.5
+    # site box), exactly as without ADR-0025.
+    assert body["n_evaluated"] == 3
+    assert client.get(f"/results/{body['scenario_id']}/infrastructure").status_code == 404
+    # Bands don't depend on the asset data.
+    assert client.get(f"/results/{body['scenario_id']}/intensity").status_code == 200

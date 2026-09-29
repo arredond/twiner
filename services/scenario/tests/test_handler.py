@@ -69,6 +69,7 @@ def handler(data_dir: Path, s3: FakeS3, monkeypatch: pytest.MonkeyPatch):  # noq
     monkeypatch.setenv("TWINER_EXPOSURE_PATH", str(data_dir / "exposure/exposure.parquet"))
     monkeypatch.setenv("TWINER_FRAGILITY_PATH", str(data_dir / "fragility/fragility.parquet"))
     monkeypatch.setenv("TWINER_FAULTS_PATH", str(data_dir / "faults/qafi_faults.parquet"))
+    monkeypatch.setenv("TWINER_DATA_DIR", str(data_dir))
     monkeypatch.setenv("TWINER_RESULTS_BUCKET", BUCKET)
     monkeypatch.setenv("AWS_REGION", "eu-south-2")
     monkeypatch.setenv("TWINER_SCENARIO_CACHE", "1")
@@ -142,6 +143,23 @@ def test_fault_scenario_is_computed_once_then_served_from_s3(handler, s3: FakeS3
     assert status == 200
     assert second["cached"] is True
     assert {**second, "cached": False} == first
+
+
+def test_infrastructure_and_intensity_are_served_from_s3(handler):
+    status, body = _call(handler, "/scenarios/fault", {"fault_id": "TEST001"})
+    assert status == 200
+    assert body["infrastructure_summary"] == {"health": 1, "bridge": 1}
+    scenario_id = body["scenario_id"]
+    status, rows = _call(handler, f"/results/{scenario_id}/infrastructure")
+    assert status == 200
+    assert {r["asset_id"] for r in rows} == {1, 2}
+    status, rows = _call(
+        handler, f"/results/{scenario_id}/infrastructure", {"municipality_code": "02003"}
+    )
+    assert (status, rows) == (200, [])
+    status, bands = _call(handler, f"/results/{scenario_id}/intensity")
+    assert status == 200 and bands["type"] == "FeatureCollection"
+    assert _call(handler, "/results/nope/intensity")[0] == 404
 
 
 def test_cache_off_recomputes(handler, monkeypatch: pytest.MonkeyPatch):

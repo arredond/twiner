@@ -25,14 +25,19 @@ from .engine import summarize_scenario
 from .faults import faults_payload, get_fault, round_near_point, rupture_anchor
 from .ground_motion import estimate_significant_distance_km
 from .impact import mean_severity
+from .infrastructure import summarize_assets, summarize_infrastructure
 from .probability_level import ProbabilityLevel, resolve_probability_level
 from .response import evaluated_region, stored_results_columns
 from .results_store import (
+    INFRASTRUCTURE_FILE,
+    INTENSITY_FILE,
     init_scenario,
+    read_artifact,
     read_municipality_stats,
     read_response,
     read_section_stats,
     read_status,
+    write_artifact,
     write_buildings,
     write_municipality_stats,
     write_response,
@@ -191,6 +196,14 @@ def _run_and_serialize(rupture: Rupture, probability_level: str, scenario_id: st
         # Written for the tile joins (buildings + debris, ADR-0019), not
         # returned -- the frontend never needs the per-building list.
         write_buildings(scenario_id, stored_results_columns(summary.shipped))
+        # Critical infrastructure + intensity bands (ADR-0025): after the
+        # buildings, since facilities take their building's damage state.
+        infrastructure, bands = summarize_infrastructure(
+            rupture, radius_km, level_params.sigma_multiplier, summary.shipped
+        )
+        write_artifact(scenario_id, INTENSITY_FILE, bands)
+        if infrastructure is not None:
+            write_artifact(scenario_id, INFRASTRUCTURE_FILE, infrastructure)
         # Fire-and-forget: pays each pool worker's cold-cache cost for this
         # scenario now, in the background, rather than on the user's first
         # tile request (see warm_cache's own docstring for why this is
@@ -234,6 +247,11 @@ def _run_and_serialize(rupture: Rupture, probability_level: str, scenario_id: st
         "n_evaluated": n_evaluated,
         "n_damaged": n_damaged,
         "municipality_stats": municipality_stats,
+        # Affected assets by category; null when no infrastructure data is
+        # deployed (the rows: /results/{id}/infrastructure).
+        "infrastructure_summary": (
+            summarize_assets(infrastructure) if infrastructure is not None else None
+        ),
     }
     # Stored (without the per-request fields added below) whether or not
     # the cache is on -- see results_store.py's docstring.
@@ -388,6 +406,30 @@ def scenario_section_severity(scenario_id: str) -> dict[str, float]:
     if stats is None:
         raise HTTPException(status_code=404, detail=f"scenario_id {scenario_id!r} not found")
     return {s["section_code"]: round(mean_severity(s["counts"]), 3) for s in stats}
+
+
+@app.get("/results/{scenario_id}/infrastructure")
+def scenario_infrastructure(scenario_id: str, municipality_code: str | None = None) -> list[dict]:
+    """Affected critical-infrastructure assets (ADR-0025), most intense
+    first: all of them (the map colours them), or one municipality's (the
+    sidebar)."""
+    rows = read_artifact(scenario_id, INFRASTRUCTURE_FILE)
+    if rows is None:
+        raise HTTPException(status_code=404, detail=f"no infrastructure for {scenario_id!r}")
+    assert isinstance(rows, list)
+    if municipality_code is not None:
+        rows = [r for r in rows if r["municipality_code"] == municipality_code]
+    return rows
+
+
+@app.get("/results/{scenario_id}/intensity")
+def scenario_intensity(scenario_id: str) -> dict:
+    """Intensity bands GeoJSON (ADR-0025) -- the map's bands layer."""
+    bands = read_artifact(scenario_id, INTENSITY_FILE)
+    if bands is None:
+        raise HTTPException(status_code=404, detail=f"no intensity for {scenario_id!r}")
+    assert isinstance(bands, dict)
+    return bands
 
 
 @app.get("/tiles/{scenario_id}/{z}/{x}/{y}.mvt")

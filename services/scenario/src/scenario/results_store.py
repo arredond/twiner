@@ -88,6 +88,25 @@ def read_section_stats(scenario_id: str) -> list[dict] | None:
     return json.loads(gzip.decompress(path.read_bytes()))
 
 
+# Scenario artifacts stored as gzipped JSON and served as-is by their own
+# routes (ADR-0025): the affected infrastructure rows and the intensity
+# bands. Same file names in the cloud store (tiles.results_store).
+INFRASTRUCTURE_FILE = "infrastructure.json.gz"
+INTENSITY_FILE = "intensity.geojson.gz"
+
+
+def write_artifact(scenario_id: str, filename: str, obj: object) -> None:
+    path = scenario_dir(scenario_id) / filename
+    path.write_bytes(gzip.compress(json.dumps(obj).encode("utf-8")))
+
+
+def read_artifact(scenario_id: str, filename: str) -> object | None:
+    path = scenario_dir(scenario_id) / filename
+    if not path.exists():
+        return None
+    return json.loads(gzip.decompress(path.read_bytes()))
+
+
 def write_buildings(scenario_id: str, columns: Mapping[str, Any]) -> None:
     """`columns`: the listed buildings, one column per
     `scenario_results.COLUMNS` entry, already sorted and unique by

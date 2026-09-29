@@ -99,6 +99,27 @@ def read_section_stats(bucket: str, scenario_id: str) -> list[dict] | None:
     return json.loads(gzip.decompress(obj["Body"].read()))
 
 
+def write_artifact(bucket: str, scenario_id: str, filename: str, obj: object) -> None:
+    """A gzipped JSON artifact served as-is by its own route (ADR-0025:
+    `infrastructure.json.gz`, `intensity.geojson.gz`) -- same files as the
+    local store's `write_artifact`."""
+    _client().put_object(
+        Bucket=bucket,
+        Key=_key(scenario_id, filename),
+        Body=gzip.compress(json.dumps(obj).encode("utf-8")),
+        ContentType="application/gzip",
+    )
+
+
+def read_artifact(bucket: str, scenario_id: str, filename: str) -> object | None:
+    s3 = _client()
+    try:
+        obj = s3.get_object(Bucket=bucket, Key=_key(scenario_id, filename))
+    except s3.exceptions.NoSuchKey:
+        return None
+    return json.loads(gzip.decompress(obj["Body"].read()))
+
+
 def write_buildings(bucket: str, scenario_id: str, columns: Mapping[str, Any]) -> None:
     """`columns`: the listed buildings, one column per
     `scenario_results.COLUMNS` entry, already sorted and unique by

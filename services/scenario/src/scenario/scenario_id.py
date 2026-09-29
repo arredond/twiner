@@ -29,7 +29,7 @@ import os
 # Bump on any change that could alter a scenario's result or response
 # shape (see module docstring). A plain counter, not a git sha: a sha
 # would bust the cache on every unrelated commit (docs, frontend, infra).
-API_VERSION = "5"
+API_VERSION = "6"
 # History: 2 -- response drops `buildings`, adds `n_damaged` (ADR-0019).
 #          3 -- streamed evaluation on one fixed ground-motion grid per
 #               scenario (ADR-0020); cell values shift slightly.
@@ -38,6 +38,8 @@ API_VERSION = "5"
 #          5 -- municipality_stats gain census-section impact figures
 #               (population, cost, debris...), plus section_stats.json.gz
 #               (ADR-0024).
+#          6 -- response gains `infrastructure_summary`; per-scenario
+#               infrastructure.json.gz + intensity.geojson.gz (ADR-0025).
 
 _TRUTHY = {"1", "true", "yes", "on"}
 

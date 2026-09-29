@@ -2227,6 +2227,7 @@ name = "twiner-scenario"
 version = "0.1.0"
 source = { editable = "services/scenario" }
 dependencies = [
+    { name = "contourpy" },
     { name = "duckdb" },
     { name = "fastapi" },
     { name = "fiona" },
@@ -2240,6 +2241,7 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
+    { name = "contourpy", specifier = ">=1.3" },
     { name = "duckdb", specifier = ">=1.5" },
     { name = "fastapi", specifier = ">=0.115" },
     { name = "fiona", specifier = ">=1.9" },
