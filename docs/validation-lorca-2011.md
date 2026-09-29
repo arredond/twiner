@@ -556,3 +556,76 @@ vulnerability-curve methodology (specifically, semi-empirical/
 damage-calibrated vs. analytical/globally-averaged) probably is. No code
 changes made here, per explicit instruction — this is research to sharpen
 the UPM asks, not an implementation task.
+
+## 12. Macroseismic intensity (ADR-0025) — notes for tuning, not done
+
+ADR-0025 added an estimated EMS-98 intensity: per critical-infrastructure
+asset, and as the map's intensity bands. It's Worden et al. (2012)'s
+PGV → MMI conversion (ShakeMap's WGRW12, without its magnitude/distance
+terms) applied to the Akkar et al. (2014) PGV. The only direct check so far
+is this event: **IGN reports a maximum intensity of VII (EMS-98) for the
+Mw 5.1 main shock** ([IGN](https://www.ign.es/web/decimo-aniversario-lorca)).
+
+Lorca town (37.677°N, 1.700°W, 3.5 km from the §1 epicentre), the §2
+rupture (Mw 5.2 point source, rake 44), both WGRW12 equations, with and
+without their magnitude/distance ("M/R") terms (distance clipped to 10 km,
+as ShakeMap does):
+
+| Vs30 | Level | PGA (g) | PGV (cm/s) | From PGV | PGV + M/R | From PGA | PGA + M/R |
+|---|---|---|---|---|---|---|---|
+| 800 | median | 0.147 | 4.8 | 5.0 | 5.0 | 6.4 | 5.6 |
+| 800 | +1σ | 0.299 | 9.5 | 6.0 | 5.9 | 7.5 | 6.8 |
+| 383 (town, ESRM20) | median | 0.180 | 7.6 | **5.7** | 5.6 | 6.7 | 5.9 |
+| 383 (town, ESRM20) | +1σ | 0.367 | 15.1 | **6.6** | 6.6 | 7.9 | 7.1 |
+
+Bold is what the app shows today ("high" is the median; "low" and "very low"
+are +1σ, `probability_level.py`).
+
+**Findings:**
+- **At the median, the ground motion is the problem.** As §10.5 already
+  found, this event sits at about +1σ on this GMPE. No conversion turns a
+  0.18 g median into VII.
+- **At +1σ, where the ground motion matches the record** (0.367 g vs the
+  ~0.36 g recorded near Lorca), **the conversion is the problem.** From PGV
+  it's 6.6, about half a degree short of VII. From PGA it's 7.9, about one
+  degree over. PGA with WGRW12's own M/R terms gives 7.1, the closest.
+- **Why they disagree:** a small, very shallow event like this one is rich
+  in high frequencies, so PGA is high relative to PGV. The PGV equation
+  reads it as weaker shaking than the PGA equation does. WGRW12's M/R terms
+  exist to correct exactly this kind of magnitude dependence.
+- **The evidence is thin.** It's one event, one number (the maximum
+  intensity), and one place. Choosing a conversion to hit VII here would be
+  fitting noise.
+
+**Options for tuning, in the order worth trying:**
+1. **Validate against the full intensity field, not the maximum.** IGN
+   publishes macroseismic intensity data points per locality for Spanish
+   events. Compute our intensity at each one for Lorca 2011 and for a few
+   other well-observed events, e.g. Mula 1999, Bullas 2002, Torreperogil
+   2012–13 and the 2021 Granada (Santa Fe) series. Look at bias and scatter
+   against distance, per conversion and per probability level. That makes
+   the rest of this list measurable instead of a judgment call.
+2. **Use WGRW12 with its M/R terms**, for PGA or both, instead of the plain
+   form. It's the smallest change: the coefficients are already in the
+   ShakeMap source the current constants were checked against. The rupture
+   distance is available per asset and per grid cell.
+3. **Combine PGA- and PGV-based estimates** (e.g. a weighted mean) rather
+   than PGV alone. Pick the weights from option 1's residuals, not from
+   this table.
+4. **Use a European-calibrated conversion** (ground-motion-to-intensity
+   equation) where the WGRW12 equations, fitted to California, may not
+   transfer. Candidates to evaluate: Caprio et al. (2015, global), Faenza &
+   Michelini (2010/2011, Italy, MCS scale), and any Iberian-specific
+   equation found in the literature.
+5. **Revisit the median ground motion itself.** This is the same near-field
+   shortfall §10.5 describes for buildings. ESHM20's backbone GMPE (Kotha et
+   al. 2020) is the natural comparison. That's a scenario-wide change,
+   because buildings would move too, so it belongs with the GMPE work, not
+   the intensity conversion.
+
+**What a change would move:** asset intensities and the bands shift
+together, since both use `mmi_from_pgv` in
+`services/scenario/infrastructure.py`. So does the "affected" cut at VI
+(`AFFECTED_INTENSITY`), so the counts of affected infrastructure change
+with it. Building damage doesn't depend on any of this, and neither does
+facility damage (the building's own result).

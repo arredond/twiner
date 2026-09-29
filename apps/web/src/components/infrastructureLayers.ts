@@ -1,5 +1,5 @@
 import type { ExpressionSpecification, FilterSpecification, GeoJSONSource, Map as MapLibreMap } from "maplibre-gl";
-import { DAMAGE_COLORS, DAMAGE_STATES } from "../damageColors";
+import { DAMAGE_STATES } from "../damageColors";
 import {
   INFRA_CATEGORIES,
   fmtIntensity,
@@ -7,6 +7,7 @@ import {
   subtypeLabel,
 } from "../infrastructure";
 import type { InfrastructureResult, IntensityBands } from "../scenarioApi";
+import { escapeHtml, renderProbabilityBarHtml } from "../popupHtml";
 import { staticDataUrl } from "../staticData";
 
 // Critical infrastructure and intensity bands on the map (ADR-0025). Kept
@@ -253,9 +254,11 @@ export function renderInfrastructurePopupHtml(
   if (result) {
     rows.push(["Estimated intensity", `${fmtIntensity(result.intensity)} EMS-98`]);
     if (result.damage_state_code !== null) {
+      // Its building's own result: the state it's labelled with and the
+      // whole distribution behind it (the same bar a building popup shows).
       const state = DAMAGE_STATES[result.damage_state_code] ?? "Unknown";
       rows.push(["Building damage", state]);
-      impact = `<div style="height:4px;margin-top:4px;background:${DAMAGE_COLORS[state]}"></div>`;
+      if (result.damage_probs) impact = renderProbabilityBarHtml(result.damage_probs);
     }
   } else if (scenario) {
     rows.push([
@@ -272,12 +275,4 @@ export function renderInfrastructurePopupHtml(
     impact +
     `<div style="font-size:0.7rem;color:#888;margin-top:0.3rem">Source: IGN Base Topográfica Nacional</div>`
   );
-}
-
-function escapeHtml(value: unknown): string {
-  return String(value)
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;");
 }

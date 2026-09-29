@@ -1,14 +1,7 @@
 import { useMemo, useState } from "react";
 import { DAMAGE_COLORS, DAMAGE_STATES } from "../damageColors";
 import { fmtInt, fmtMeur, impactRows, meanSeverity } from "../impactFormat";
-import {
-  INFRA_CATEGORIES,
-  INTENSITY_COLORS,
-  categoryLabel,
-  countByCategory,
-  fmtIntensity,
-  subtypeLabel,
-} from "../infrastructure";
+import { INFRA_CATEGORIES, INTENSITY_COLORS, fmtIntensity, subtypeLabel } from "../infrastructure";
 import type { AreaImpact, InfrastructureResult, MunicipalityStats, SectionStats } from "../scenarioApi";
 
 // Right-hand scenario panel (ADR-0024): shown while there's a result, lists
@@ -33,6 +26,10 @@ interface Props {
   // This scenario's affected critical infrastructure (ADR-0025), most
   // intense first; null while loading or with no infrastructure data.
   infrastructure: InfrastructureResult[] | null;
+  // The asset last picked from the list (highlighted), and picking one:
+  // App zooms the map to it and switches its layer on.
+  focusedAssetId: number | null;
+  onSelectAsset: (asset: InfrastructureResult) => void;
   // Clears the scenario (App.tsx), not just hides the panel.
   onClose: () => void;
 }
@@ -52,6 +49,8 @@ export function ImpactSidebar({
   onSelectMunicipality,
   onSelectSection,
   infrastructure,
+  focusedAssetId,
+  onSelectAsset,
   onClose,
 }: Props) {
   const [limit, setLimit] = useState(PAGE_SIZE);
@@ -75,7 +74,6 @@ export function ImpactSidebar({
   );
   const totals = useMemo(() => sumImpact(affected), [affected]);
   const sortedSections = useMemo(() => (sections ? [...sections].sort(bySeverity) : null), [sections]);
-  const infraCounts = useMemo(() => (infrastructure ? countByCategory(infrastructure) : null), [infrastructure]);
   const municipalityInfrastructure = useMemo(
     () =>
       selectedMunicipality && infrastructure
@@ -122,14 +120,7 @@ export function ImpactSidebar({
               : `${fmtInt(affected.length)} municipalities affected · ${fmtInt(totals.affected_population)} residents affected, ${fmtInt(totals.displaced_population)} displaced · ${fmtMeur(totals.cost_meur)} · ${fmtInt(totals.debris_t)} t debris`}
           </p>
         )}
-        {!selectedMunicipality && infraCounts && infrastructure!.length > 0 && (
-          <p style={{ fontSize: "0.8rem", color: "#555", margin: "0.25rem 0 0" }}>
-            Critical infrastructure affected:{" "}
-            {INFRA_CATEGORIES.filter((c) => infraCounts[c.key])
-              .map((c) => `${fmtInt(infraCounts[c.key])} ${c.label.toLowerCase()}`)
-              .join(" · ")}
-          </p>
-        )}
+
         {(selectedMunicipality ? (sortedSections?.length ?? 0) : affected.length) > 1 && (
           <input
             type="search"
@@ -147,7 +138,12 @@ export function ImpactSidebar({
           <>
             <AreaCard title={selectedMunicipality.name ?? selectedMunicipality.municipality_code} area={selectedMunicipality} emphasized />
             {municipalityInfrastructure && municipalityInfrastructure.length > 0 && (
-              <InfrastructureList rows={municipalityInfrastructure} />
+              <InfrastructureList
+                key={selectedMunicipality.municipality_code}
+                rows={municipalityInfrastructure}
+                focusedAssetId={focusedAssetId}
+                onSelectAsset={onSelectAsset}
+              />
             )}
             <h3 style={{ fontSize: "0.85rem", margin: "0.5rem 0 0" }}>
               Census sections with damage
@@ -173,6 +169,13 @@ export function ImpactSidebar({
           </>
         ) : (
           <>
+            {infrastructure && infrastructure.length > 0 && (
+              <InfrastructureList
+                rows={infrastructure}
+                focusedAssetId={focusedAssetId}
+                onSelectAsset={onSelectAsset}
+              />
+            )}
             {needle && shownMunicipalities.length === 0 && <NoMatches query={query} />}
             {shownMunicipalities.slice(0, limit).map((m) => (
               <AreaCard
@@ -198,29 +201,90 @@ export function ImpactSidebar({
   );
 }
 
-// Enough to list a town's affected hospitals and schools without a long
-// tail of bridges pushing its census sections off screen.
-const INFRA_LIST_LIMIT = 25;
+// Rows shown per category before "Show more": a nationwide scenario can
+// flag thousands of bridges.
+const INFRA_PAGE_SIZE = 50;
 
-function InfrastructureList({ rows }: { rows: InfrastructureResult[] }) {
-  const [expanded, setExpanded] = useState(false);
-  const shown = expanded ? rows : rows.slice(0, INFRA_LIST_LIMIT);
+// Affected critical infrastructure (ADR-0025), collapsed by default and
+// grouped by category (each group collapsed too), most intense first
+// within a group. Clicking an asset zooms the map to it.
+function InfrastructureList({
+  rows,
+  focusedAssetId,
+  onSelectAsset,
+}: {
+  rows: InfrastructureResult[];
+  focusedAssetId: number | null;
+  onSelectAsset: (asset: InfrastructureResult) => void;
+}) {
+  const groups = useMemo(() => {
+    const byCategory = new Map<string, InfrastructureResult[]>();
+    for (const row of rows) byCategory.set(row.category, [...(byCategory.get(row.category) ?? []), row]);
+    return INFRA_CATEGORIES.filter((c) => byCategory.has(c.key)).map((c) => ({
+      ...c,
+      rows: byCategory.get(c.key)!,
+    }));
+  }, [rows]);
   return (
-    <section>
-      <h3 style={{ fontSize: "0.85rem", margin: "0.5rem 0 0.3rem" }}>Critical infrastructure affected ({rows.length})</h3>
-      <div style={{ display: "flex", flexDirection: "column", gap: "0.2rem" }}>
-        {shown.map((r) => (
-          <div
+    <details style={sectionBox}>
+      <summary style={summaryStyle}>Critical infrastructure affected ({fmtInt(rows.length)})</summary>
+      <div style={{ display: "flex", flexDirection: "column", gap: "0.3rem", marginTop: "0.4rem" }}>
+        {groups.map((g) => (
+          <InfrastructureGroup
+            key={g.key}
+            label={g.label}
+            letter={g.letter}
+            rows={g.rows}
+            focusedAssetId={focusedAssetId}
+            onSelectAsset={onSelectAsset}
+          />
+        ))}
+        <p style={{ fontSize: "0.7rem", color: "#888", margin: 0 }}>
+          Estimated intensity VI or more, or on a damaged building. Only facilities on a building have a damage
+          estimate.
+        </p>
+      </div>
+    </details>
+  );
+}
+
+function InfrastructureGroup({
+  label,
+  letter,
+  rows,
+  focusedAssetId,
+  onSelectAsset,
+}: {
+  label: string;
+  letter: string;
+  rows: InfrastructureResult[];
+  focusedAssetId: number | null;
+  onSelectAsset: (asset: InfrastructureResult) => void;
+}) {
+  const [limit, setLimit] = useState(INFRA_PAGE_SIZE);
+  return (
+    <details>
+      <summary style={{ cursor: "pointer", fontSize: "0.8rem" }}>
+        <span style={letterBadge}>{letter}</span> {label} ({fmtInt(rows.length)})
+      </summary>
+      <div style={{ display: "flex", flexDirection: "column", gap: "0.2rem", margin: "0.3rem 0 0.2rem" }}>
+        {rows.slice(0, limit).map((r) => (
+          <button
             key={r.asset_id}
+            onClick={() => onSelectAsset(r)}
+            title="Show on the map"
             style={{
               display: "flex",
               alignItems: "center",
               gap: "0.5rem",
+              width: "100%",
+              textAlign: "left",
               background: "#fff",
-              border: "1px solid #e2e2e2",
+              border: `1px solid ${r.asset_id === focusedAssetId ? "#ff2d95" : "#e2e2e2"}`,
               borderRadius: 4,
               padding: "0.25rem 0.5rem",
               fontSize: "0.78rem",
+              cursor: "pointer",
             }}
           >
             <span
@@ -242,32 +306,64 @@ function InfrastructureList({ rows }: { rows: InfrastructureResult[] }) {
                 {r.name ?? subtypeLabel(r.subtype)}
               </span>
               <span style={{ color: "#888", fontSize: "0.7rem" }}>
-                {r.name ? subtypeLabel(r.subtype) : categoryLabel(r.category)}
+                {r.name ? subtypeLabel(r.subtype) : r.municipality_code}
               </span>
             </span>
-            {r.damage_state_code !== null && (
-              <span
-                title="Damage state of its building"
-                style={{
-                  borderLeft: `4px solid ${DAMAGE_COLORS[DAMAGE_STATES[r.damage_state_code]]}`,
-                  paddingLeft: "0.3rem",
-                  color: "#555",
-                }}
-              >
-                {DAMAGE_STATES[r.damage_state_code]}
-              </span>
-            )}
-          </div>
+            {r.damage_state_code !== null && <DamageChip code={r.damage_state_code} probs={r.damage_probs} />}
+          </button>
         ))}
+        {rows.length > limit && (
+          <button onClick={() => setLimit((n) => n + INFRA_PAGE_SIZE)} style={{ ...linkButton, marginTop: 0 }}>
+            Show {Math.min(INFRA_PAGE_SIZE, rows.length - limit)} more
+          </button>
+        )}
       </div>
-      {rows.length > INFRA_LIST_LIMIT && (
-        <button onClick={() => setExpanded((e) => !e)} style={{ ...linkButton, marginTop: "0.3rem" }}>
-          {expanded ? "Show fewer" : `Show all ${rows.length}`}
-        </button>
-      )}
-    </section>
+    </details>
   );
 }
+
+// A facility's building damage: its labelled state, and the whole
+// distribution as a thin bar under it (hover for the percentages).
+function DamageChip({ code, probs }: { code: number; probs: number[] | null }) {
+  const state = DAMAGE_STATES[code];
+  const breakdown = probs
+    ? DAMAGE_STATES.map((s, i) => `${s} ${Math.round((probs[i] ?? 0) * 100)}%`).join(" · ")
+    : state;
+  return (
+    <span title={`Building damage: ${breakdown}`} style={{ width: "4.5rem", flex: "none", color: "#555" }}>
+      <span style={{ display: "block", fontSize: "0.72rem" }}>{state}</span>
+      {probs && (
+        <span style={{ display: "flex", height: "0.3rem", borderRadius: 1, overflow: "hidden" }}>
+          {DAMAGE_STATES.map((s, i) =>
+            (probs[i] ?? 0) > 0 ? <span key={s} style={{ flex: probs[i], background: DAMAGE_COLORS[s] }} /> : null
+          )}
+        </span>
+      )}
+    </span>
+  );
+}
+
+const sectionBox: React.CSSProperties = {
+  background: "#fff",
+  border: "1px solid #e2e2e2",
+  borderRadius: 4,
+  padding: "0.4rem 0.6rem",
+};
+
+const summaryStyle: React.CSSProperties = { cursor: "pointer", fontSize: "0.85rem", fontWeight: 600 };
+
+const letterBadge: React.CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  width: "0.95rem",
+  height: "0.95rem",
+  borderRadius: "50%",
+  border: "1px solid #333",
+  fontSize: "0.58rem",
+  fontWeight: 700,
+  verticalAlign: "middle",
+};
 
 function AreaCard({
   title,

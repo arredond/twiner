@@ -136,10 +136,15 @@ building beside it see the same shaking at the chosen probability level.
 - An asset is returned if its intensity is at least **VI**, EMS-98's
   "slightly damaging" (`AFFECTED_INTENSITY`).
 - A facility is also returned below VI if its building came out damaged.
-- Facilities carry their building's `damage_state_code` from this same
-  run (0 when it isn't listed), which is the building model everything
-  else uses. Non-building assets carry `null`: there's no damage model,
-  and the UI says so.
+- Facilities carry their building's result from this same run, which is
+  the building model everything else uses: `damage_state_code` *and* the
+  full distribution (`damage_probs`). The engine tracks the facilities'
+  buildings (`summarize_scenario(track_building_ids=...)`) so that even a
+  confidently undamaged one, which the tile joins don't list, reports its
+  distribution. That adds no measurable time.
+- A facility whose building wasn't evaluated, and every non-building
+  asset, carries `null`: there's no damage estimate, and the UI says so.
+- Rows also carry the asset's lon/lat for the sidebar's zoom-to.
 
 **Bands.** The same PGV → intensity is evaluated on a regular grid over
 the site box:
@@ -172,41 +177,52 @@ Slight damage at "high", and VIII (8.1) with Extensive damage at "very
 low".
 
 **Sanity check against Lorca 2011** (Mw 5.2 point source, as in
-docs/validation-lorca-2011.md). The estimate for Lorca town is 5.7 at
-"high" and 6.6 at "low"/"very low" (+1σ), with the town's Vs30 of 383 m/s.
-IGN's observed maximum intensity was VII (EMS-98). The gap is the GMPE's,
-not the conversion's: its median PGA there (0.18 g) is about half the
-~0.36 g recorded, the same near-field shortfall the validation doc
-documents for buildings. PGA-based conversion would read about one unit
-higher here, but we don't retune the method to one event.
+docs/validation-lorca-2011.md). With the town's Vs30 of 383 m/s, the
+estimate for Lorca town is 5.7 at "high" and 6.6 at "low"/"very low"
+(+1σ). IGN's observed maximum was VII (EMS-98).
+- *At the median*, the GMPE is short: its median PGA there (0.18 g) is
+  about half the ~0.36 g recorded.
+- *At +1σ*, the ground motion matches the record (0.367 g), and the
+  conversion is what falls short: PGV-based gives 6.6, PGA-based 7.9, and
+  PGA with WGRW12's magnitude/distance terms 7.1.
+
+One event isn't grounds for retuning. docs/validation-lorca-2011.md §12
+has the comparison and the tuning options, the first being validation
+against IGN's full intensity data.
 
 ### Frontend
 
-- **Legend:** a new "Intensity (EMS-98, est.)" section with a "Show
-  intensity bands" toggle, off by default and enabled once a scenario's
-  bands have loaded. The palette is ColorBrewer's sequential Blues, IV–X,
-  kept apart from the damage palette (green–red) and the fault lines
-  (purple). The bands draw under every choropleth and building layer, at
-  35% opacity.
-- **"Critical infrastructure" panel** (collapsible, next to the legend):
-  - a "Show on map" master toggle, off by default;
-  - one toggle per category, each with its map letter: Health (H), Care
-    homes (C), Emergency services (E), Education (S), Power (P), Bridges
-    (B), Dams (D);
-  - after a run, each category's affected count.
+- **One legend, with every toggle inline in its section header:**
+  - *Damage* (on by default): one switch for buildings, the
+    municipality/section choropleths and debris. Off hides the choropleths
+    and debris and draws buildings uncoloured.
+  - *Intensity (EMS-98, est.)* (off): the bands, IV–X, in ColorBrewer's
+    sequential Blues, kept apart from the damage palette (green–red) and
+    the fault lines (purple). They sit under every choropleth and building
+    layer, at 35% opacity. The switch is enabled once a scenario's bands
+    have loaded.
+  - *Critical infrastructure* (off): a master switch meaning "any category
+    on", then one inline row per category (letter badge, name, affected
+    count after a run, switch). Categories: Health (H), Care homes (C),
+    Emergency services (E), Education (S), Power (P), Bridges (B), Dams (D).
 - **Map:**
   - Assets are circles with their category letter (letters from z10) and,
     from z12, their real shapes.
   - After a run, affected assets are filled with their intensity band's
-    colour, the same scale as the bands layer, for every category. The
-    rest fade.
-  - Clicking an asset shows its type, voltage or length, registry id,
-    Catastro building, intensity, and building damage state when it has
-    one. Otherwise it says "below VI" or "outside the evaluated area".
-  - Facility buildings keep their own damage colour on the building layer.
-- **Sidebar:** the header lists affected infrastructure by category. A
-  municipality's drill-down lists its affected assets: intensity chip,
-  name and type, and building damage where modelled.
+    colour, the same scale as the bands, for every category. The rest fade.
+  - A click shows type, voltage or length, registry id, Catastro building,
+    intensity, and for facilities their building's damage state *with its
+    full probability distribution*. Otherwise the popup says "below VI" or
+    "outside the evaluated area".
+- **Sidebar:** a "Critical infrastructure affected (N)" section, collapsed
+  by default, both for the whole scenario and in a municipality's
+  drill-down.
+  - Assets are grouped by category, each group collapsed too
+    ("Bridges (27)"), most intense first, 50 per page.
+  - Each row shows its intensity chip, name and type, and for facilities
+    the damage state with a thin distribution bar.
+  - Clicking an asset switches its category's layer on, flies the map to it
+    and opens its popup.
 
 ## Alternatives considered
 
@@ -240,9 +256,11 @@ higher here, but we don't retune the method to one event.
   Context).
 - **Every BTN "presa" as a dam.** 28,213 features, mostly pond
   embankments.
-- **Intensity from PGA, or the maximum of PGA- and PGV-based.** Either
-  would read higher at Lorca 2011, but tuning the method to one event
-  isn't a reason on its own. PGV has the lower published scatter.
+- **Intensity from PGA, or PGA and PGV combined.** Either reads higher at
+  Lorca 2011 (PGA with WGRW12's magnitude/distance terms comes closest to
+  the observed VII), but one event isn't a reason on its own. Left as
+  tuning options in docs/validation-lorca-2011.md §12. PGV has the lower
+  published scatter.
 
 ## Consequences
 

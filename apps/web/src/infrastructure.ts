@@ -1,5 +1,4 @@
 import type { ExpressionSpecification } from "maplibre-gl";
-import type { InfrastructureResult } from "./scenarioApi";
 
 // Critical infrastructure (ADR-0025): the categories the pipeline
 // (pipelines/exposure infrastructure.py) assigns, in panel order. `letter`
@@ -18,10 +17,6 @@ export const INFRA_CATEGORIES = [
 export type InfraCategory = (typeof INFRA_CATEGORIES)[number]["key"];
 
 export const INFRA_CATEGORY_KEYS: InfraCategory[] = INFRA_CATEGORIES.map((c) => c.key);
-
-export function categoryLabel(key: string): string {
-  return INFRA_CATEGORIES.find((c) => c.key === key)?.label ?? key;
-}
 
 export const SUBTYPE_LABELS: Record<string, string> = {
   hospital: "Hospital",
@@ -86,10 +81,4 @@ export function intensityColorExpr(input: ExpressionSpecification): ExpressionSp
     INTENSITY_COLORS[4],
     ...INTENSITY_LEVELS.slice(1).flatMap((level) => [level, INTENSITY_COLORS[level]]),
   ] as unknown as ExpressionSpecification;
-}
-
-export function countByCategory(rows: InfrastructureResult[]): Record<string, number> {
-  const counts: Record<string, number> = {};
-  for (const row of rows) counts[row.category] = (counts[row.category] ?? 0) + 1;
-  return counts;
 }

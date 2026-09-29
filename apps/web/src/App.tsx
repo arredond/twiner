@@ -4,7 +4,6 @@ import { ImpactSidebar } from "./components/ImpactSidebar";
 import { ManualRunForm, type ManualParams } from "./components/RunScenarioPopup";
 import { PROBABILITY_LEVEL_LABELS, PROBABILITY_LEVEL_SHORT_LABELS } from "./probabilityLevels";
 import { DamageLegend } from "./components/DamageLegend";
-import { InfrastructurePanel } from "./components/InfrastructurePanel";
 import { INFRA_CATEGORY_KEYS, type InfraCategory } from "./infrastructure";
 import {
   getInfrastructure,
@@ -105,20 +104,25 @@ export default function App() {
     };
   }, [selectedMunicipalityCode, loadSectionStats]);
 
-  // Critical infrastructure and intensity bands (ADR-0025): both fetched
-  // per scenario; the bands are drawn only while the legend's toggle is
-  // on, the assets only while the infrastructure panel's is.
+  // Map layer toggles, all in the legend: the damage layers (buildings,
+  // choropleths, debris) on by default; intensity bands and critical
+  // infrastructure (ADR-0025) off until asked for. Both of the latter are
+  // fetched per scenario either way.
+  const [showDamage, setShowDamage] = useState(true);
   const [intensityBands, setIntensityBands] = useState<IntensityBands | null>(null);
   const [showIntensity, setShowIntensity] = useState(false);
   const [infrastructure, setInfrastructure] = useState<InfrastructureResult[] | null>(null);
-  const [infraEnabled, setInfraEnabled] = useState(false);
-  const [infraCategories, setInfraCategories] = useState<InfraCategory[]>(INFRA_CATEGORY_KEYS);
-  const [infraPanelOpen, setInfraPanelOpen] = useState(false);
+  const [infraCategories, setInfraCategories] = useState<InfraCategory[]>([]);
+  // An asset picked in the sidebar: the map flies to it and opens its
+  // popup. `key` makes picking the same asset again fly there again.
+  const [focusedAsset, setFocusedAsset] = useState<{ key: number; asset: InfrastructureResult } | null>(null);
+  const nextFocusKey = useRef(0);
   const hasInfrastructure = result?.infrastructure_summary != null;
 
   useEffect(() => {
     setIntensityBands(null);
     setInfrastructure(null);
+    setFocusedAsset(null);
     if (!scenarioId) return;
     let cancelled = false;
     getIntensityBands(scenarioId)
@@ -178,7 +182,6 @@ export default function App() {
   async function runScenario(run: () => Promise<ScenarioResult>) {
     setPending(null);
     setLegendOpen(true);
-    setInfraPanelOpen(true);
     setIsRunning(true);
     setError(null);
     try {
@@ -249,6 +252,16 @@ export default function App() {
     setError(null);
   }
 
+  // Sidebar asset click: switch its category's layer on (the legend shows
+  // it on too) and fly the map to it.
+  function focusAsset(asset: InfrastructureResult) {
+    const category = asset.category as InfraCategory;
+    setInfraCategories((current) =>
+      current.includes(category) ? current : INFRA_CATEGORY_KEYS.filter((k) => k === category || current.includes(k))
+    );
+    setFocusedAsset({ key: nextFocusKey.current++, asset });
+  }
+
   const runPopup =
     pending === null
       ? null
@@ -282,10 +295,12 @@ export default function App() {
           onMapClick={handleMapClick}
           runPopup={runPopup}
           onRunPopupClose={(key) => setPending((p) => (p?.key === key ? null : p))}
+          showDamage={showDamage}
           intensityBands={intensityBands}
           showIntensity={showIntensity}
-          infrastructureCategories={infraEnabled ? infraCategories : []}
+          infrastructureCategories={infraCategories}
           infrastructureResults={infrastructure}
+          focusedAsset={focusedAsset}
         />
 
         <div style={{ ...overlayPanel, top: "0.75rem", left: "0.75rem", maxWidth: "17rem" }}>
@@ -340,51 +355,33 @@ export default function App() {
           )}
         </div>
 
-        <div
+        <details
+          open={legendOpen}
+          onToggle={(e) => setLegendOpen(e.currentTarget.open)}
           style={{
-            position: "absolute",
-            zIndex: 1,
+            ...overlayPanel,
             bottom: "1.75rem",
             left: "0.75rem",
-            display: "flex",
-            alignItems: "flex-end",
-            gap: "0.5rem",
             fontSize: "0.8rem",
+            maxHeight: "calc(100vh - 12rem)",
+            overflowY: "auto",
           }}
         >
-          <details
-            open={legendOpen}
-            onToggle={(e) => setLegendOpen(e.currentTarget.open)}
-            style={{ ...overlayPanel, position: "static" }}
-          >
-            <summary style={{ cursor: "pointer", fontWeight: 600 }}>Legend</summary>
-            <div style={{ marginTop: "0.5rem" }}>
-              <DamageLegend
-                damageStatus={isRunning ? "loading" : result ? "ready" : "idle"}
-                debrisStatus={isRunning ? "loading" : result ? "ready" : "idle"}
-                intensityStatus={isRunning ? "loading" : intensityBands ? "ready" : "idle"}
-                showIntensity={showIntensity}
-                onShowIntensityChange={setShowIntensity}
-              />
-            </div>
-          </details>
-          <details
-            open={infraPanelOpen}
-            onToggle={(e) => setInfraPanelOpen(e.currentTarget.open)}
-            style={{ ...overlayPanel, position: "static" }}
-          >
-            <summary style={{ cursor: "pointer", fontWeight: 600 }}>Critical infrastructure</summary>
-            <div style={{ marginTop: "0.5rem" }}>
-              <InfrastructurePanel
-                enabled={infraEnabled}
-                onEnabledChange={setInfraEnabled}
-                categories={infraCategories}
-                onCategoriesChange={setInfraCategories}
-                affectedCounts={result?.infrastructure_summary ?? null}
-              />
-            </div>
-          </details>
-        </div>
+          <summary style={{ cursor: "pointer", fontWeight: 600 }}>Legend</summary>
+          <div style={{ marginTop: "0.5rem" }}>
+            <DamageLegend
+              damageStatus={isRunning ? "loading" : result ? "ready" : "idle"}
+              showDamage={showDamage}
+              onShowDamageChange={setShowDamage}
+              intensityStatus={isRunning ? "loading" : intensityBands ? "ready" : "idle"}
+              showIntensity={showIntensity}
+              onShowIntensityChange={setShowIntensity}
+              infraCategories={infraCategories}
+              onInfraCategoriesChange={setInfraCategories}
+              infraCounts={result?.infrastructure_summary ?? null}
+            />
+          </div>
+        </details>
       </main>
       {result && (
         <ImpactSidebar
@@ -402,6 +399,8 @@ export default function App() {
           onSelectMunicipality={setSelectedMunicipalityCode}
           onSelectSection={setSelectedSectionCode}
           infrastructure={infrastructure}
+          focusedAssetId={focusedAsset?.asset.asset_id ?? null}
+          onSelectAsset={focusAsset}
           onClose={clearScenario}
         />
       )}

@@ -9,6 +9,7 @@ import "maplibre-gl/dist/maplibre-gl.css";
 import { DAMAGE_COLORS, DAMAGE_STATES, DEBRIS_COLOR } from "../damageColors";
 import { staticDataUrl } from "../staticData";
 import { impactRows, meanSeverity } from "../impactFormat";
+import { escapeHtml, renderProbabilityBarHtml } from "../popupHtml";
 import {
   getBuildingInfo,
   TILES_API_URL,
@@ -259,6 +260,9 @@ interface Props {
   // close, so App must only clear the popup whose key matches.
   runPopup: { key: number; lat: number; lon: number; content: ReactNode } | null;
   onRunPopupClose: (key: number) => void;
+  // The legend's damage toggle: off hides the municipality/section
+  // choropleths and debris and draws buildings uncoloured.
+  showDamage: boolean;
   // ADR-0025. The scenario's intensity bands (null before a run or while
   // loading), drawn only while `showIntensity` (the legend's toggle).
   intensityBands: IntensityBands | null;
@@ -267,6 +271,9 @@ interface Props {
   // layer), and this scenario's affected assets, coloured by intensity.
   infrastructureCategories: string[];
   infrastructureResults: InfrastructureResult[] | null;
+  // An asset picked in the sidebar: flown to, with its popup open. A new
+  // `key` flies again even for the same asset.
+  focusedAsset: { key: number; asset: InfrastructureResult } | null;
 }
 
 // The API sends `damage_state_code`, the index into this same
@@ -296,12 +303,6 @@ function tileDamageResult(
     prob_extensive: Number(tileProps.prob_extensive),
     prob_complete: Number(tileProps.prob_complete),
   };
-}
-
-function escapeHtml(value: unknown): string {
-  return String(value ?? "—").replace(/[&<>"']/g, (c) =>
-    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c] as string
-  );
 }
 
 const EARTH_RADIUS_KM = 6371;
@@ -344,27 +345,13 @@ function boundsFromRegion(region: EvaluatedRegion): maplibregl.LngLatBounds {
 // `title=` gives the hover tooltip (name + percentage) for free, no JS
 // wiring needed inside a Popup's detached DOM.
 function renderProbabilityBar(damage: BuildingDamageResult): string {
-  const probs: Array<[string, number]> = [
-    ["None", damage.prob_none],
-    ["Slight", damage.prob_slight],
-    ["Moderate", damage.prob_moderate],
-    ["Extensive", damage.prob_extensive],
-    ["Complete", damage.prob_complete],
-  ];
-  const segments = probs
-    .filter(([, p]) => p > 0)
-    .map(([state, p]) => {
-      const pct = Math.round(p * 100);
-      return (
-        `<div title="${escapeHtml(state)}: ${pct}%" ` +
-        `style="flex:${p}; background:${DAMAGE_COLORS[state]}; height:100%"></div>`
-      );
-    })
-    .join("");
-  return (
-    `<div style="display:flex; width:100%; height:0.9rem; border-radius:2px; ` +
-    `overflow:hidden; margin:3px 0">${segments}</div>`
-  );
+  return renderProbabilityBarHtml([
+    damage.prob_none,
+    damage.prob_slight,
+    damage.prob_moderate,
+    damage.prob_extensive,
+    damage.prob_complete,
+  ]);
 }
 
 // Popup content for a clicked building: static exposure attributes come
@@ -650,10 +637,12 @@ export function DamageMap({
   onMapClick,
   runPopup,
   onRunPopupClose,
+  showDamage,
   intensityBands,
   showIntensity,
   infrastructureCategories,
   infrastructureResults,
+  focusedAsset,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
@@ -711,6 +700,8 @@ export function DamageMap({
   // not a client-side results lookup.
   const evaluatedRegionRef = useRef(evaluatedRegion);
   evaluatedRegionRef.current = evaluatedRegion;
+  const showDamageRef = useRef(showDamage);
+  showDamageRef.current = showDamage;
   // Asset popups look up this scenario's row by id; the ids carrying
   // feature-state, to clear on the next scenario.
   const infrastructureByIdRef = useRef<Map<number, InfrastructureResult>>(new Map());
@@ -1166,6 +1157,28 @@ export function DamageMap({
     );
   }
 
+  // The damage toggle (showDamageRef): buildings coloured by damage or
+  // uniformly "not evaluated" grey, choropleths and debris shown or hidden.
+  // Re-applied after every buildings/debris source swap, which re-adds
+  // those layers with their default paint and visibility.
+  function applyDamageLayers(map: MapLibreMap) {
+    const show = showDamageRef.current;
+    map.setPaintProperty(
+      BUILDINGS_LAYER_ID,
+      "fill-color",
+      show ? buildingsFillColor(evaluatedRegionRef.current) : DAMAGE_COLORS.Unknown
+    );
+    for (const layerId of [
+      MUNICIPALITIES_LAYER_ID,
+      SECTIONS_LAYER_ID,
+      SECTIONS_FOCUS_LAYER_ID,
+      DEBRIS_LAYER_ID,
+      DEBRIS_OUTLINE_LAYER_ID,
+    ]) {
+      if (map.getLayer(layerId)) map.setLayoutProperty(layerId, "visibility", show ? "visible" : "none");
+    }
+  }
+
   // Run popup: one MapLibre popup per anchor point, whose DOM node the
   // React content is portalled into (so it stays a live React form, not
   // HTML set once). Closing it from the map (× or a click elsewhere)
@@ -1263,7 +1276,7 @@ export function DamageMap({
     // dangling ref that clearBuildingSelection would act on uselessly.
     selectedRef.current = null;
 
-    map.setPaintProperty(BUILDINGS_LAYER_ID, "fill-color", buildingsFillColor(evaluatedRegion));
+    applyDamageLayers(map);
   }, [scenarioId]);
 
   // Municipality choropleth: same feature-state pattern, keyed by
@@ -1416,12 +1429,40 @@ export function DamageMap({
     const map = mapRef.current;
     if (!map || !mapLoadedRef.current) return;
 
-    map.setPaintProperty(BUILDINGS_LAYER_ID, "fill-color", buildingsFillColor(evaluatedRegion));
+    applyDamageLayers(map);
 
     if (evaluatedRegion) {
       map.fitBounds(boundsFromRegion(evaluatedRegion), { padding: 48, maxZoom: 15, duration: 500 });
     }
   }, [evaluatedRegion]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapLoadedRef.current) return;
+    applyDamageLayers(map);
+  }, [showDamage]);
+
+  // Sidebar asset pick: fly there (at least building zoom, so its building
+  // and shape show) and open the same popup a map click would.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapLoadedRef.current || !focusedAsset) return;
+    const { asset } = focusedAsset;
+    map.flyTo({ center: [asset.lon, asset.lat], zoom: Math.max(map.getZoom(), 15), duration: 800 });
+    const popup = new maplibregl.Popup({ closeButton: true, maxWidth: "20rem" })
+      .setLngLat([asset.lon, asset.lat])
+      .setHTML(
+        renderInfrastructurePopupHtml(
+          { name: asset.name, subtype: asset.subtype, category: asset.category },
+          asset,
+          { withinEvaluatedRegion: true }
+        )
+      )
+      .addTo(map);
+    return () => {
+      popup.remove();
+    };
+  }, [focusedAsset]);
 
   useEffect(() => {
     const map = mapRef.current;

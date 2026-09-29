@@ -167,16 +167,22 @@ export interface ScenarioResult {
 
 // One affected critical-infrastructure asset (ADR-0025): estimated
 // intensity (EMS-98 scale, from Worden et al. 2012) at its location, plus
-// its building's damage state for facilities on a Catastro building (null
-// for everything else -- no damage model).
+// its building's damage for facilities on a Catastro building this
+// scenario evaluated (null for everything else -- no damage model).
 export interface InfrastructureResult {
   asset_id: number;
   category: string;
   subtype: string;
   name: string | null;
   municipality_code: string;
+  // Its representative point (the sidebar zooms to it).
+  lon: number;
+  lat: number;
   intensity: number;
   damage_state_code: number | null;
+  // Its building's probability of each damage state, DAMAGE_STATES order;
+  // null exactly when damage_state_code is.
+  damage_probs: number[] | null;
 }
 
 // GeoJSON of the scenario's intensity bands: one feature per integer
