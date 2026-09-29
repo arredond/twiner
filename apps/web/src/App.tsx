@@ -183,6 +183,8 @@ export default function App() {
   async function runScenario(run: () => Promise<ScenarioResult>) {
     setPending(null);
     setLegendOpen(true);
+    // The result itself: back on after a "New run" switched it off.
+    setShowDamage(true);
     setIsRunning(true);
     setError(null);
     try {
@@ -247,12 +249,19 @@ export default function App() {
   // Closing the scenario panel clears the scenario: result layers go back
   // to their pre-scenario state (DamageMap reacts to the null result), the
   // viewport stays where it is.
+  // "New run" (top-left) and the scenario panel's × both land here: back to
+  // picking a scenario, with the legend collapsed and every layer toggle
+  // off except faults (on, since Automatic mode starts from them). The next
+  // run switches damage back on itself.
   function clearScenario() {
     setResult(null);
     setSelectedFaultId(null);
     setError(null);
-    // The legend opened with the run; it closes with it.
     setLegendOpen(false);
+    setShowDamage(false);
+    setShowIntensity(false);
+    setInfraCategories([]);
+    setShowFaults(true);
   }
 
   // Sidebar asset click: switch its category's layer on (the legend shows
@@ -308,52 +317,75 @@ export default function App() {
         />
 
         <div style={{ ...overlayPanel, top: "0.75rem", left: "0.75rem", maxWidth: "17rem" }}>
-          <div style={{ display: "flex", alignItems: "baseline", gap: "0.4rem" }}>
-            <strong>twiner</strong>
-            <span style={{ fontSize: "0.75rem", color: "#666" }}>Seismic scenarios — Spain</span>
-          </div>
-          <div role="group" aria-label="Scenario mode" style={{ display: "flex", marginTop: "0.5rem" }}>
-            {(["automatic", "manual"] as const).map((m) => (
-              <button
-                key={m}
-                type="button"
-                onClick={() => changeMode(m)}
-                aria-pressed={mode === m}
-                style={{
-                  flex: 1,
-                  padding: "0.3rem 0.5rem",
-                  fontSize: "0.8rem",
-                  border: "1px solid #bbb",
-                  background: mode === m ? "#1c1c1c" : "#fff",
-                  color: mode === m ? "#fff" : "#1c1c1c",
-                  borderRadius: m === "automatic" ? "4px 0 0 4px" : "0 4px 4px 0",
-                }}
-              >
-                {m === "automatic" ? "Automatic" : "Manual"}
-              </button>
-            ))}
-          </div>
-          <label style={{ marginTop: "0.5rem", fontSize: "0.8rem" }}>
-            Probability level
-            <select
-              value={probabilityLevel}
-              onChange={(e) => setProbabilityLevel(e.target.value as ProbabilityLevel)}
-              style={{ fontSize: "0.8rem" }}
+          {result ? (
+            // With a scenario showing, the setup controls step aside: one
+            // way back to them (clearScenario).
+            <button
+              type="button"
+              onClick={clearScenario}
+              style={{
+                padding: "0.35rem 0.8rem",
+                fontSize: "0.85rem",
+                fontWeight: 600,
+                border: "1px solid #1c1c1c",
+                borderRadius: 4,
+                background: "#1c1c1c",
+                color: "#fff",
+                cursor: "pointer",
+              }}
             >
-              {(Object.keys(PROBABILITY_LEVEL_LABELS) as ProbabilityLevel[]).map((level) => (
-                <option key={level} value={level}>
-                  {PROBABILITY_LEVEL_LABELS[level]}
-                </option>
-              ))}
-            </select>
-          </label>
-          <p style={{ fontSize: "0.75rem", color: "#666", margin: "0.4rem 0 0" }}>
-            {mode === "automatic"
-              ? showFaults
-                ? "Click a fault (dashed purple line) to run its maximum-magnitude earthquake."
-                : "Turn faults on in the legend to pick one."
-              : "Click anywhere on the map to place an earthquake."}
-          </p>
+              New run
+            </button>
+          ) : (
+            <>
+              <div style={{ display: "flex", alignItems: "baseline", gap: "0.4rem" }}>
+                <strong>twiner</strong>
+                <span style={{ fontSize: "0.75rem", color: "#666" }}>Seismic scenarios — Spain</span>
+              </div>
+              <div role="group" aria-label="Scenario mode" style={{ display: "flex", marginTop: "0.5rem" }}>
+                {(["automatic", "manual"] as const).map((m) => (
+                  <button
+                    key={m}
+                    type="button"
+                    onClick={() => changeMode(m)}
+                    aria-pressed={mode === m}
+                    style={{
+                      flex: 1,
+                      padding: "0.3rem 0.5rem",
+                      fontSize: "0.8rem",
+                      border: "1px solid #bbb",
+                      background: mode === m ? "#1c1c1c" : "#fff",
+                      color: mode === m ? "#fff" : "#1c1c1c",
+                      borderRadius: m === "automatic" ? "4px 0 0 4px" : "0 4px 4px 0",
+                    }}
+                  >
+                    {m === "automatic" ? "Automatic" : "Manual"}
+                  </button>
+                ))}
+              </div>
+              <label style={{ marginTop: "0.5rem", fontSize: "0.8rem" }}>
+                Probability level
+                <select
+                  value={probabilityLevel}
+                  onChange={(e) => setProbabilityLevel(e.target.value as ProbabilityLevel)}
+                  style={{ fontSize: "0.8rem" }}
+                >
+                  {(Object.keys(PROBABILITY_LEVEL_LABELS) as ProbabilityLevel[]).map((level) => (
+                    <option key={level} value={level}>
+                      {PROBABILITY_LEVEL_LABELS[level]}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <p style={{ fontSize: "0.75rem", color: "#666", margin: "0.4rem 0 0" }}>
+                {mode === "automatic"
+                  ? showFaults
+                    ? "Click a fault (dashed purple line) to run its maximum-magnitude earthquake."
+                    : "Turn faults on in the legend to pick one."
+                  : "Click anywhere on the map to place an earthquake."}
+              </p>
+            </>
+          )}
           {isRunning && <p style={{ fontSize: "0.8rem", margin: "0.4rem 0 0" }}>Running scenario…</p>}
           {error && <p style={{ fontSize: "0.8rem", color: "#c1121f", margin: "0.4rem 0 0" }}>{error}</p>}
           {faultsError && (
