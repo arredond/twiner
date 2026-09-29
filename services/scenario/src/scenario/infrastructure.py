@@ -37,7 +37,6 @@ from functools import lru_cache
 import numpy as np
 import pyarrow as pa
 import pyarrow.compute as pc
-import pyarrow.parquet as pq
 import shapely
 from contourpy import FillType, contour_generator
 from openquake.hazardlib.imt import PGV
@@ -59,12 +58,20 @@ def _infra_path(env_var: str, filename: str) -> str:
 
 
 def _read_optional(path: str) -> pa.Table | None:
-    """The parquet at `path`, or None if it isn't there (a local path or an
-    S3 key -- pyarrow raises FileNotFoundError for one, OSError for the
-    other)."""
+    """The parquet at `path` (local or `s3://`), or None if it isn't there.
+    Read through the same shared DuckDB + httpfs as every other S3 read in
+    this service (impact.AreaMeta.load), the path proven in the Lambda
+    image."""
+    import duckdb
+
+    from .db import ensure_httpfs, get_connection
+
+    con = get_connection()
+    if path.startswith("s3://"):
+        ensure_httpfs(con)
     try:
-        return pq.read_table(path)
-    except (FileNotFoundError, OSError):
+        return con.execute("SELECT * FROM read_parquet(?)", [path]).arrow().read_all()
+    except duckdb.IOException:
         return None
 
 

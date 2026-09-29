@@ -51,7 +51,7 @@ RUN pip install --no-cache-dir --no-deps "openquake.engine>=3.19" && \
         "decorator~=5.1.1" "numba~=0.61.2" "alpha_shapes~=1.1.0" \
         "pyproj~=3.7.2" "geopandas~=1.1.4" "fiona~=1.10.1" \
         "h3>=4.4" "toml~=0.10.2" "pyzmq~=26.2.0" psutil requests \
-        "pillow~=12.2.0" duckdb pyarrow fastapi uvicorn && \
+        "pillow~=12.2.0" duckdb pyarrow fastapi uvicorn "contourpy>=1.3" && \
     pip install --no-cache-dir --no-deps ./tiles_pkg && \
     pip install --no-cache-dir --no-deps .
 

@@ -39,7 +39,7 @@ FRONTEND_ORIGINS = ["https://twiner.arredon.do", "http://localhost:5173"]
 # fragility/faults parquet. Any string works; a date keeps it readable.
 # (Calculation-code changes are covered separately, by scenario_id.py's
 # API_VERSION.) See docs/decisions/0018-scenario-result-cache.md.
-DATA_VERSION = "2026-09-29"  # census sections + impact columns (ADR-0024)
+DATA_VERSION = "2026-09-29-infra"  # + critical infrastructure (ADR-0025)
 
 
 class TwinerStack(Stack):
@@ -204,6 +204,12 @@ class TwinerStack(Stack):
                 # a local-only default path that doesn't exist in Lambda.
                 "TWINER_FAULTS_PATH": f"s3://{data_bucket.bucket_name}/faults/qafi_faults.parquet",
                 "TWINER_MUNICIPALITIES_PATH": f"s3://{data_bucket.bucket_name}/exposure/municipalities.parquet",
+                # Critical infrastructure (ADR-0025): the assets each
+                # scenario evaluates, and ESRM20's Vs30 grid for the
+                # intensity bands. Both optional -- missing, a scenario just
+                # has no infrastructure results (and bands on DEFAULT_VS30).
+                "TWINER_INFRA_SITES_PATH": f"s3://{data_bucket.bucket_name}/infrastructure/infrastructure_sites.parquet",
+                "TWINER_VS30_SITES_PATH": f"s3://{data_bucket.bucket_name}/infrastructure/vs30_sites.parquet",
                 "TWINER_RESULTS_BUCKET": results_bucket.bucket_name,
                 # Content-addressed scenario cache (ADR-0018): a repeat of
                 # an already-computed scenario returns the stored result

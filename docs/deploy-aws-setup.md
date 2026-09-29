@@ -175,6 +175,14 @@ aws s3 cp data/exposure/municipalities.parquet \
 # under tiles/ too: the frontend derives all three URLs from
 # VITE_S3_DATA_BUCKET + these fixed keys (apps/web/src/staticData.ts's
 # staticDataUrl).
+# Critical infrastructure (ADR-0025; build with exposure.infrastructure_cli
+# after the BTN manual download, see pipelines/README.md)
+aws s3 cp data/infrastructure/infrastructure_sites.parquet \
+    s3://<DataBucketName>/infrastructure/infrastructure_sites.parquet --profile twiner-admin
+aws s3 cp data/infrastructure/vs30_sites.parquet \
+    s3://<DataBucketName>/infrastructure/vs30_sites.parquet --profile twiner-admin
+aws s3 cp data/infrastructure/infrastructure.pmtiles \
+    s3://<DataBucketName>/tiles/infrastructure.pmtiles --profile twiner-admin
 aws s3 cp data/exposure/buildings.pmtiles \
     s3://<DataBucketName>/tiles/buildings.pmtiles --profile twiner-admin
 aws s3 cp data/exposure/debris.pmtiles \
