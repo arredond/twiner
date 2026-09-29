@@ -15,11 +15,22 @@
 #
 # Optional: symlink this onto your PATH, e.g.:
 #   ln -s "$(pwd)/bin/twiner" /usr/local/bin/twiner
+#
+# Worktrees: each checkout gets its own tmux session ("twiner" for the main
+# worktree, "twiner-<dir>" for a linked one) and, on start, the first free
+# ports from 8000 (API) and 5173 (frontend) -- so a worktree's stack runs
+# alongside main's instead of refusing to start. The frontend is pointed at
+# its own API port. `twiner status` prints the URLs.
 
 set -euo pipefail
 
-SESSION="twiner"
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# A linked worktree's .git is a file; the main worktree's is a directory.
+if [[ -f "$REPO_ROOT/.git" ]]; then
+  SESSION="twiner-$(basename "$REPO_ROOT" | tr '.:' '__')"
+else
+  SESSION="twiner"
+fi
 
 # Defaults to the national dataset (see README's Quickstart for how it's
 # built). buildings.parquet is always a per-municipality partitioned glob
@@ -59,13 +70,26 @@ fi
 : "${TWINER_PROD_SCENARIO_API_URL:=https://naw44z44znff5je2ohuyyai7ce0gwpiu.lambda-url.eu-south-2.on.aws/}"
 : "${TWINER_PROD_TILES_API_URL:=}"
 
-API_CMD="cd '$REPO_ROOT' && TWINER_BUILDINGS_PATH='$TWINER_BUILDINGS_PATH' TWINER_EXPOSURE_PATH='$TWINER_EXPOSURE_PATH' TWINER_SCENARIO_CACHE='$TWINER_SCENARIO_CACHE' TWINER_DATA_VERSION='$TWINER_DATA_VERSION' uv run --package twiner-scenario uvicorn scenario.local:app --port 8000 --reload"
-WEB_CMD_LOCAL="cd '$REPO_ROOT/apps/web' && npm run dev -- --port 5173"
+# First port >= $1 nobody is listening on.
+free_port() {
+  local port="$1"
+  while lsof -nP -iTCP:"$port" -sTCP:LISTEN >/dev/null 2>&1; do
+    port=$((port + 1))
+  done
+  echo "$port"
+}
+
+# Commands for the chosen ports (API_PORT/WEB_PORT, set by cmd_start).
 # VITE_SCENARIO_API_URL/VITE_TILES_API_URL set here always win over
 # apps/web/.env* files (Vite: process.env takes priority over .env-file
 # values), so this is the one place mode selection actually happens -- no
-# dotenv juggling needed.
-WEB_CMD_PROD="cd '$REPO_ROOT/apps/web' && VITE_SCENARIO_API_URL='$TWINER_PROD_SCENARIO_API_URL' VITE_TILES_API_URL='$TWINER_PROD_TILES_API_URL' npm run dev -- --port 5173"
+# dotenv juggling needed. --strictPort: fail rather than let Vite drift to
+# a port other than the one printed.
+build_cmds() {
+  API_CMD="cd '$REPO_ROOT' && TWINER_BUILDINGS_PATH='$TWINER_BUILDINGS_PATH' TWINER_EXPOSURE_PATH='$TWINER_EXPOSURE_PATH' TWINER_SCENARIO_CACHE='$TWINER_SCENARIO_CACHE' TWINER_DATA_VERSION='$TWINER_DATA_VERSION' uv run --package twiner-scenario uvicorn scenario.local:app --port $API_PORT --reload"
+  WEB_CMD_LOCAL="cd '$REPO_ROOT/apps/web' && VITE_SCENARIO_API_URL='http://localhost:$API_PORT' npm run dev -- --port $WEB_PORT --strictPort"
+  WEB_CMD_PROD="cd '$REPO_ROOT/apps/web' && VITE_SCENARIO_API_URL='$TWINER_PROD_SCENARIO_API_URL' VITE_TILES_API_URL='$TWINER_PROD_TILES_API_URL' npm run dev -- --port $WEB_PORT --strictPort"
+}
 
 is_running() {
   tmux has-session -t "$SESSION" 2>/dev/null
@@ -86,18 +110,25 @@ cmd_start() {
     exit 0
   fi
 
+  WEB_PORT="$(free_port 5173)"
   if [ "$mode" = "local" ]; then
+    API_PORT="$(free_port 8000)"
+    build_cmds
     tmux new-session -d -s "$SESSION" -n api "$API_CMD"
     tmux new-window -t "$SESSION" -n web "$WEB_CMD_LOCAL"
-    echo "twiner: started (local)."
-    echo "  scenario API: http://localhost:8000  (tmux window 'api')"
-    echo "  web frontend: http://localhost:5173  (tmux window 'web')"
+    tmux set-environment -t "$SESSION" TWINER_URLS "api http://localhost:$API_PORT, web http://localhost:$WEB_PORT"
+    echo "twiner: started (local, session '$SESSION')."
+    echo "  scenario API: http://localhost:$API_PORT  (tmux window 'api')"
+    echo "  web frontend: http://localhost:$WEB_PORT  (tmux window 'web')"
   else
+    API_PORT=""
+    build_cmds
     tmux new-session -d -s "$SESSION" -n web "$WEB_CMD_PROD"
-    echo "twiner: started (prod)."
+    tmux set-environment -t "$SESSION" TWINER_URLS "web http://localhost:$WEB_PORT"
+    echo "twiner: started (prod, session '$SESSION')."
     echo "  scenario API: $TWINER_PROD_SCENARIO_API_URL  (deployed AWS backend, no local API window)"
     echo "  tiles API: ${TWINER_PROD_TILES_API_URL:-<unset -- see TWINER_PROD_TILES_API_URL>}"
-    echo "  web frontend: http://localhost:5173  (tmux window 'web')"
+    echo "  web frontend: http://localhost:$WEB_PORT  (tmux window 'web')"
     echo "  note: the deployed backend is much slower for large-radius faults"
     echo "  (seconds, not milliseconds) -- see docs/known-issues-cloud-deploy.md."
   fi
@@ -121,7 +152,8 @@ cmd_restart() {
 
 cmd_status() {
   if is_running; then
-    echo "twiner: running."
+    echo "twiner: running (session '$SESSION')."
+    tmux show-environment -t "$SESSION" TWINER_URLS 2>/dev/null | sed 's/^TWINER_URLS=/  /' || true
     tmux list-windows -t "$SESSION" -F '  #{window_name}: #{pane_current_command}'
   else
     echo "twiner: not running."

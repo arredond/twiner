@@ -25,8 +25,10 @@
   never by manually running `uvicorn`/`npm run dev` yourself -- it runs
   both the scenario API and web frontend in a tmux session (`twiner
   status`/`attach`/`stop` manage it). Frontend: http://localhost:5173.
-  Scenario API: http://localhost:8000. `bin/twiner start prod` points the
-  local frontend at the deployed AWS backend instead.
+  Scenario API: http://localhost:8000. Run from a worktree, it uses its own
+  tmux session and the next free ports instead (printed on start and by
+  `twiner status`), so it runs alongside main's. `bin/twiner start prod`
+  points the local frontend at the deployed AWS backend instead.
 - Do not use the claude-in-chrome browser extension/tools on this
   project. Debug the frontend via curl/JS logic review, network request
   logs, and console output instead.
