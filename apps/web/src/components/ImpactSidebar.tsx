@@ -1,7 +1,15 @@
 import { useMemo, useState } from "react";
 import { DAMAGE_COLORS, DAMAGE_STATES } from "../damageColors";
 import { fmtInt, fmtMeur, impactRows, meanSeverity } from "../impactFormat";
-import type { AreaImpact, MunicipalityStats, SectionStats } from "../scenarioApi";
+import {
+  INFRA_CATEGORIES,
+  INTENSITY_COLORS,
+  categoryLabel,
+  countByCategory,
+  fmtIntensity,
+  subtypeLabel,
+} from "../infrastructure";
+import type { AreaImpact, InfrastructureResult, MunicipalityStats, SectionStats } from "../scenarioApi";
 
 // Right-hand scenario panel (ADR-0024): shown while there's a result, lists
 // every municipality with damaged buildings, and drills into one
@@ -22,6 +30,9 @@ interface Props {
   selectedSectionCode: string | null;
   onSelectMunicipality: (code: string | null) => void;
   onSelectSection: (code: string | null) => void;
+  // This scenario's affected critical infrastructure (ADR-0025), most
+  // intense first; null while loading or with no infrastructure data.
+  infrastructure: InfrastructureResult[] | null;
   // Clears the scenario (App.tsx), not just hides the panel.
   onClose: () => void;
 }
@@ -40,6 +51,7 @@ export function ImpactSidebar({
   selectedSectionCode,
   onSelectMunicipality,
   onSelectSection,
+  infrastructure,
   onClose,
 }: Props) {
   const [limit, setLimit] = useState(PAGE_SIZE);
@@ -63,6 +75,14 @@ export function ImpactSidebar({
   );
   const totals = useMemo(() => sumImpact(affected), [affected]);
   const sortedSections = useMemo(() => (sections ? [...sections].sort(bySeverity) : null), [sections]);
+  const infraCounts = useMemo(() => (infrastructure ? countByCategory(infrastructure) : null), [infrastructure]);
+  const municipalityInfrastructure = useMemo(
+    () =>
+      selectedMunicipality && infrastructure
+        ? infrastructure.filter((r) => r.municipality_code === selectedMunicipality.municipality_code)
+        : null,
+    [infrastructure, selectedMunicipality]
+  );
 
   const needle = normalize(query.trim());
   const shownMunicipalities = needle
@@ -102,6 +122,14 @@ export function ImpactSidebar({
               : `${fmtInt(affected.length)} municipalities affected · ${fmtInt(totals.affected_population)} residents affected, ${fmtInt(totals.displaced_population)} displaced · ${fmtMeur(totals.cost_meur)} · ${fmtInt(totals.debris_t)} t debris`}
           </p>
         )}
+        {!selectedMunicipality && infraCounts && infrastructure!.length > 0 && (
+          <p style={{ fontSize: "0.8rem", color: "#555", margin: "0.25rem 0 0" }}>
+            Critical infrastructure affected:{" "}
+            {INFRA_CATEGORIES.filter((c) => infraCounts[c.key])
+              .map((c) => `${fmtInt(infraCounts[c.key])} ${c.label.toLowerCase()}`)
+              .join(" · ")}
+          </p>
+        )}
         {(selectedMunicipality ? (sortedSections?.length ?? 0) : affected.length) > 1 && (
           <input
             type="search"
@@ -118,6 +146,9 @@ export function ImpactSidebar({
         {selectedMunicipality ? (
           <>
             <AreaCard title={selectedMunicipality.name ?? selectedMunicipality.municipality_code} area={selectedMunicipality} emphasized />
+            {municipalityInfrastructure && municipalityInfrastructure.length > 0 && (
+              <InfrastructureList rows={municipalityInfrastructure} />
+            )}
             <h3 style={{ fontSize: "0.85rem", margin: "0.5rem 0 0" }}>
               Census sections with damage
               {sortedSections && shownSections
@@ -164,6 +195,77 @@ export function ImpactSidebar({
         </p>
       </div>
     </aside>
+  );
+}
+
+// Enough to list a town's affected hospitals and schools without a long
+// tail of bridges pushing its census sections off screen.
+const INFRA_LIST_LIMIT = 25;
+
+function InfrastructureList({ rows }: { rows: InfrastructureResult[] }) {
+  const [expanded, setExpanded] = useState(false);
+  const shown = expanded ? rows : rows.slice(0, INFRA_LIST_LIMIT);
+  return (
+    <section>
+      <h3 style={{ fontSize: "0.85rem", margin: "0.5rem 0 0.3rem" }}>Critical infrastructure affected ({rows.length})</h3>
+      <div style={{ display: "flex", flexDirection: "column", gap: "0.2rem" }}>
+        {shown.map((r) => (
+          <div
+            key={r.asset_id}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "0.5rem",
+              background: "#fff",
+              border: "1px solid #e2e2e2",
+              borderRadius: 4,
+              padding: "0.25rem 0.5rem",
+              fontSize: "0.78rem",
+            }}
+          >
+            <span
+              title="Estimated intensity (EMS-98)"
+              style={{
+                minWidth: "4.2rem",
+                textAlign: "center",
+                borderRadius: 3,
+                padding: "0 0.25rem",
+                background: INTENSITY_COLORS[Math.min(10, Math.floor(r.intensity))],
+                color: r.intensity >= 9 ? "#fff" : "#1c1c1c",
+                fontVariantNumeric: "tabular-nums",
+              }}
+            >
+              {fmtIntensity(r.intensity)}
+            </span>
+            <span style={{ flex: 1, minWidth: 0 }}>
+              <span style={{ display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                {r.name ?? subtypeLabel(r.subtype)}
+              </span>
+              <span style={{ color: "#888", fontSize: "0.7rem" }}>
+                {r.name ? subtypeLabel(r.subtype) : categoryLabel(r.category)}
+              </span>
+            </span>
+            {r.damage_state_code !== null && (
+              <span
+                title="Damage state of its building"
+                style={{
+                  borderLeft: `4px solid ${DAMAGE_COLORS[DAMAGE_STATES[r.damage_state_code]]}`,
+                  paddingLeft: "0.3rem",
+                  color: "#555",
+                }}
+              >
+                {DAMAGE_STATES[r.damage_state_code]}
+              </span>
+            )}
+          </div>
+        ))}
+      </div>
+      {rows.length > INFRA_LIST_LIMIT && (
+        <button onClick={() => setExpanded((e) => !e)} style={{ ...linkButton, marginTop: "0.3rem" }}>
+          {expanded ? "Show fewer" : `Show all ${rows.length}`}
+        </button>
+      )}
+    </section>
   );
 }
 

@@ -159,6 +159,32 @@ export interface ScenarioResult {
   n_damaged: number;
   elapsed_ms?: number;
   municipality_stats: MunicipalityStats[];
+  // Affected critical-infrastructure assets by category (ADR-0025); null
+  // when the backend has no infrastructure data deployed. Absent on a
+  // response from an older API version.
+  infrastructure_summary?: Record<string, number> | null;
+}
+
+// One affected critical-infrastructure asset (ADR-0025): estimated
+// intensity (EMS-98 scale, from Worden et al. 2012) at its location, plus
+// its building's damage state for facilities on a Catastro building (null
+// for everything else -- no damage model).
+export interface InfrastructureResult {
+  asset_id: number;
+  category: string;
+  subtype: string;
+  name: string | null;
+  municipality_code: string;
+  intensity: number;
+  damage_state_code: number | null;
+}
+
+// GeoJSON of the scenario's intensity bands: one feature per integer
+// level, `properties.intensity`.
+export interface IntensityBands {
+  type: "FeatureCollection";
+  features: GeoJSON.Feature<GeoJSON.MultiPolygon | GeoJSON.Polygon, { intensity: number }>[];
+  cell_km: number;
 }
 
 async function postScenario(path: string, body: unknown): Promise<ScenarioResult> {
@@ -298,4 +324,18 @@ export function getSectionStats(scenarioId: string, municipalityCode: string): P
 // colors by, much smaller than the full rows for a large scenario.
 export function getSectionSeverity(scenarioId: string): Promise<Record<string, number>> {
   return getJson(`/results/${encodeURIComponent(scenarioId)}/section_severity`);
+}
+
+// All affected assets (the map colours them), or one municipality's (the
+// sidebar). Most intense first.
+export function getInfrastructure(
+  scenarioId: string,
+  municipalityCode?: string
+): Promise<InfrastructureResult[]> {
+  const query = municipalityCode ? `?${new URLSearchParams({ municipality_code: municipalityCode })}` : "";
+  return getJson(`/results/${encodeURIComponent(scenarioId)}/infrastructure${query}`);
+}
+
+export function getIntensityBands(scenarioId: string): Promise<IntensityBands> {
+  return getJson(`/results/${encodeURIComponent(scenarioId)}/intensity`);
 }

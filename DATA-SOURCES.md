@@ -32,6 +32,13 @@ research behind the four Basque/Navarra sources below.
 | Instituto Nacional de Estadística (INE) — census section boundaries, 1 Jan 2025 | All of Spain, 36,554 sections (EPSG:25830 shapefile) | Direct download: [`seccionado_2025.zip`](https://www.ine.es/prodyser/cartografia/seccionado_2025.zip) (zip's own folder name isn't UTF-8 -- extracted flat) | `pipelines/exposure/src/exposure/census_sections.py` |
 | INE — Censo Anual de Población 2021-2025, "Población por sexo y edad (grupos quinquenales)" at census-section level | All of Spain, one table per province (52), 2025 values used | CSV per table, e.g. [`69113.csv`](https://www.ine.es/jaxiT3/files/t/es/csv_bdsc/69113.csv) (Asturias); ids in `POPULATION_TABLE_IDS`, found via the [section results index](https://www.ine.es/dynt3/inebase/es/index.htm?padre=11555&capsel=11154) -- Álava's is the odd one out (65042) | `pipelines/exposure/src/exposure/census_sections.py` |
 
+## Critical infrastructure
+
+| Source | Coverage | Resource | Pipeline module |
+|---|---|---|---|
+| Instituto Geográfico Nacional (IGN/CNIG) — Base Topográfica Nacional (BTN), update of 26/06/2026 (CC BY 4.0 ign.es) | All of Spain; features beyond the border (BTN sheets extend into France/Andorra/Portugal, ~2,260 features) are dropped | **Manual download** (CNIG refuses scripted requests -- see [ADR-0025](docs/decisions/0025-critical-infrastructure.md)): the GeoPackage rows "BTN Tema - Servicios e instalaciones" (layer `0590P`: schools, universities, hospitals, health centres, care homes, police, emergency services), "BTN Tema - Energia" (`0719S` substations, `0713S` power plants, `0710L` lines for substation voltage) and "BTN Tema - Construcciones" (`0546L` bridges, `0552L` dams) from [the BTN download page](https://centrodedescargas.cnig.es/CentroDescargas/btn), unzipped into `data/infrastructure/raw/`. Layer codes and attribute values: [ESPBTN.pdf](https://www.ign.es/resources/docs/IGNCnig/BTN/ESPBTN.pdf). Hospitals carry the Ministry of Health's national hospital catalogue (CNH) id, schools the national school registry (RCD/RUCT) id, dams MITECO's dam inventory (IPE) id; only IPE-listed dams are kept (1,533 of 28,213 -- BTN also captures pond and irrigation-reservoir embankments as dams). | `pipelines/exposure/src/exposure/infrastructure.py` |
+| ↳ Vs30 (ESRM20), same source as buildings (see ADR-0015) | All of Spain except Canarias | Reused for each asset and saved as `vs30_sites.parquet` for the intensity-band grid | `pipelines/exposure/src/exposure/vs30.py` |
+
 ## Seismic hazard
 
 | Source | Coverage | Resource | Pipeline module |

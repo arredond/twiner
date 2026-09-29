@@ -72,11 +72,18 @@ uv run python -m exposure.municipalities_cli data/exposure/muni_raw data/exposur
 uv run python -m exposure.census_sections_cli data/census/raw data/exposure/parts \
     data/census data/exposure/buildings-cloud-impact.parquet
 
+# 1d. Critical infrastructure (ADR-0025): hospitals, schools, substations,
+# bridges... from IGN's BTN. The three BTN theme GeoPackages are a MANUAL
+# download into data/infrastructure/raw/ first -- see pipelines/README.md.
+uv run python -m exposure.infrastructure_cli data/infrastructure/raw data/exposure/parts \
+    data/exposure/municipalities.parquet data/infrastructure
+
 # 2. Copy whichever buildings.pmtiles/debris.pmtiles/municipalities.pmtiles
 # you built into the frontend's static assets
 cp data/exposure/buildings.pmtiles apps/web/public/data/buildings.pmtiles
 cp data/exposure/municipalities.pmtiles apps/web/public/data/municipalities.pmtiles
 cp data/census/sections.pmtiles apps/web/public/data/sections.pmtiles
+cp data/infrastructure/infrastructure.pmtiles apps/web/public/data/infrastructure.pmtiles
 
 # 3. Start both the scenario API and the frontend together
 npm install --prefix apps/web

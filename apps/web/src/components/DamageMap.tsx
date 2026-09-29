@@ -16,9 +16,21 @@ import {
   type BuildingDamageResult,
   type EvaluatedRegion,
   type Fault,
+  type InfrastructureResult,
+  type IntensityBands,
   type MunicipalityStats,
   type SectionStats,
 } from "../scenarioApi";
+import {
+  INFRA_CLICKABLE_LAYER_IDS,
+  INFRA_SHAPES_FILL_LAYER_ID,
+  addInfrastructureLayers,
+  addIntensityLayers,
+  applyInfrastructureResults,
+  renderInfrastructurePopupHtml,
+  setInfrastructureCategories,
+  setIntensityBands,
+} from "./infrastructureLayers";
 
 // MapLibre 6 locates its worker at runtime (`new URL("./maplibre-gl-worker.mjs",
 // import.meta.url)` built from a template string), which Vite's production
@@ -247,6 +259,14 @@ interface Props {
   // close, so App must only clear the popup whose key matches.
   runPopup: { key: number; lat: number; lon: number; content: ReactNode } | null;
   onRunPopupClose: (key: number) => void;
+  // ADR-0025. The scenario's intensity bands (null before a run or while
+  // loading), drawn only while `showIntensity` (the legend's toggle).
+  intensityBands: IntensityBands | null;
+  showIntensity: boolean;
+  // Infrastructure categories to draw (the panel's toggles; [] hides the
+  // layer), and this scenario's affected assets, coloured by intensity.
+  infrastructureCategories: string[];
+  infrastructureResults: InfrastructureResult[] | null;
 }
 
 // The API sends `damage_state_code`, the index into this same
@@ -630,6 +650,10 @@ export function DamageMap({
   onMapClick,
   runPopup,
   onRunPopupClose,
+  intensityBands,
+  showIntensity,
+  infrastructureCategories,
+  infrastructureResults,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
@@ -687,6 +711,10 @@ export function DamageMap({
   // not a client-side results lookup.
   const evaluatedRegionRef = useRef(evaluatedRegion);
   evaluatedRegionRef.current = evaluatedRegion;
+  // Asset popups look up this scenario's row by id; the ids carrying
+  // feature-state, to clear on the next scenario.
+  const infrastructureByIdRef = useRef<Map<number, InfrastructureResult>>(new Map());
+  const infrastructureStateIdsRef = useRef<Set<number>>(new Set());
 
   const faultsData = useMemo(
     () => (faults ? faultsToFeatureCollection(faults) : null),
@@ -732,6 +760,10 @@ export function DamageMap({
     mapRef.current = map;
 
     map.on("load", () => {
+      // Intensity bands (ADR-0025) first, so they sit under every
+      // choropleth and building layer: context, not the result itself.
+      addIntensityLayers(map);
+
       // Municipality choropleth (low zoom) -- added before buildings/debris
       // so it renders underneath them once both are visible near the
       // minzoom/maxzoom seam, though in practice only one of the two sets
@@ -809,6 +841,10 @@ export function DamageMap({
       buildingsSourceScenarioIdRef.current = null;
 
       addDebrisSourceAndLayers(map, null);
+
+      // Critical infrastructure (ADR-0025): above buildings and debris,
+      // below the fault lines. Hidden until a category is toggled on.
+      addInfrastructureLayers(map);
 
       map.addSource(FAULTS_SOURCE_ID, {
         type: "geojson",
@@ -1037,6 +1073,36 @@ export function DamageMap({
         map.getCanvas().style.cursor = "";
       });
 
+      // Infrastructure asset popup: static attributes off the tile, this
+      // scenario's intensity (and building damage) when it flagged the asset.
+      for (const layerId of INFRA_CLICKABLE_LAYER_IDS) {
+        map.on("click", layerId, (e: MapLayerMouseEvent) => {
+          const feature = e.features?.[0];
+          if (!feature) return;
+          const tileProps = (feature.properties ?? {}) as Record<string, unknown>;
+          const assetId = Number(feature.id ?? tileProps.asset_id);
+          const region = evaluatedRegionRef.current;
+          new maplibregl.Popup({ closeButton: true, maxWidth: "20rem" })
+            .setLngLat(e.lngLat)
+            .setHTML(
+              renderInfrastructurePopupHtml(
+                tileProps,
+                infrastructureByIdRef.current.get(assetId) ?? null,
+                region
+                  ? { withinEvaluatedRegion: isWithinEvaluatedRegion(region, e.lngLat.lat, e.lngLat.lng) }
+                  : null
+              )
+            )
+            .addTo(map);
+        });
+        map.on("mouseenter", layerId, () => {
+          map.getCanvas().style.cursor = "pointer";
+        });
+        map.on("mouseleave", layerId, () => {
+          map.getCanvas().style.cursor = "";
+        });
+      }
+
       // General map click (manual mode's rupture popup) -- skips clicks
       // that landed on a building, debris ring, municipality or section
       // (handled by their own popup click handlers above), and on a fault
@@ -1053,6 +1119,7 @@ export function DamageMap({
             MUNICIPALITIES_LAYER_ID,
             SECTIONS_LAYER_ID,
             SECTIONS_FOCUS_LAYER_ID,
+            ...INFRA_CLICKABLE_LAYER_IDS.filter((id) => map.getLayoutProperty(id, "visibility") !== "none"),
           ],
         });
         if (hits.length === 0) {
@@ -1179,10 +1246,15 @@ export function DamageMap({
     for (const sourceId of [DEBRIS_SOURCE_ID, BUILDINGS_SOURCE_ID]) {
       if (map.getSource(sourceId)) map.removeSource(sourceId);
     }
-    // Re-inserted beneath the fault lines, same stacking as the initial
-    // load (municipalities < buildings < debris < faults) -- addLayer
-    // without a beforeId would put them on top of everything.
-    const beforeId = map.getLayer(FAULTS_LAYER_ID) ? FAULTS_LAYER_ID : undefined;
+    // Re-inserted beneath infrastructure and the fault lines, same stacking
+    // as the initial load (municipalities < buildings < debris <
+    // infrastructure < faults) -- addLayer without a beforeId would put
+    // them on top of everything.
+    const beforeId = map.getLayer(INFRA_SHAPES_FILL_LAYER_ID)
+      ? INFRA_SHAPES_FILL_LAYER_ID
+      : map.getLayer(FAULTS_LAYER_ID)
+        ? FAULTS_LAYER_ID
+        : undefined;
     addBuildingsSourceAndLayers(map, scenarioId, beforeId);
     addDebrisSourceAndLayers(map, scenarioId, beforeId);
     // A source swap drops any feature-state the removed source held --
@@ -1350,6 +1422,37 @@ export function DamageMap({
       map.fitBounds(boundsFromRegion(evaluatedRegion), { padding: 48, maxZoom: 15, duration: 500 });
     }
   }, [evaluatedRegion]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    const apply = () => setIntensityBands(map, intensityBands, showIntensity);
+    if (mapLoadedRef.current) apply();
+    else map.once("load", apply);
+  }, [intensityBands, showIntensity]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    const apply = () => setInfrastructureCategories(map, infrastructureCategories);
+    if (mapLoadedRef.current) apply();
+    else map.once("load", apply);
+  }, [infrastructureCategories]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    infrastructureByIdRef.current = new Map((infrastructureResults ?? []).map((r) => [r.asset_id, r]));
+    if (!map) return;
+    const apply = () => {
+      infrastructureStateIdsRef.current = applyInfrastructureResults(
+        map,
+        infrastructureStateIdsRef.current,
+        infrastructureResults
+      );
+    };
+    if (mapLoadedRef.current) apply();
+    else map.once("load", apply);
+  }, [infrastructureResults]);
 
   return (
     <div style={{ position: "relative", width: "100%", height: "100%" }}>

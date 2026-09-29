@@ -142,6 +142,35 @@ skipped), `data/census/{sections.parquet, sections_meta.parquet,
 municipalities_meta.parquet, sections.pmtiles}`, and the compacted
 `buildings-cloud-impact.parquet` that `bin/twiner` uses when present.
 
+### Critical infrastructure (`exposure.infrastructure_cli`)
+
+Hospitals, health centres, care homes, schools, universities, police and
+emergency services, substations, power plants, bridges and inventoried dams
+from IGN's Base Topográfica Nacional
+([ADR-0025](../docs/decisions/0025-critical-infrastructure.md)). **Manual
+download first**: CNIG refuses scripted downloads, so get the three
+GeoPackage rows "BTN Tema - Servicios e instalaciones", "BTN Tema -
+Energia" and "BTN Tema - Construcciones" from
+<https://centrodedescargas.cnig.es/CentroDescargas/btn> and unzip them into
+`data/infrastructure/raw/`. Then, after a crawl and the municipalities
+step (it matches facilities to `parts_dir`'s buildings and assigns
+municipalities from `municipalities.parquet`); ~45 seconds nationally:
+
+```bash
+uv run python -m exposure.infrastructure_cli data/infrastructure/raw data/exposure/parts \
+    data/exposure/municipalities.parquet data/infrastructure
+cp data/infrastructure/infrastructure.pmtiles apps/web/public/data/infrastructure.pmtiles
+```
+
+Outputs, in `data/infrastructure/`: `infrastructure.parquet` (every asset
+with geometry), `infrastructure_sites.parquet` (the same without geometry
+-- what the scenario service loads), `vs30_sites.parquet` (ESRM20's Vs30
+grid, for the intensity bands) and `infrastructure.pmtiles` (two layers,
+`points` and `shapes`, feature id = BTN id). The scenario service finds
+them under `$TWINER_DATA_DIR/infrastructure/` (or `TWINER_INFRA_SITES_PATH`
+/ `TWINER_VS30_SITES_PATH`); without them a scenario simply has no
+infrastructure results.
+
 ## `fragility`: Martins & Silva (2020) fragility functions
 
 Downloads a curated subset of the [global fragility/vulnerability function

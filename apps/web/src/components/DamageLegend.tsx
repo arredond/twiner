@@ -1,4 +1,5 @@
 import { DAMAGE_COLORS, DAMAGE_STATES, DEBRIS_COLOR } from "../damageColors";
+import { INTENSITY_COLORS, INTENSITY_LEVELS, roman } from "../infrastructure";
 
 export type LayerStatus = "idle" | "loading" | "ready";
 
@@ -56,9 +57,20 @@ export interface DamageLegendProps {
   // (DamageMap.tsx colors areas by mean damage state), hence one section.
   damageStatus?: LayerStatus;
   debrisStatus?: LayerStatus;
+  // Intensity bands (ADR-0025): their own toggle, off by default; only
+  // offered once a scenario has bands to show.
+  intensityStatus?: LayerStatus;
+  showIntensity?: boolean;
+  onShowIntensityChange?: (show: boolean) => void;
 }
 
-export function DamageLegend({ damageStatus = "idle", debrisStatus = "idle" }: DamageLegendProps) {
+export function DamageLegend({
+  damageStatus = "idle",
+  debrisStatus = "idle",
+  intensityStatus = "idle",
+  showIntensity = false,
+  onShowIntensityChange,
+}: DamageLegendProps) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
       <LayerSection title="Damage" status={damageStatus}>
@@ -77,6 +89,27 @@ export function DamageLegend({ damageStatus = "idle", debrisStatus = "idle" }: D
             see DamageMap.tsx -- a separate concept from a building's own
             damage color, not a restatement of it. */}
         <LegendRow color={DEBRIS_COLOR} label="Debris (façade buffer)" />
+      </LayerSection>
+      <LayerSection title="Intensity (EMS-98, est.)" status={intensityStatus}>
+        <label style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
+          <input
+            type="checkbox"
+            checked={showIntensity}
+            disabled={intensityStatus !== "ready"}
+            onChange={(e) => onShowIntensityChange?.(e.target.checked)}
+          />
+          Show intensity bands
+        </label>
+        {/* Also the colour of affected infrastructure (InfrastructurePanel),
+            whether or not the bands themselves are on. */}
+        <div style={{ display: "flex", marginTop: "0.3rem" }}>
+          {INTENSITY_LEVELS.map((level) => (
+            <div key={level} style={{ flex: 1, textAlign: "center" }}>
+              <div style={{ height: "0.7rem", background: INTENSITY_COLORS[level] }} />
+              <span style={{ fontSize: "0.7rem" }}>{level === 10 ? "X+" : roman(level)}</span>
+            </div>
+          ))}
+        </div>
       </LayerSection>
     </div>
   );

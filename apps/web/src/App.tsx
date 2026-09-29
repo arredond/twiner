@@ -4,7 +4,11 @@ import { ImpactSidebar } from "./components/ImpactSidebar";
 import { ManualRunForm, type ManualParams } from "./components/RunScenarioPopup";
 import { PROBABILITY_LEVEL_LABELS, PROBABILITY_LEVEL_SHORT_LABELS } from "./probabilityLevels";
 import { DamageLegend } from "./components/DamageLegend";
+import { InfrastructurePanel } from "./components/InfrastructurePanel";
+import { INFRA_CATEGORY_KEYS, type InfraCategory } from "./infrastructure";
 import {
+  getInfrastructure,
+  getIntensityBands,
   getSectionSeverity,
   getSectionStats,
   roundCoord,
@@ -13,6 +17,8 @@ import {
   runFaultScenario,
   runManualScenario,
   type Fault,
+  type InfrastructureResult,
+  type IntensityBands,
   type ProbabilityLevel,
   type ScenarioResult,
   type SectionStats,
@@ -99,6 +105,39 @@ export default function App() {
     };
   }, [selectedMunicipalityCode, loadSectionStats]);
 
+  // Critical infrastructure and intensity bands (ADR-0025): both fetched
+  // per scenario; the bands are drawn only while the legend's toggle is
+  // on, the assets only while the infrastructure panel's is.
+  const [intensityBands, setIntensityBands] = useState<IntensityBands | null>(null);
+  const [showIntensity, setShowIntensity] = useState(false);
+  const [infrastructure, setInfrastructure] = useState<InfrastructureResult[] | null>(null);
+  const [infraEnabled, setInfraEnabled] = useState(false);
+  const [infraCategories, setInfraCategories] = useState<InfraCategory[]>(INFRA_CATEGORY_KEYS);
+  const [infraPanelOpen, setInfraPanelOpen] = useState(false);
+  const hasInfrastructure = result?.infrastructure_summary != null;
+
+  useEffect(() => {
+    setIntensityBands(null);
+    setInfrastructure(null);
+    if (!scenarioId) return;
+    let cancelled = false;
+    getIntensityBands(scenarioId)
+      .then((bands) => !cancelled && setIntensityBands(bands))
+      .catch(() => {
+        // No bands (e.g. an older cached result): the toggle stays disabled.
+      });
+    if (hasInfrastructure) {
+      getInfrastructure(scenarioId)
+        .then((rows) => !cancelled && setInfrastructure(rows))
+        .catch(() => {
+          // Assets then just show uncoloured.
+        });
+    }
+    return () => {
+      cancelled = true;
+    };
+  }, [scenarioId, hasInfrastructure]);
+
   // Faults feed both the map's fault layer and the fault popup.
   const [faults, setFaults] = useState<Fault[] | null>(null);
   const [faultsError, setFaultsError] = useState<string | null>(null);
@@ -139,6 +178,7 @@ export default function App() {
   async function runScenario(run: () => Promise<ScenarioResult>) {
     setPending(null);
     setLegendOpen(true);
+    setInfraPanelOpen(true);
     setIsRunning(true);
     setError(null);
     try {
@@ -242,6 +282,10 @@ export default function App() {
           onMapClick={handleMapClick}
           runPopup={runPopup}
           onRunPopupClose={(key) => setPending((p) => (p?.key === key ? null : p))}
+          intensityBands={intensityBands}
+          showIntensity={showIntensity}
+          infrastructureCategories={infraEnabled ? infraCategories : []}
+          infrastructureResults={infrastructure}
         />
 
         <div style={{ ...overlayPanel, top: "0.75rem", left: "0.75rem", maxWidth: "17rem" }}>
@@ -296,19 +340,51 @@ export default function App() {
           )}
         </div>
 
-        <details
-          open={legendOpen}
-          onToggle={(e) => setLegendOpen(e.currentTarget.open)}
-          style={{ ...overlayPanel, bottom: "1.75rem", left: "0.75rem", fontSize: "0.8rem" }}
+        <div
+          style={{
+            position: "absolute",
+            zIndex: 1,
+            bottom: "1.75rem",
+            left: "0.75rem",
+            display: "flex",
+            alignItems: "flex-end",
+            gap: "0.5rem",
+            fontSize: "0.8rem",
+          }}
         >
-          <summary style={{ cursor: "pointer", fontWeight: 600 }}>Legend</summary>
-          <div style={{ marginTop: "0.5rem" }}>
-            <DamageLegend
-              damageStatus={isRunning ? "loading" : result ? "ready" : "idle"}
-              debrisStatus={isRunning ? "loading" : result ? "ready" : "idle"}
-            />
-          </div>
-        </details>
+          <details
+            open={legendOpen}
+            onToggle={(e) => setLegendOpen(e.currentTarget.open)}
+            style={{ ...overlayPanel, position: "static" }}
+          >
+            <summary style={{ cursor: "pointer", fontWeight: 600 }}>Legend</summary>
+            <div style={{ marginTop: "0.5rem" }}>
+              <DamageLegend
+                damageStatus={isRunning ? "loading" : result ? "ready" : "idle"}
+                debrisStatus={isRunning ? "loading" : result ? "ready" : "idle"}
+                intensityStatus={isRunning ? "loading" : intensityBands ? "ready" : "idle"}
+                showIntensity={showIntensity}
+                onShowIntensityChange={setShowIntensity}
+              />
+            </div>
+          </details>
+          <details
+            open={infraPanelOpen}
+            onToggle={(e) => setInfraPanelOpen(e.currentTarget.open)}
+            style={{ ...overlayPanel, position: "static" }}
+          >
+            <summary style={{ cursor: "pointer", fontWeight: 600 }}>Critical infrastructure</summary>
+            <div style={{ marginTop: "0.5rem" }}>
+              <InfrastructurePanel
+                enabled={infraEnabled}
+                onEnabledChange={setInfraEnabled}
+                categories={infraCategories}
+                onCategoriesChange={setInfraCategories}
+                affectedCounts={result?.infrastructure_summary ?? null}
+              />
+            </div>
+          </details>
+        </div>
       </main>
       {result && (
         <ImpactSidebar
@@ -325,6 +401,7 @@ export default function App() {
           selectedSectionCode={selectedSectionCode}
           onSelectMunicipality={setSelectedMunicipalityCode}
           onSelectSection={setSelectedSectionCode}
+          infrastructure={infrastructure}
           onClose={clearScenario}
         />
       )}
