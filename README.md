@@ -83,11 +83,13 @@ npm install --prefix apps/web
 ./bin/twiner start   # see `twiner status`/`twiner attach`/`twiner stop`/`twiner restart`
 ```
 
-Open http://localhost:5173, submit a manual rupture or pick a fault in the
-sidebar, and the map colors buildings by resulting damage state; the
-right-hand impact panel lists affected municipalities (population, cost,
-debris -- rough estimates, see docs/impact-estimates.md) and drills into
-their census sections.
+Open http://localhost:5173. In Automatic mode, click a fault (dashed purple
+line) to open its "run scenario" popup; in Manual mode, click anywhere on
+the map to configure an earthquake there. The map colors buildings by
+resulting damage state, and the right-hand scenario panel lists affected
+municipalities (population, cost, debris -- rough estimates, see
+docs/impact-estimates.md) and drills into their census sections. Closing
+the panel clears the scenario.
 `bin/twiner` defaults to whichever dataset `TWINER_BUILDINGS_PATH`/
 `TWINER_EXPOSURE_PATH` point at (see the script's own comments) -- set
 those env vars before `twiner start` to point at a different one, e.g. a

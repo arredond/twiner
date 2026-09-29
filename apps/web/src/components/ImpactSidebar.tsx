@@ -3,13 +3,17 @@ import { DAMAGE_COLORS, DAMAGE_STATES } from "../damageColors";
 import { fmtInt, fmtMeur, impactRows, meanSeverity } from "../impactFormat";
 import type { AreaImpact, MunicipalityStats, SectionStats } from "../scenarioApi";
 
-// Right-hand impact panel (ADR-0024): opens once a scenario has run, lists
+// Right-hand scenario panel (ADR-0024): shown while there's a result, lists
 // every municipality with damaged buildings, and drills into one
 // municipality's census sections on click (App.tsx fetches those and
 // zooms the map). All figures are server-side estimates -- see
 // docs/impact-estimates.md for how each is computed.
 
 interface Props {
+  // The scenario, e.g. "Alhama de Murcia (1/4) - Mmax. 6.7 - High
+  // probability" (App.tsx's scenarioTitle), and a one-line summary.
+  title: string;
+  subtitle: string;
   municipalities: MunicipalityStats[];
   selectedMunicipality: MunicipalityStats | null;
   // null while loading; the error string if the fetch failed.
@@ -18,6 +22,7 @@ interface Props {
   selectedSectionCode: string | null;
   onSelectMunicipality: (code: string | null) => void;
   onSelectSection: (code: string | null) => void;
+  // Clears the scenario (App.tsx), not just hides the panel.
   onClose: () => void;
 }
 
@@ -26,6 +31,8 @@ interface Props {
 const PAGE_SIZE = 100;
 
 export function ImpactSidebar({
+  title,
+  subtitle,
   municipalities,
   selectedMunicipality,
   sections,
@@ -77,12 +84,13 @@ export function ImpactSidebar({
       }}
     >
       <header style={{ padding: "0.75rem 1rem", borderBottom: "1px solid #ddd", background: "#fff" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <h2 style={{ fontSize: "1rem", margin: 0 }}>Impact</h2>
-          <button onClick={onClose} title="Hide panel" style={iconButton}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "0.5rem" }}>
+          <h2 style={{ fontSize: "1rem", margin: 0 }}>{title}</h2>
+          <button onClick={onClose} title="Close scenario" aria-label="Close scenario" style={iconButton}>
             ×
           </button>
         </div>
+        <p style={{ fontSize: "0.75rem", color: "#666", margin: "0.2rem 0 0" }}>{subtitle}</p>
         {selectedMunicipality ? (
           <button onClick={() => onSelectMunicipality(null)} style={linkButton}>
             ← All municipalities

@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import * as maplibregl from "maplibre-gl";
 import type { GeoJSONSource, Map as MapLibreMap, MapLayerMouseEvent } from "maplibre-gl";
 import maplibreWorkerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url";
@@ -225,15 +226,27 @@ interface Props {
   evaluatedRegion: EvaluatedRegion | null;
   faults: Fault[] | null;
   selectedFaultId: string | null;
+  // Which kind of scenario a map click starts. Automatic: faults are
+  // hoverable (name + Mmax tooltip) and clickable (onFaultClick), other
+  // clicks do nothing new. Manual: faults are display-only and every click
+  // that doesn't hit a result layer goes to onMapClick.
+  mode: "automatic" | "manual";
   // lat/lon here is the actual point clicked on the fault trace -- only
   // used as the rupture's reference point for a fault without full rupture
   // geometry (see scenarioApi.ts's runFaultScenario); every other fault's
   // rupture location comes from its own trace.
   onFaultClick: (faultId: string, lat: number, lon: number) => void;
-  // Fires for a click anywhere on the map that *didn't* hit a fault line
-  // (those go to onFaultClick instead) -- drives manual mode's lat/lon.
+  // Manual mode only: a click that hit no fault/building/debris/
+  // municipality/section -- where the rupture popup opens.
   onMapClick: (lat: number, lon: number) => void;
-  onMapMove: (lat: number, lon: number) => void;
+  // The "run scenario" popup (App.tsx owns its content): anchored at
+  // `lat`/`lon`, rendered through a React portal into a MapLibre popup.
+  // A new `key` opens a new popup. null closes it; the user closing it
+  // (× or a map click elsewhere) calls onRunPopupClose with its key --
+  // a map click can open the next popup *before* the old one reports its
+  // close, so App must only clear the popup whose key matches.
+  runPopup: { key: number; lat: number; lon: number; content: ReactNode } | null;
+  onRunPopupClose: (key: number) => void;
 }
 
 // The API sends `damage_state_code`, the index into this same
@@ -612,9 +625,11 @@ export function DamageMap({
   evaluatedRegion,
   faults,
   selectedFaultId,
+  mode,
   onFaultClick,
   onMapClick,
-  onMapMove,
+  runPopup,
+  onRunPopupClose,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
@@ -658,8 +673,13 @@ export function DamageMap({
   onFaultClickRef.current = onFaultClick;
   const onMapClickRef = useRef(onMapClick);
   onMapClickRef.current = onMapClick;
-  const onMapMoveRef = useRef(onMapMove);
-  onMapMoveRef.current = onMapMove;
+  const modeRef = useRef(mode);
+  modeRef.current = mode;
+  const onRunPopupCloseRef = useRef(onRunPopupClose);
+  onRunPopupCloseRef.current = onRunPopupClose;
+  // The run popup's MapLibre shell and the DOM node its React content is
+  // portalled into (see the runPopup effect below).
+  const [runPopupContainer, setRunPopupContainer] = useState<HTMLDivElement | null>(null);
   // Building-click popup needs the region a scenario was evaluated against
   // to classify a clicked building that has no joined damage_state_code
   // (see isWithinEvaluatedRegion) -- damage itself now comes straight off
@@ -808,15 +828,37 @@ export function DamageMap({
         paint: { "line-color": "#7209b7", "line-width": 4 },
       });
 
-      map.on("click", FAULTS_LAYER_ID, (e: MapLayerMouseEvent) => {
-        const faultId = e.features?.[0]?.properties?.fault_id;
-        if (faultId) onFaultClickRef.current(faultId, e.lngLat.lat, e.lngLat.lng);
+      // Automatic mode: hovering a fault names it; clicking opens its run
+      // popup (App.tsx). Manual mode leaves fault lines inert so a click on
+      // one sets the rupture location like anywhere else.
+      const faultTooltip = new maplibregl.Popup({
+        closeButton: false,
+        closeOnClick: false,
+        className: "fault-tooltip",
+        offset: 8,
       });
-      map.on("mouseenter", FAULTS_LAYER_ID, () => {
+      map.on("click", FAULTS_LAYER_ID, (e: MapLayerMouseEvent) => {
+        if (modeRef.current !== "automatic") return;
+        const faultId = e.features?.[0]?.properties?.fault_id;
+        if (!faultId) return;
+        faultTooltip.remove();
+        onFaultClickRef.current(faultId, e.lngLat.lat, e.lngLat.lng);
+      });
+      map.on("mousemove", FAULTS_LAYER_ID, (e: MapLayerMouseEvent) => {
+        if (modeRef.current !== "automatic") return;
+        const props = e.features?.[0]?.properties;
+        if (!props) return;
         map.getCanvas().style.cursor = "pointer";
+        faultTooltip
+          .setLngLat(e.lngLat)
+          .setHTML(
+            `<strong>${escapeHtml(props.name)}</strong> · Mmax ${escapeHtml(Number(props.mmax).toFixed(1))}`
+          )
+          .addTo(map);
       });
       map.on("mouseleave", FAULTS_LAYER_ID, () => {
         map.getCanvas().style.cursor = "";
+        faultTooltip.remove();
       });
 
       // Click-to-highlight: buildings and debris share one selection at a
@@ -995,15 +1037,17 @@ export function DamageMap({
         map.getCanvas().style.cursor = "";
       });
 
-      // General map click (manual mode's "click to set lat/lon") -- skips
-      // clicks that landed on a fault line, building, debris ring or
-      // municipality (handled by their own popup click handlers above) so
-      // one click doesn't trigger two different behaviors at once, and
-      // clears any highlight since this click hit none of them.
+      // General map click (manual mode's rupture popup) -- skips clicks
+      // that landed on a building, debris ring, municipality or section
+      // (handled by their own popup click handlers above), and on a fault
+      // line in automatic mode, so one click doesn't trigger two different
+      // behaviors at once; clears any highlight since this click hit none
+      // of them. Never switches mode itself (App.tsx ignores it outside
+      // manual mode).
       map.on("click", (e: MapLayerMouseEvent) => {
         const hits = map.queryRenderedFeatures(e.point, {
           layers: [
-            FAULTS_LAYER_ID,
+            ...(modeRef.current === "automatic" ? [FAULTS_LAYER_ID] : []),
             BUILDINGS_LAYER_ID,
             DEBRIS_LAYER_ID,
             MUNICIPALITIES_LAYER_ID,
@@ -1016,17 +1060,6 @@ export function DamageMap({
           onMapClickRef.current(e.lngLat.lat, e.lngLat.lng);
         }
       });
-
-      // Automatic mode's dropdown (no click coordinate available) uses
-      // wherever the map is currently centered as its reference point --
-      // kept live so it tracks panning/zooming rather than freezing at the
-      // initial SPAIN_CENTER.
-      const reportCenter = () => {
-        const c = map.getCenter();
-        onMapMoveRef.current(c.lat, c.lng);
-      };
-      map.on("moveend", reportCenter);
-      reportCenter();
 
       const reportZoom = () => setZoom(map.getZoom());
       map.on("zoom", reportZoom);
@@ -1065,6 +1098,36 @@ export function DamageMap({
       focus.length === 0 ? NO_SECTIONS_FILTER : ["in", ["get", "code"], ["literal", focus]]
     );
   }
+
+  // Run popup: one MapLibre popup per anchor point, whose DOM node the
+  // React content is portalled into (so it stays a live React form, not
+  // HTML set once). Closing it from the map (× or a click elsewhere)
+  // reports back through onRunPopupClose; closing it from App (null)
+  // removes it without that callback.
+  const runPopupKey = runPopup?.key;
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !runPopup) return;
+    const { key, lat, lon } = runPopup;
+    const container = document.createElement("div");
+    const popup = new maplibregl.Popup({ closeButton: true, maxWidth: "20rem", className: "run-popup" })
+      .setLngLat([lon, lat])
+      .setDOMContent(container)
+      .addTo(map);
+    let closedByApp = false;
+    popup.on("close", () => {
+      if (!closedByApp) onRunPopupCloseRef.current(key);
+    });
+    setRunPopupContainer(container);
+    return () => {
+      closedByApp = true;
+      popup.remove();
+      setRunPopupContainer(null);
+    };
+    // Keyed on `key` alone: content changes (form edits) re-render
+    // through the portal without recreating the popup.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [runPopupKey]);
 
   // Faults data can arrive (or change) after the map has already loaded --
   // update the source in place rather than requiring load-order luck.
@@ -1291,6 +1354,7 @@ export function DamageMap({
   return (
     <div style={{ position: "relative", width: "100%", height: "100%" }}>
       <div ref={containerRef} style={{ width: "100%", height: "100%" }} />
+      {runPopup && runPopupContainer && createPortal(runPopup.content, runPopupContainer)}
       {zoom !== null && (
         <div
           style={{

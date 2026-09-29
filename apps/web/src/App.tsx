@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { DamageMap } from "./components/DamageMap";
 import { ImpactSidebar } from "./components/ImpactSidebar";
-import { RuptureForm, type ManualParams } from "./components/RuptureForm";
-import { PROBABILITY_LEVEL_LABELS } from "./probabilityLevels";
+import { FaultRunForm, ManualRunForm, type ManualParams } from "./components/RunScenarioPopup";
+import { PROBABILITY_LEVEL_SHORT_LABELS } from "./probabilityLevels";
 import { DamageLegend } from "./components/DamageLegend";
 import {
   getSectionSeverity,
@@ -18,18 +18,19 @@ import {
   type SectionStats,
 } from "./scenarioApi";
 
-// twiner milestone-1 MVP shell: source panel -> run -> damage layer,
-// matching MERISUR's own UX shape (docs/merisur.md §5). The
-// probability-level selector (docs/merisur.md §4.7) landed per
-// docs/validation-lorca-2011.md §10.5.
+// twiner shell: a full-screen map where scenarios start (a fault's popup in
+// Automatic mode, a clicked point's popup in Manual mode -- MERISUR's two
+// entry modes, docs/merisur.md §4.1/§5), and a right-hand scenario panel
+// with the result's impact (ADR-0024). Closing the panel clears the
+// scenario.
 export default function App() {
   const [result, setResult] = useState<ScenarioResult | null>(null);
   const [isRunning, setIsRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Post-scenario impact panel (ADR-0024): opens on every new result, lists
-  // affected municipalities, drills into one's census sections.
-  const [impactOpen, setImpactOpen] = useState(false);
+  // Post-scenario impact panel (ADR-0024): shown whenever there's a
+  // result; lists affected municipalities, drills into one's census
+  // sections.
   const [selectedMunicipalityCode, setSelectedMunicipalityCode] = useState<string | null>(null);
   const [selectedSectionCode, setSelectedSectionCode] = useState<string | null>(null);
   const [sections, setSections] = useState<SectionStats[] | null>(null);
@@ -65,15 +66,14 @@ export default function App() {
     [scenarioId]
   );
 
-  // New scenario: reset the drill-down, open the panel, fetch the map's
-  // section severities.
+  // New scenario (or none): reset the drill-down, fetch the map's section
+  // severities.
   useEffect(() => {
     sectionCacheRef.current = new Map();
     setSelectedMunicipalityCode(null);
     setSelectedSectionCode(null);
     setSectionSeverity({});
     if (!scenarioId) return;
-    setImpactOpen(true);
     let cancelled = false;
     getSectionSeverity(scenarioId)
       .then((severity) => !cancelled && setSectionSeverity(severity))
@@ -99,37 +99,20 @@ export default function App() {
     };
   }, [selectedMunicipalityCode, loadSectionStats]);
 
-  // Faults are fetched once here (not inside RuptureForm) because both the
-  // sidebar dropdown and the map's clickable fault layer need the same
-  // list -- MERISUR lets you pick a fault either way (docs/merisur.md §4.1
-  // "select an existing fault", §5 map + list selection).
+  // Faults feed both the map's fault layer and the fault popup.
   const [faults, setFaults] = useState<Fault[] | null>(null);
   const [faultsError, setFaultsError] = useState<string | null>(null);
   const [selectedFaultId, setSelectedFaultId] = useState<string | null>(null);
 
-  // Kept live from the map's own center (moveend-driven, see DamageMap's
-  // onMapMove -- not per-frame): orders the fault dropdown nearest-first,
-  // and is the fallback reference point for the rare fault without full
-  // rupture geometry (see runFaultScenario).
-  const [mapCenter, setMapCenter] = useState({ lat: 40.0, lon: -3.7038 });
-  const faultsByDistance = useMemo(
-    () => (faults ? sortFaultsByDistance(faults, mapCenter) : null),
-    [faults, mapCenter]
-  );
-
-  // Mode + manual-mode form state live here (not inside RuptureForm) so a
-  // map click (DamageMap) can drive both -- clicking empty space switches
-  // to manual mode and fills in the clicked coordinates, matching "clicking
-  // on the map should set lat/long."
+  // Automatic: hover/click faults. Manual: click anywhere for a rupture
+  // popup. Only this toggle changes the mode -- a map click never does.
   const [mode, setMode] = useState<"automatic" | "manual">("automatic");
-  // MERISUR's probability-level selector (docs/merisur.md §4.7): shared
-  // across both modes, same as `mode` itself -- lifted here rather than
-  // duplicated per-mode since it means the same thing (which ground-motion/
-  // damage percentile to use) regardless of how the rupture was defined.
+  // MERISUR's probability-level selector (docs/merisur.md §4.7): shared by
+  // both popups and remembered between them.
   const [probabilityLevel, setProbabilityLevel] = useState<ProbabilityLevel>("high");
   const [manualParams, setManualParams] = useState<ManualParams>({
     lat: 40.4168,
-    lon: -3.7038, // Madrid -- arbitrary, recognizable starting point, not seismically special
+    lon: -3.7038,
     mag: 6.0,
     styleOfFaulting: "strike-slip",
     advancedEnabled: false,
@@ -138,10 +121,16 @@ export default function App() {
     ztorKm: 5,
   });
 
-  // Fetched once: the backend always returns every fault (no location
-  // args), and re-ordering for the current view is local (faultsByDistance
-  // above). The old per-pan refetch was a Lambda round trip -- sometimes a
-  // cold start -- on every map move.
+  // The open "run scenario" popup, if any. `key` makes each open a new
+  // popup (see DamageMap's runPopup prop).
+  const [pending, setPending] = useState<
+    | { key: number; kind: "fault"; faultId: string; lat: number; lon: number }
+    | { key: number; kind: "manual"; lat: number; lon: number }
+    | null
+  >(null);
+  const nextPopupKey = useRef(0);
+
+  // Fetched once: every fault, no location args.
   useEffect(() => {
     listFaults()
       .then(setFaults)
@@ -150,6 +139,7 @@ export default function App() {
   }, []);
 
   async function runScenario(run: () => Promise<ScenarioResult>) {
+    setPending(null);
     setIsRunning(true);
     setError(null);
     try {
@@ -161,9 +151,10 @@ export default function App() {
     }
   }
 
-  function handleManualSubmit() {
+  function runManual() {
     const { lat, lon, mag, styleOfFaulting, advancedEnabled, strike, dip, ztorKm } = manualParams;
     const rake = STYLE_OF_FAULTING_RAKE[styleOfFaulting];
+    setSelectedFaultId(null);
     return runScenario(() =>
       runManualScenario({
         lat,
@@ -179,125 +170,73 @@ export default function App() {
     );
   }
 
-  // Fault identity comes from the loaded list (has_rupture_geometry decides
-  // whether a reference point is sent at all, see runFaultScenario). An id
-  // not in the list -- shouldn't happen, both entry points come from it --
-  // is sent with the reference point, which the backend ignores unless it
-  // needs it.
-  function runFault(faultId: string, near: { lat: number; lon: number }) {
-    const fault = faults?.find((f) => f.fault_id === faultId) ?? {
-      fault_id: faultId,
-      has_rupture_geometry: false,
-    };
+  // The clicked point is only used as the rupture's reference point for a
+  // fault without full rupture geometry (see runFaultScenario).
+  function runFault(fault: Fault, near: { lat: number; lon: number }) {
+    setSelectedFaultId(fault.fault_id);
     return runScenario(() => runFaultScenario(fault, probabilityLevel, near));
   }
 
-  // Dropdown selection: no click coordinate, so the map's current center is
-  // the reference point (only used for a fault without rupture geometry).
-  function handleFaultSubmit(faultId: string) {
-    setSelectedFaultId(faultId);
-    return runFault(faultId, mapCenter);
-  }
-
-  // Clicking a fault on the map selects *and* runs it immediately, matching
-  // MERISUR's "click a fault, get its max-magnitude earthquake" flow more
-  // directly than the sidebar's select-then-press-"Run scenario" two-step.
-  // The clicked point is the reference point (again, only used for a fault
-  // without rupture geometry).
   function handleFaultClick(faultId: string, lat: number, lon: number) {
-    setSelectedFaultId(faultId);
-    void runFault(faultId, { lat, lon });
+    setPending({ key: nextPopupKey.current++, kind: "fault", faultId, lat, lon });
   }
 
-  // Clicking anywhere else on the map (DamageMap already excludes fault-line
-  // hits, which go to handleFaultClick instead) sets manual mode's rupture
-  // location -- but only while manual mode is already active. Switching
-  // modes on a stray map click would be surprising while browsing the map
-  // in automatic mode (e.g. panning near a building); the user has to
-  // deliberately pick "Manual" first.
+  // Manual mode only (see `mode`). Rounded here too (not just in
+  // scenarioApi.ts) so the popup's lat/lon show the value that's sent.
   function handleMapClick(lat: number, lon: number) {
     if (mode !== "manual") return;
-    // Rounded here too (not just in scenarioApi.ts) so the form's lat/lon
-    // inputs show the same value that will actually be sent.
     setManualParams((p) => ({ ...p, lat: roundCoord(lat), lon: roundCoord(lon) }));
+    setPending({ key: nextPopupKey.current++, kind: "manual", lat, lon });
   }
+
+  function changeMode(next: "automatic" | "manual") {
+    setMode(next);
+    setPending(null);
+  }
+
+  // Closing the scenario panel clears the scenario: result layers go back
+  // to their pre-scenario state (DamageMap reacts to the null result), the
+  // viewport stays where it is.
+  function clearScenario() {
+    setResult(null);
+    setSelectedFaultId(null);
+    setError(null);
+  }
+
+  const pendingFault = pending?.kind === "fault" ? faults?.find((f) => f.fault_id === pending.faultId) : undefined;
+  const runPopup =
+    pending === null
+      ? null
+      : {
+          key: pending.key,
+          lat: pending.lat,
+          lon: pending.lon,
+          content:
+            pending.kind === "manual" ? (
+              <ManualRunForm
+                params={manualParams}
+                onChange={setManualParams}
+                probabilityLevel={probabilityLevel}
+                onProbabilityLevelChange={setProbabilityLevel}
+                onRun={() => void runManual()}
+                isRunning={isRunning}
+              />
+            ) : pendingFault ? (
+              <FaultRunForm
+                fault={pendingFault}
+                probabilityLevel={probabilityLevel}
+                onProbabilityLevelChange={setProbabilityLevel}
+                onRun={() => void runFault(pendingFault, { lat: pending.lat, lon: pending.lon })}
+                isRunning={isRunning}
+              />
+            ) : (
+              <p style={{ fontSize: "0.85rem" }}>Unknown fault {pending.faultId}.</p>
+            ),
+        };
 
   return (
     <div style={{ display: "flex", width: "100vw", height: "100vh" }}>
-      <aside
-        style={{
-          width: "20rem",
-          padding: "1rem",
-          display: "flex",
-          flexDirection: "column",
-          gap: "1.5rem",
-          overflowY: "auto",
-          borderRight: "1px solid #ddd",
-        }}
-      >
-        <div>
-          <h1 style={{ fontSize: "1.1rem" }}>twiner</h1>
-          <p style={{ fontSize: "0.85rem", color: "#666" }}>
-            Seismic scenario simulator — Spain
-          </p>
-        </div>
-
-        <RuptureForm
-          mode={mode}
-          onModeChange={setMode}
-          probabilityLevel={probabilityLevel}
-          onProbabilityLevelChange={setProbabilityLevel}
-          faults={faultsByDistance}
-          faultsError={faultsError}
-          selectedFaultId={selectedFaultId}
-          onSelectFault={setSelectedFaultId}
-          onFaultSubmit={handleFaultSubmit}
-          manualParams={manualParams}
-          onManualParamsChange={setManualParams}
-          onManualSubmit={handleManualSubmit}
-          isRunning={isRunning}
-        />
-
-        {error && <p style={{ color: "#c1121f" }}>{error}</p>}
-
-        {result && (
-          <p style={{ fontSize: "0.85rem" }}>
-            {result.n_evaluated.toLocaleString()} buildings evaluated,{" "}
-            {result.n_damaged.toLocaleString()} damaged, for Mw{" "}
-            {result.rupture.mag.toFixed(2)}
-            {result.rupture.finite_rupture && " (finite rupture plane)"}
-            {result.cached && " — cached"}
-            {!impactOpen && (
-              <>
-                {" "}
-                <button onClick={() => setImpactOpen(true)} style={{ padding: "0.1rem 0.4rem", fontSize: "0.8rem" }}>
-                  Show impact
-                </button>
-              </>
-            )}
-            <br />
-            <span style={{ color: "#666" }}>
-              {result.rupture.source} — {PROBABILITY_LEVEL_LABELS[result.rupture.probability_level]}
-            </span>
-          </p>
-        )}
-
-        <div>
-          <h2 style={{ fontSize: "0.9rem" }}>Damage state</h2>
-          <DamageLegend
-            municipalStatsStatus={isRunning ? "loading" : result ? "ready" : "idle"}
-            buildingsStatus={isRunning ? "loading" : result ? "ready" : "idle"}
-            debrisStatus={isRunning ? "loading" : result ? "ready" : "idle"}
-          />
-        </div>
-
-        <p style={{ fontSize: "0.75rem", color: "#999" }}>
-          Dashed purple lines are QAFI faults — click one to run its
-          maximum-magnitude earthquake. In Manual mode, click anywhere else
-          on the map to set the rupture location.
-        </p>
-      </aside>
-      <main style={{ flex: 1 }}>
+      <main style={{ flex: 1, position: "relative" }}>
         <DamageMap
           scenarioId={scenarioId}
           municipalityStats={result?.municipality_stats ?? []}
@@ -308,13 +247,70 @@ export default function App() {
           evaluatedRegion={result?.evaluated_region ?? null}
           faults={faults}
           selectedFaultId={selectedFaultId}
+          mode={mode}
           onFaultClick={handleFaultClick}
           onMapClick={handleMapClick}
-          onMapMove={(lat, lon) => setMapCenter({ lat, lon })}
+          runPopup={runPopup}
+          onRunPopupClose={(key) => setPending((p) => (p?.key === key ? null : p))}
         />
+
+        <div style={{ ...overlayPanel, top: "0.75rem", left: "0.75rem", maxWidth: "17rem" }}>
+          <div style={{ display: "flex", alignItems: "baseline", gap: "0.4rem" }}>
+            <strong>twiner</strong>
+            <span style={{ fontSize: "0.75rem", color: "#666" }}>Seismic scenarios — Spain</span>
+          </div>
+          <div role="group" aria-label="Scenario mode" style={{ display: "flex", marginTop: "0.5rem" }}>
+            {(["automatic", "manual"] as const).map((m) => (
+              <button
+                key={m}
+                type="button"
+                onClick={() => changeMode(m)}
+                aria-pressed={mode === m}
+                style={{
+                  flex: 1,
+                  padding: "0.3rem 0.5rem",
+                  fontSize: "0.8rem",
+                  border: "1px solid #bbb",
+                  background: mode === m ? "#1c1c1c" : "#fff",
+                  color: mode === m ? "#fff" : "#1c1c1c",
+                  borderRadius: m === "automatic" ? "4px 0 0 4px" : "0 4px 4px 0",
+                }}
+              >
+                {m === "automatic" ? "Automatic" : "Manual"}
+              </button>
+            ))}
+          </div>
+          <p style={{ fontSize: "0.75rem", color: "#666", margin: "0.4rem 0 0" }}>
+            {mode === "automatic"
+              ? "Click a fault (dashed purple line) to run its maximum-magnitude earthquake."
+              : "Click anywhere on the map to place an earthquake."}
+          </p>
+          {isRunning && <p style={{ fontSize: "0.8rem", margin: "0.4rem 0 0" }}>Running scenario…</p>}
+          {error && <p style={{ fontSize: "0.8rem", color: "#c1121f", margin: "0.4rem 0 0" }}>{error}</p>}
+          {faultsError && (
+            <p style={{ fontSize: "0.8rem", color: "#c1121f", margin: "0.4rem 0 0" }}>Faults: {faultsError}</p>
+          )}
+        </div>
+
+        <details style={{ ...overlayPanel, bottom: "1.75rem", left: "0.75rem", fontSize: "0.8rem" }}>
+          <summary style={{ cursor: "pointer", fontWeight: 600 }}>Legend</summary>
+          <div style={{ marginTop: "0.5rem" }}>
+            <DamageLegend
+              municipalStatsStatus={isRunning ? "loading" : result ? "ready" : "idle"}
+              buildingsStatus={isRunning ? "loading" : result ? "ready" : "idle"}
+              debrisStatus={isRunning ? "loading" : result ? "ready" : "idle"}
+            />
+          </div>
+        </details>
       </main>
-      {result && impactOpen && (
+      {result && (
         <ImpactSidebar
+          title={scenarioTitle(result, faults)}
+          subtitle={
+            `${result.n_evaluated.toLocaleString()} buildings evaluated, ${result.n_damaged.toLocaleString()} damaged` +
+            (result.rupture.finite_rupture ? " · finite rupture plane" : "") +
+            (result.cached ? " · cached" : "")
+          }
           municipalities={result.municipality_stats}
           selectedMunicipality={selectedMunicipality}
           sections={sections}
@@ -322,12 +318,21 @@ export default function App() {
           selectedSectionCode={selectedSectionCode}
           onSelectMunicipality={setSelectedMunicipalityCode}
           onSelectSection={setSelectedSectionCode}
-          onClose={() => setImpactOpen(false)}
+          onClose={clearScenario}
         />
       )}
     </div>
   );
 }
+
+const overlayPanel: React.CSSProperties = {
+  position: "absolute",
+  zIndex: 1,
+  background: "rgba(255,255,255,0.95)",
+  borderRadius: 6,
+  boxShadow: "0 1px 4px rgba(0,0,0,0.2)",
+  padding: "0.6rem 0.75rem",
+};
 
 const STYLE_OF_FAULTING_RAKE: Record<ManualParams["styleOfFaulting"], number> = {
   "strike-slip": 0,
@@ -335,28 +340,21 @@ const STYLE_OF_FAULTING_RAKE: Record<ManualParams["styleOfFaulting"], number> = 
   reverse: 90,
 };
 
-// Nearest-first relative to `center`, by each trace's closest *vertex* --
-// an approximation of true point-to-line distance, plenty for ordering a
-// dropdown (QAFI traces are densely digitized). Stable for ties, so equal
-// distances keep the backend's name order.
-function sortFaultsByDistance(faults: Fault[], center: { lat: number; lon: number }): Fault[] {
-  const distance = (fault: Fault) => {
-    const geometry = JSON.parse(fault.geometry_geojson) as
-      | { type: "LineString"; coordinates: number[][] }
-      | { type: "MultiLineString"; coordinates: number[][][] };
-    const vertices = geometry.type === "LineString" ? geometry.coordinates : geometry.coordinates.flat();
-    const cosLat = Math.cos((center.lat * Math.PI) / 180);
-    let best = Infinity;
-    for (const [lon, lat] of vertices) {
-      // Equirectangular, squared -- only compared, never displayed.
-      const dx = (lon - center.lon) * cosLat;
-      const dy = lat - center.lat;
-      best = Math.min(best, dx * dx + dy * dy);
-    }
-    return best;
-  };
-  return faults
-    .map((fault) => ({ fault, d: distance(fault) }))
-    .sort((a, b) => a.d - b.d)
-    .map(({ fault }) => fault);
+// "Alhama de Murcia (1/4) - Mmax. 6.7 - High probability" or
+// "Manual - Mag. 8 - Low probability". A fault result's `source` is
+// "fault:<fault_id>:<name>" (services/scenario rupture.py).
+function scenarioTitle(result: ScenarioResult, faults: Fault[] | null): string {
+  const probability = PROBABILITY_LEVEL_SHORT_LABELS[result.rupture.probability_level];
+  const [kind, faultId, ...nameParts] = result.rupture.source.split(":");
+  if (kind === "fault") {
+    const fault = faults?.find((f) => f.fault_id === faultId);
+    const name = fault?.name ?? (nameParts.join(":") || faultId);
+    return `${name} - Mmax. ${fmtMagnitude(fault?.mmax ?? result.rupture.mag)} - ${probability}`;
+  }
+  return `Manual - Mag. ${fmtMagnitude(result.rupture.mag)} - ${probability}`;
+}
+
+// One decimal at most, none when whole: 6.7, 8.
+function fmtMagnitude(mag: number): string {
+  return String(Number(mag.toFixed(1)));
 }

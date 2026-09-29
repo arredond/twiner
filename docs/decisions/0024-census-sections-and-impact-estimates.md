@@ -89,8 +89,14 @@ placeholders elsewhere.
 - `API_VERSION` 5.
 
 **Frontend.**
-- A right-hand `ImpactSidebar` opens on every result. It lists affected
-  municipalities, sorted by affected population.
+- A right-hand `ImpactSidebar` opens on every result, titled with the
+  scenario ("Alhama de Murcia (1/4) - Mmax. 6.7 - High probability"). It
+  lists affected municipalities by damage class, then by % of buildings
+  affected, with a search box. Closing it clears the scenario (result
+  layers back to their pre-scenario state, viewport unchanged).
+- There's no left sidebar: scenarios start from map popups (a fault's in
+  Automatic mode, with a name + Mmax hover tooltip; a clicked point's in
+  Manual mode). A small overlay holds the mode toggle and run status.
 - Clicking one fetches its sections, frames the municipality below
   building zoom, and lists its sections with the same figures.
 - Clicking a section in the sidebar outlines it and centers it at z11.5,
