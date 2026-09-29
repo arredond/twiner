@@ -36,6 +36,54 @@ const INTENSITY_LINE_LAYER_ID = "intensity-bands-line";
 
 const NEUTRAL_FILL = "#ffffff";
 const NEUTRAL_STROKE = "#333333";
+// Assets a showing scenario didn't flag: kept on the map for context, but
+// as small plain grey dots (no outline, no letter) so the affected ones
+// are what stands out.
+const INACTIVE_COLOR = "#9e9e9e";
+
+const AFFECTED: ExpressionSpecification = ["!=", ["feature-state", "intensity"], null];
+
+// Marker size by zoom: [zoom, radius, radius when inactive]. `zoom` has to
+// be the top-level interpolation input, so the inactive choice goes inside
+// each stop.
+const RADIUS_STOPS: Array<[number, number, number]> = [
+  [5, 2.5, 1],
+  [9, 4.5, 1.6],
+  [13, 8, 2.5],
+];
+const STROKE_STOPS: Array<[number, number]> = [
+  [5, 0.5],
+  [10, 1.2],
+];
+
+function byZoom(stops: Array<[number, number | ExpressionSpecification]>): ExpressionSpecification {
+  return ["interpolate", ["linear"], ["zoom"], ...stops.flat()] as unknown as ExpressionSpecification;
+}
+
+// Point/letter/shape paint, before any scenario (`scenario` false: every
+// asset a white lettered marker) or with one showing (affected assets by
+// intensity, the rest inactive grey dots).
+function assetPaint(scenario: boolean) {
+  // `active` for everything without a scenario; with one, `active` for
+  // affected assets and `inactive` for the rest.
+  const whenInactive = (
+    active: number | string | ExpressionSpecification,
+    inactive: number | string
+  ): ExpressionSpecification =>
+    (scenario ? ["case", AFFECTED, active, inactive] : active) as unknown as ExpressionSpecification;
+  // A constant, typed to sit alongside the expressions (MapLibre takes
+  // either for these properties).
+  const plain = (value: number | string) => value as unknown as ExpressionSpecification;
+  return {
+    circleRadius: byZoom(RADIUS_STOPS.map(([z, r, small]) => [z, scenario ? whenInactive(r, small) : r])),
+    circleColor: scenario ? whenInactive(ASSET_COLOR, INACTIVE_COLOR) : ASSET_COLOR,
+    circleStrokeWidth: byZoom(STROKE_STOPS.map(([z, w]) => [z, scenario ? whenInactive(w, 0) : w])),
+    textOpacity: scenario ? whenInactive(1, 0) : plain(1),
+    fillColor: scenario ? whenInactive(ASSET_COLOR, INACTIVE_COLOR) : ASSET_COLOR,
+    fillOpacity: scenario ? whenInactive(0.6, 0.25) : plain(0.6),
+    lineColor: scenario ? whenInactive(ASSET_COLOR, INACTIVE_COLOR) : plain(NEUTRAL_STROKE),
+  };
+}
 
 // Colour by the asset's estimated intensity once a scenario has flagged it
 // as affected (feature-state `intensity`, set from the API's rows), neutral
@@ -114,7 +162,7 @@ export function addInfrastructureLayers(map: MapLibreMap, beforeId?: string): vo
       minzoom: SHAPES_MINZOOM,
       filter: ["==", ["geometry-type"], "Polygon"],
       layout: hidden,
-      paint: { "fill-color": ASSET_COLOR, "fill-opacity": 0.6 },
+      paint: { "fill-color": assetPaint(false).fillColor, "fill-opacity": 0.6 },
     },
     beforeId
   );
@@ -127,12 +175,7 @@ export function addInfrastructureLayers(map: MapLibreMap, beforeId?: string): vo
       minzoom: SHAPES_MINZOOM,
       layout: hidden,
       paint: {
-        "line-color": [
-          "case",
-          ["!=", ["feature-state", "intensity"], null],
-          ASSET_COLOR,
-          NEUTRAL_STROKE,
-        ],
+        "line-color": assetPaint(false).lineColor,
         // Bridges and dams are lines: thick enough to see and click.
         "line-width": ["case", ["==", ["geometry-type"], "LineString"], 4, 1.5],
       },
@@ -147,10 +190,10 @@ export function addInfrastructureLayers(map: MapLibreMap, beforeId?: string): vo
       "source-layer": "points",
       layout: hidden,
       paint: {
-        "circle-radius": ["interpolate", ["linear"], ["zoom"], 5, 2.5, 9, 4.5, 13, 8],
+        "circle-radius": assetPaint(false).circleRadius,
         "circle-color": ASSET_COLOR,
         "circle-stroke-color": NEUTRAL_STROKE,
-        "circle-stroke-width": ["interpolate", ["linear"], ["zoom"], 5, 0.5, 10, 1.2],
+        "circle-stroke-width": assetPaint(false).circleStrokeWidth,
       },
     },
     beforeId
@@ -220,11 +263,14 @@ export function applyInfrastructureResults(
     }
     ids.add(row.asset_id);
   }
-  const affected: ExpressionSpecification = ["!=", ["feature-state", "intensity"], null];
-  const faded: ExpressionSpecification | number = rows ? ["case", affected, 1, 0.3] : 1;
-  map.setPaintProperty(INFRA_POINTS_LAYER_ID, "circle-opacity", faded);
-  map.setPaintProperty(INFRA_POINTS_LAYER_ID, "circle-stroke-opacity", faded);
-  map.setPaintProperty(INFRA_LETTERS_LAYER_ID, "text-opacity", faded);
+  const paint = assetPaint(rows !== null);
+  map.setPaintProperty(INFRA_POINTS_LAYER_ID, "circle-radius", paint.circleRadius);
+  map.setPaintProperty(INFRA_POINTS_LAYER_ID, "circle-color", paint.circleColor);
+  map.setPaintProperty(INFRA_POINTS_LAYER_ID, "circle-stroke-width", paint.circleStrokeWidth);
+  map.setPaintProperty(INFRA_LETTERS_LAYER_ID, "text-opacity", paint.textOpacity);
+  map.setPaintProperty(INFRA_SHAPES_FILL_LAYER_ID, "fill-color", paint.fillColor);
+  map.setPaintProperty(INFRA_SHAPES_FILL_LAYER_ID, "fill-opacity", paint.fillOpacity);
+  map.setPaintProperty(INFRA_SHAPES_LINE_LAYER_ID, "line-color", paint.lineColor);
   return ids;
 }
 
