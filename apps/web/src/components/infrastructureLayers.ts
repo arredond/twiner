@@ -1,5 +1,5 @@
 import type { ExpressionSpecification, FilterSpecification, GeoJSONSource, Map as MapLibreMap } from "maplibre-gl";
-import { DAMAGE_STATES } from "../damageColors";
+import { DAMAGE_STATES, SELECTED_COLOR } from "../damageColors";
 import { fmtIntensity, intensityColorExpr, subtypeLabel } from "../infrastructure";
 import {
   CATEGORY_ICONS,
@@ -50,6 +50,13 @@ const NEUTRAL_STROKE = "#333333";
 const INACTIVE_COLOR = "#9e9e9e";
 
 const AFFECTED: ExpressionSpecification = ["!=", ["feature-state", "intensity"], null];
+// The clicked/sidebar-picked asset (selectAsset): a pink ring or outline,
+// like a selected building, and always drawn as a full marker -- even an
+// inactive grey dot, so what was clicked is what lights up.
+const SELECTED: ExpressionSpecification = ["boolean", ["feature-state", "selected"], false];
+const SHOWN: ExpressionSpecification = ["any", AFFECTED, SELECTED];
+// Ring width added to a selected marker's normal stroke.
+const SELECTED_EXTRA_STROKE = 2;
 
 // Marker size by zoom: [zoom, radius, radius when inactive]. `zoom` has to
 // be the top-level interpolation input, so the inactive choice goes inside
@@ -90,7 +97,9 @@ function assetPaint(scenario: boolean) {
     active: number | string | ExpressionSpecification,
     inactive: number | string
   ): ExpressionSpecification =>
-    (scenario ? ["case", AFFECTED, active, inactive] : active) as unknown as ExpressionSpecification;
+    (scenario ? ["case", SHOWN, active, inactive] : active) as unknown as ExpressionSpecification;
+  const whenSelected = (selected: number | string, otherwise: number | string | ExpressionSpecification) =>
+    ["case", SELECTED, selected, otherwise] as unknown as ExpressionSpecification;
   // A constant, typed to sit alongside the expressions (MapLibre takes
   // either for these properties).
   const plain = (value: number | string) => value as unknown as ExpressionSpecification;
@@ -107,11 +116,14 @@ function assetPaint(scenario: boolean) {
   return {
     circleRadius: byZoom(RADIUS_STOPS.map(([z, r, small]) => [z, scenario ? whenInactive(r, small) : r])),
     circleColor: scenario ? whenInactive(ASSET_COLOR, INACTIVE_COLOR) : ASSET_COLOR,
-    circleStrokeWidth: byZoom(STROKE_STOPS.map(([z, w]) => [z, scenario ? whenInactive(w, 0) : w])),
+    circleStrokeColor: whenSelected(SELECTED_COLOR, NEUTRAL_STROKE),
+    circleStrokeWidth: byZoom(
+      STROKE_STOPS.map(([z, w]) => [z, whenSelected(w + SELECTED_EXTRA_STROKE, scenario ? whenInactive(w, 0) : w)])
+    ),
     iconOpacity: { dark: iconOpacity("dark"), light: iconOpacity("light") },
     fillColor: scenario ? whenInactive(ASSET_COLOR, INACTIVE_COLOR) : ASSET_COLOR,
     fillOpacity: scenario ? whenInactive(0.6, 0.25) : plain(0.6),
-    lineColor: scenario ? whenInactive(ASSET_COLOR, INACTIVE_COLOR) : plain(NEUTRAL_STROKE),
+    lineColor: whenSelected(SELECTED_COLOR, scenario ? whenInactive(ASSET_COLOR, INACTIVE_COLOR) : plain(NEUTRAL_STROKE)),
   };
 }
 
@@ -227,7 +239,12 @@ export function addInfrastructureLayers(map: MapLibreMap, beforeId?: string): vo
       paint: {
         "line-color": assetPaint(false).lineColor,
         // Bridges and dams are lines: thick enough to see and click.
-        "line-width": ["case", ["==", ["geometry-type"], "LineString"], 4, 1.5],
+        "line-width": [
+          "case",
+          ["==", ["geometry-type"], "LineString"],
+          ["case", SELECTED, 6, 4],
+          ["case", SELECTED, 3, 1.5],
+        ],
       },
     },
     beforeId
@@ -242,7 +259,7 @@ export function addInfrastructureLayers(map: MapLibreMap, beforeId?: string): vo
       paint: {
         "circle-radius": assetPaint(false).circleRadius,
         "circle-color": ASSET_COLOR,
-        "circle-stroke-color": NEUTRAL_STROKE,
+        "circle-stroke-color": assetPaint(false).circleStrokeColor,
         "circle-stroke-width": assetPaint(false).circleStrokeWidth,
       },
     },
@@ -315,7 +332,8 @@ export function applyInfrastructureResults(
 ): Set<number> {
   for (const id of previousIds) {
     for (const sourceLayer of ["points", "shapes"]) {
-      map.removeFeatureState({ source: INFRA_SOURCE_ID, sourceLayer, id });
+      // Just the intensity: a selection (selectAsset) outlives a new result.
+      map.removeFeatureState({ source: INFRA_SOURCE_ID, sourceLayer, id }, "intensity");
     }
   }
   const ids = new Set<number>();
@@ -343,6 +361,18 @@ export function applyInfrastructureResults(
 
 // Categories whose assets carry an official registry id, labelled
 // infra.popup.registry.<category>.
+// Moves the selection highlight from `previousId` to `id` (null: none) on
+// both the asset's marker and its shape. Returns the now-selected id.
+export function selectAsset(map: MapLibreMap, previousId: number | null, id: number | null): number | null {
+  for (const sourceLayer of ["points", "shapes"]) {
+    if (previousId !== null) {
+      map.setFeatureState({ source: INFRA_SOURCE_ID, sourceLayer, id: previousId }, { selected: false });
+    }
+    if (id !== null) map.setFeatureState({ source: INFRA_SOURCE_ID, sourceLayer, id }, { selected: true });
+  }
+  return id;
+}
+
 const REGISTRY_CATEGORIES = new Set(["health", "education", "dam"]);
 
 // `result`: this scenario's row for the asset, if it was flagged.

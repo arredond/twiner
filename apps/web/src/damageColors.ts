@@ -28,3 +28,7 @@ export const MAP_PALETTE = {
   light: { debris: "#5c4433", fault: "#7209b7", focusOutline: "#1c1c1c" },
   dark: { debris: "#a47e5f", fault: "#c77dff", focusOutline: "#f1f1f1" },
 } as const;
+
+// Click-to-highlight, on every selectable map feature (buildings, debris
+// rings, sections, infrastructure) and the sidebar card it came from.
+export const SELECTED_COLOR = "#ff2d95";

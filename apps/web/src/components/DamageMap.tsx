@@ -6,7 +6,7 @@ import maplibreWorkerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?worker&ur
 import type { Feature, FeatureCollection, Geometry } from "geojson";
 import { Protocol } from "pmtiles";
 import "maplibre-gl/dist/maplibre-gl.css";
-import { DAMAGE_COLORS, DAMAGE_STATES, MAP_PALETTE } from "../damageColors";
+import { DAMAGE_COLORS, DAMAGE_STATES, MAP_PALETTE, SELECTED_COLOR } from "../damageColors";
 import type { I18n } from "../i18n";
 import type { Theme } from "../settings";
 import { staticDataUrl } from "../staticData";
@@ -36,6 +36,7 @@ import {
   addInfrastructureLayers,
   addIntensityLayers,
   applyInfrastructureResults,
+  selectAsset,
   renderInfrastructurePopupHtml,
   setInfrastructureCategories,
   setIntensityBands,
@@ -78,7 +79,7 @@ const BUILDINGS_OUTLINE_LAYER_ID = "buildings-selected-outline";
 // from each layer's own fill-color/fill-opacity choropleth paint so the
 // highlight never fights with it (see the two *_OUTLINE_LAYER_ID layers
 // below).
-const SELECTED_OUTLINE_COLOR = "#ff2d95";
+const SELECTED_OUTLINE_COLOR = SELECTED_COLOR;
 const SELECTED_OUTLINE_PAINT: maplibregl.ExpressionSpecification = [
   "case",
   ["boolean", ["feature-state", "selected"], false],
@@ -734,6 +735,17 @@ export function DamageMap({
   // before setting a new one keeps a stale highlight from lingering on a
   // previous source after a click elsewhere.
   const selectedRef = useRef<{ source: string; sourceLayer: string; id: string } | null>(null);
+  // The selected infrastructure asset (asset_id), part of the same single
+  // selection: selecting it clears a building/debris one and vice versa.
+  const selectedAssetIdRef = useRef<number | null>(null);
+  const selectInfraAsset = (id: number | null) => {
+    const map = mapRef.current;
+    if (!map) return;
+    selectedAssetIdRef.current = selectAsset(map, selectedAssetIdRef.current, id);
+  };
+  // Clears whatever is selected (set once the map has loaded), for the
+  // sidebar asset pick below.
+  const clearSelectionRef = useRef<() => void>(() => {});
   // Click/hover/move handlers are bound once (map.on is idempotent-unfriendly
   // to re-bind per render) but need the latest callback -- a ref sidesteps
   // stale closures without re-registering listeners on every render.
@@ -991,6 +1003,7 @@ export function DamageMap({
       const selectBuilding = (id: string) => {
         clearBuildingSelection();
         clearDebrisSelection();
+        selectInfraAsset(null);
         const target = { source: BUILDINGS_SOURCE_ID, sourceLayer: "buildings", id };
         map.setFeatureState(target, { selected: true });
         selectedRef.current = target;
@@ -1000,6 +1013,7 @@ export function DamageMap({
       };
       const selectDebrisRing = (buildingId: string, ring: number) => {
         clearBuildingSelection();
+        selectInfraAsset(null);
         map.setFilter(DEBRIS_OUTLINE_LAYER_ID, [
           "all",
           ["==", ["get", "building_id"], buildingId],
@@ -1009,7 +1023,9 @@ export function DamageMap({
       const clearSelection = () => {
         clearBuildingSelection();
         clearDebrisSelection();
+        selectInfraAsset(null);
       };
+      clearSelectionRef.current = clearSelection;
 
       // Building click popup: floors/construction year/use/cadastral id
       // come straight off the clicked tile feature (no request needed);
@@ -1160,6 +1176,8 @@ export function DamageMap({
           if (!feature) return;
           const tileProps = (feature.properties ?? {}) as Record<string, unknown>;
           const assetId = Number(feature.id ?? tileProps.asset_id);
+          clearSelection();
+          selectInfraAsset(assetId);
           const region = evaluatedRegionRef.current;
           new maplibregl.Popup({ closeButton: true, maxWidth: "20rem" })
             .setLngLat(e.lngLat)
@@ -1554,6 +1572,8 @@ export function DamageMap({
     const map = mapRef.current;
     if (!map || !mapLoadedRef.current || !focusedAsset) return;
     const { asset } = focusedAsset;
+    clearSelectionRef.current();
+    selectInfraAsset(asset.asset_id);
     map.flyTo({
       center: [asset.lon, asset.lat],
       zoom: Math.max(map.getZoom(), 15),
