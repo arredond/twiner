@@ -78,6 +78,31 @@ def tile_municipalities(municipalities: gpd.GeoDataFrame, output_path: str | Pat
         return tile_geojson_files([geojson_path], output_path, layer_name="municipalities")
 
 
+def tile_sections(sections: gpd.GeoDataFrame, output_path: str | Path) -> Path:
+    """Tile INE census-section polygons (census_sections.py) into
+    `sections.pmtiles`, the mid-zoom choropleth between municipalities and
+    buildings. Only the join key (`code`) and labels ride along -- every
+    number the map shows comes from the scenario's own section stats."""
+    if "code" not in sections.columns:
+        raise ValueError("sections GeoDataFrame must have a code column")
+
+    with tempfile.TemporaryDirectory() as tmp:
+        geojson_path = Path(tmp) / "sections.geojson"
+        sections[["code", "municipality_code", "municipality_name", "geometry"]].to_file(
+            geojson_path, driver="GeoJSON"
+        )
+        # Without these, tippecanoe drops small dense-urban sections to fit
+        # its default 500KB/200k-feature tile budget at low zoom -- a
+        # missing section is a hole in the choropleth, not a tolerable
+        # thinning the way it is for debris rings.
+        return tile_geojson_files(
+            [geojson_path],
+            output_path,
+            layer_name="sections",
+            extra_args=["--no-tile-size-limit", "--no-feature-limit"],
+        )
+
+
 def tile_geojson_files(
     geojson_paths: list[Path],
     output_path: str | Path,

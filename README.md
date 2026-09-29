@@ -65,10 +65,18 @@ uv run python -m fragility data/fragility/fragility.parquet
 uv run python -m exposure.municipalities_cli data/exposure/muni_raw data/exposure/parts \
     data/exposure/municipalities.pmtiles data/exposure/municipalities.parquet
 
+# 1c. INE census sections + population (ADR-0024) -- powers the impact
+# sidebar (population, cost, debris...) and the mid-zoom section
+# choropleth. Also writes data/exposure/buildings-cloud-impact.parquet,
+# which bin/twiner uses whenever it exists.
+uv run python -m exposure.census_sections_cli data/census/raw data/exposure/parts \
+    data/census data/exposure/buildings-cloud-impact.parquet
+
 # 2. Copy whichever buildings.pmtiles/debris.pmtiles/municipalities.pmtiles
 # you built into the frontend's static assets
 cp data/exposure/buildings.pmtiles apps/web/public/data/buildings.pmtiles
 cp data/exposure/municipalities.pmtiles apps/web/public/data/municipalities.pmtiles
+cp data/census/sections.pmtiles apps/web/public/data/sections.pmtiles
 
 # 3. Start both the scenario API and the frontend together
 npm install --prefix apps/web
@@ -76,7 +84,10 @@ npm install --prefix apps/web
 ```
 
 Open http://localhost:5173, submit a manual rupture or pick a fault in the
-sidebar, and the map colors buildings by resulting damage state.
+sidebar, and the map colors buildings by resulting damage state; the
+right-hand impact panel lists affected municipalities (population, cost,
+debris -- rough estimates, see docs/impact-estimates.md) and drills into
+their census sections.
 `bin/twiner` defaults to whichever dataset `TWINER_BUILDINGS_PATH`/
 `TWINER_EXPOSURE_PATH` point at (see the script's own comments) -- set
 those env vars before `twiner start` to point at a different one, e.g. a

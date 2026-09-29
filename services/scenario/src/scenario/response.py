@@ -25,6 +25,7 @@ import pyarrow.compute as pc
 from pyproj import Geod
 
 from .damage import DAMAGE_STATES
+from .impact import AreaMeta, ImpactCounter
 
 if TYPE_CHECKING:
     from .rupture import Rupture
@@ -38,26 +39,6 @@ _GEOD = Geod(ellps="WGS84")
 UNCERTAINTY_MARGIN = 0.15
 
 DAMAGE_STATE_CODES = {state: i for i, state in enumerate(DAMAGE_STATES)}
-
-# Catastro's ATOM feed doesn't always file a municipality under its real
-# INE code (Madrid: 28900, not INE 28079 -- pipelines/exposure/catastro.py's
-# own docstring). Ceuta/Melilla are a confirmed case: Catastro lists them as
-# "territorial offices" 55/56, not INE province codes 51/52, so buildings
-# there carry `municipality_code` "55101"/"56101" (pipeline.build_exposure
-# stamps Catastro's own code, per this module's docstring above) while
-# `municipalities.pmtiles`/`municipalities.parquet` (sourced from IGN, keyed
-# by real INE codes -- pipelines/exposure/municipalities.py) expect
-# "51001"/"52001". Without this remap, DamageMap.tsx's join
-# (`stats.municipality_code === tile's ine_code`, see its own comments)
-# silently fails for these two, and a scenario there would never highlight
-# them on the low-zoom choropleth. Kept in sync by hand with
-# `pipelines/exposure/municipalities.py`'s own `_CATASTRO_CODE_TO_INE` --
-# same two confirmed entries, not a general translator (see that module's
-# comment for why one wasn't built).
-_CATASTRO_CODE_TO_INE = {
-    "55101": "51001",  # Ceuta
-    "56101": "52001",  # Melilla
-}
 
 # Columns the frontend actually reads (see this module's docstring) --
 # building_id + damage_state_code + the five probabilities.
@@ -158,85 +139,34 @@ def prepare_response_buildings(result: pd.DataFrame) -> pd.DataFrame:
     return table.to_pandas()
 
 
-class MunicipalityCounter:
-    """Per-municipality damage-state counts, accumulated batch by batch --
-    engine.py streams a scenario's buildings through in chunks, so these
-    counts are built up without ever holding every evaluated building at
-    once. `stats()` gives the `municipality_stats` payload (see
-    `compute_municipality_stats`). Buildings with no municipality_code are
-    left out, as a pandas groupby on that column would."""
-
-    def __init__(self) -> None:
-        self._counts: dict[str, np.ndarray] = {}
-
-    def add(self, municipality_codes: pa.Array, damage_state_code: np.ndarray) -> None:
-        encoded = pa.array(municipality_codes, type=pa.string()).dictionary_encode()
-        indices = encoded.indices.to_numpy(zero_copy_only=False)
-        valid = encoded.indices.is_valid().to_numpy(zero_copy_only=False)
-        n_codes, n_states = len(encoded.dictionary), len(DAMAGE_STATES)
-        counts = np.bincount(
-            indices[valid].astype(np.int64) * n_states + damage_state_code[valid],
-            minlength=n_codes * n_states,
-        ).reshape(n_codes, n_states)
-        for code, row in zip(encoded.dictionary.to_pylist(), counts):
-            if code in self._counts:
-                self._counts[code] += row
-            elif row.any():
-                self._counts[code] = row.copy()
-
-    @property
-    def n_damaged(self) -> int:
-        """Non-None buildings, the same "affected" definition as the stats
-        (`count_damaged`)."""
-        return int(sum(row[1:].sum() for row in self._counts.values()))
-
-    def stats(self) -> list[dict]:
-        return [
-            {
-                "municipality_code": _CATASTRO_CODE_TO_INE.get(code, code),
-                "n_evaluated": int(row.sum()),
-                "counts": {state: int(n) for state, n in zip(DAMAGE_STATES, row)},
-            }
-            for code, row in sorted(self._counts.items())
-        ]
-
-
-def compute_municipality_stats(result: pd.DataFrame) -> list[dict]:
+def compute_municipality_stats(result: pd.DataFrame, meta: AreaMeta | None = None) -> list[dict]:
     """Aggregate engine.py's *full* per-building result (every evaluated
-    building, before `prepare_response_buildings` trims it down) into
-    per-municipality damage-state counts, for the map's low-zoom
-    choropleth (apps/web/src/components/DamageMap.tsx).
+    building, before `prepare_response_buildings` trims it down) into the
+    per-municipality rows the map choropleth and impact sidebar read.
 
-    Keyed on `result`'s `municipality_code` column -- pipelines/exposure
-    stamps that column onto every building at ingest time
-    (`pipeline.build_exposure`), from the same INE/Foral code that already
-    names its `<ine_code>.buildings.parquet` part (region.py), so engine.py
-    carries it straight through for free.
-
-    This used to be a DuckDB `ST_Contains` spatial join against a ~8,200-
-    polygon municipalities GeoParquet, done fresh on every scenario request
-    -- correct, but it scales with (buildings evaluated x municipality
-    count), which made it the dominant cost of `/scenarios/fault` once
-    long/nationwide faults routinely evaluate millions of buildings
-    (measured: ~7s of the request at 3M evaluated buildings, see
-    docs/decisions -- the regression from ~1-2s to ~10-20s per request
-    that motivated this rewrite). Point-in-polygon membership doesn't
-    change between requests, so doing it once per building at pipeline
-    time instead of once per request removes that cost entirely, and drops
-    the per-request dependency on municipalities.parquet/DuckDB's spatial
-    extension for this endpoint altogether.
-
-    Same counting as the streaming path (`MunicipalityCounter`), which
-    engine.py's `summarize_scenario` uses; this DataFrame form is for
-    callers holding a full `run_scenario` result.
+    Keyed on `result`'s `municipality_code` column (stamped at ingest,
+    ADR-0014 -- this used to be a per-request spatial join, which became
+    the dominant cost of `/scenarios/fault` at millions of buildings), via
+    census sections when `result` carries `census_section_code`
+    (ADR-0024). Same counting as the streaming path
+    (`impact.ImpactCounter`, engine.summarize_scenario); this DataFrame
+    form is for callers holding a full `run_scenario` result.
     """
-    counter = MunicipalityCounter()
+    counter = ImpactCounter()
     if not result.empty:
+        n = len(result)
+
+        def column(name: str, default: object) -> pd.Series:
+            return result[name] if name in result.columns else pd.Series([default] * n)
+
         counter.add(
             pa.array(result["municipality_code"].to_numpy(), type=pa.string()),
+            pa.array(column("census_section_code", None).to_numpy(), type=pa.string()),
             result["damage_state"].map(DAMAGE_STATE_CODES).to_numpy(dtype=np.int64),
+            column("num_dwellings", 0).to_numpy(dtype=np.float64),
+            column("built_area_m2", 0.0).to_numpy(dtype=np.float64),
         )
-    return counter.stats()
+    return counter.municipality_stats(meta if meta is not None else AreaMeta())
 
 
 def count_damaged(result: pd.DataFrame) -> int:

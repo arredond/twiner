@@ -25,6 +25,13 @@ research behind the four Basque/Navarra sources below.
 |---|---|---|---|
 | Instituto Geográfico Nacional (IGN/CNIG) | All of Spain, 4 admin levels (country/CCAA/province/municipio) | INSPIRE Administrative Units ATOM feed: [`lin_lim_mun.es.xml`](https://www.ign.es/atom/dataset_feeds/lin_lim_mun.es.xml), resolving to a direct GML download: [`lineas_limite_gml.zip`](https://centrodedescargas.cnig.es/CentroDescargas/documentos/atom/au/lineas_limite_gml.zip) (CC BY 4.0 ign.es) | `pipelines/exposure/src/exposure/municipalities.py` |
 
+## Census sections and population
+
+| Source | Coverage | Resource | Pipeline module |
+|---|---|---|---|
+| Instituto Nacional de Estadística (INE) — census section boundaries, 1 Jan 2025 | All of Spain, 36,554 sections (EPSG:25830 shapefile) | Direct download: [`seccionado_2025.zip`](https://www.ine.es/prodyser/cartografia/seccionado_2025.zip) (zip's own folder name isn't UTF-8 -- extracted flat) | `pipelines/exposure/src/exposure/census_sections.py` |
+| INE — Censo Anual de Población 2021-2025, "Población por sexo y edad (grupos quinquenales)" at census-section level | All of Spain, one table per province (52), 2025 values used | CSV per table, e.g. [`69113.csv`](https://www.ine.es/jaxiT3/files/t/es/csv_bdsc/69113.csv) (Asturias); ids in `POPULATION_TABLE_IDS`, found via the [section results index](https://www.ine.es/dynt3/inebase/es/index.htm?padre=11555&capsel=11154) -- Álava's is the odd one out (65042) | `pipelines/exposure/src/exposure/census_sections.py` |
+
 ## Seismic hazard
 
 | Source | Coverage | Resource | Pipeline module |

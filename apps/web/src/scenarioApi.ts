@@ -78,20 +78,54 @@ export interface EvaluatedRegion {
   radius_km: number;
 }
 
-// Per-municipality damage-state counts, aggregated server-side from the
-// scenario's *full* evaluated set (services/scenario/response.py's
-// compute_municipality_stats) -- powers the map's low-zoom choropleth
-// (DamageMap.tsx), joined against municipalities.pmtiles' own precomputed
-// `n_buildings` property (denominator) by `municipality_code`. Always an
-// array, empty when the backend has no municipalities dataset available
-// yet (see compute_municipality_stats's own docstring) -- not an error.
-export interface MunicipalityStats {
-  municipality_code: string;
+// Post-event impact figures for one area -- a municipality or a census
+// section -- aggregated server-side over the scenario's *full* evaluated
+// set (services/scenario/impact.py, ADR-0024). Rough, documented
+// placeholder estimates (docs/impact-estimates.md), not a loss model.
+// "Affected" means any damage state other than None; "displaced" means
+// Extensive or Complete. Percentages are null when their denominator is 0.
+export interface AreaImpact {
+  name: string | null;
   n_evaluated: number;
-  // Buildings with a predicted damage state other than None, over the
-  // whole evaluated set (same definition as municipality_stats).
   n_damaged: number;
   counts: Record<DamageState, number>;
+  // All buildings in the area (not only evaluated ones) -- the
+  // denominator for pct_buildings_affected.
+  n_buildings: number;
+  pct_buildings_affected: number | null;
+  population: number;
+  // Residents under 15 or 65+ (INE Censo Anual 2025).
+  vulnerable_population: number;
+  affected_population: number;
+  pct_population_affected: number | null;
+  affected_vulnerable_population: number;
+  pct_vulnerable_affected: number | null;
+  displaced_population: number;
+  cost_meur: number;
+  debris_t: number;
+  truck_rotations: number;
+  shoring_props: number;
+}
+
+// One row per municipality the scenario evaluated. Joined against
+// municipalities.pmtiles' `ine_code` by `municipality_code`. **Only rows
+// with n_damaged > 0 carry the impact figures** -- undamaged ones are
+// slimmed to code/n_evaluated/n_damaged/counts to keep a large scenario's
+// response small, so filter on n_damaged before reading anything else
+// (the sidebar and choropleth only ever show damaged municipalities).
+export interface MunicipalityStats extends AreaImpact {
+  municipality_code: string;
+  // [west, south, east, north], EPSG:4326 -- the sidebar's zoom-to target.
+  // null only without the census dataset on the backend.
+  bbox: [number, number, number, number] | null;
+}
+
+// One row per *damaged* census section (INE 10-digit code: province(2) +
+// municipality(3) + district(2) + section(3)); joined against
+// sections.pmtiles' `code`.
+export interface SectionStats extends AreaImpact {
+  section_code: string;
+  municipality_code: string;
 }
 
 export interface ScenarioResult {
@@ -238,4 +272,27 @@ export async function getBuildingInfo(buildingId: string): Promise<Record<string
     throw new Error(`building lookup failed (${resp.status}): ${detail}`);
   }
   return resp.json();
+}
+
+async function getJson<T>(path: string): Promise<T> {
+  const resp = await fetch(`${API_URL}${path}`);
+  if (!resp.ok) {
+    const detail = await resp.text();
+    throw new Error(`request failed (${resp.status}): ${detail}`);
+  }
+  return resp.json();
+}
+
+// A scenario's damaged census sections within one municipality, full
+// figures -- fetched when the impact sidebar drills into it.
+export function getSectionStats(scenarioId: string, municipalityCode: string): Promise<SectionStats[]> {
+  const query = new URLSearchParams({ municipality_code: municipalityCode });
+  return getJson(`/results/${encodeURIComponent(scenarioId)}/section_stats?${query}`);
+}
+
+// section_code -> mean damage severity (0 None .. 4 Complete) for every
+// damaged section of a scenario: just what the map's section choropleth
+// colors by, much smaller than the full rows for a large scenario.
+export function getSectionSeverity(scenarioId: string): Promise<Record<string, number>> {
+  return getJson(`/results/${encodeURIComponent(scenarioId)}/section_severity`);
 }

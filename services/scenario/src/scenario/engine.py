@@ -40,7 +40,8 @@ from .ground_motion import (
     GriddedIntensity,
     estimate_significant_distance_km,
 )
-from .response import MunicipalityCounter, shipped_buildings_table
+from .impact import ImpactCounter
+from .response import shipped_buildings_table
 from .rupture import Rupture
 
 _KM_PER_DEGREE_LAT = 111.0
@@ -152,13 +153,14 @@ def _query_sites(
     # Measured: ~14x faster than the ST_Centroid-on-the-fly equivalent for a
     # regional bounding-box query (see docs/decisions/0006).
     return con.execute(
-        """
+        f"""
         SELECT
             b.building_id,
             b.centroid_lon AS lon,
             b.centroid_lat AS lat,
             b.municipality_code,
             COALESCE(b.vs30, ?) AS vs30,
+            {_impact_columns(con, buildings_path)},
             e.taxonomy_class,
             e.height_class
         FROM read_parquet(?) AS b
@@ -168,6 +170,38 @@ def _query_sites(
         """,
         [DEFAULT_VS30, buildings_path, exposure_path, lon_lo, lon_hi, lat_lo, lat_hi],
     ).to_arrow_reader(batch_rows)
+
+
+# Columns the impact estimates (impact.py, ADR-0024) read, with the value
+# used when the buildings file predates them: the census-section sites
+# file (pipelines/exposure census_sections.py) has all three; the plain
+# `*.buildings.parquet` parts have `num_dwellings` but no section or
+# built area. A missing column degrades those estimates, never the damage
+# result itself.
+_IMPACT_COLUMNS = {
+    "census_section_code": "NULL::VARCHAR",
+    "num_dwellings": "0",
+    "built_area_m2": "0.0",
+}
+_impact_columns_sql: dict[str, str] = {}
+
+
+def _impact_columns(con: duckdb.DuckDBPyConnection, buildings_path: str) -> str:
+    """SELECT list for `_IMPACT_COLUMNS`, probed once per buildings path."""
+    if buildings_path not in _impact_columns_sql:
+        present = {
+            row[0]
+            for row in con.execute(
+                "DESCRIBE SELECT * FROM read_parquet(?) LIMIT 0", [buildings_path]
+            ).fetchall()
+        }
+        _impact_columns_sql[buildings_path] = ", ".join(
+            f"COALESCE(b.{name}, {default}) AS {name}"
+            if name in present
+            else f"{default} AS {name}"
+            for name, default in _IMPACT_COLUMNS.items()
+        )
+    return _impact_columns_sql[buildings_path]
 
 
 # A ~1km box in central Madrid: small enough to be cheap, real enough to
@@ -284,12 +318,12 @@ def run_scenario(
 @dataclass
 class ScenarioSummary:
     """What local.py/handler.py actually need from a scenario, without the
-    full per-building result: the evaluated count, per-municipality
+    full per-building result: the evaluated count, per-census-section
     damage-state counts, and the thin rows for the buildings the tile joins
     list (damaged or uncertain -- `response.shipped_mask`)."""
 
     n_evaluated: int
-    municipalities: MunicipalityCounter
+    areas: ImpactCounter
     shipped: pa.Table
     # From the call until the first batch of sites was evaluated: query
     # setup plus the first S3 reads, in the deployed stack -- logged by
@@ -298,7 +332,7 @@ class ScenarioSummary:
 
     @property
     def n_damaged(self) -> int:
-        return self.municipalities.n_damaged
+        return self.areas.n_damaged
 
 
 def summarize_scenario(
@@ -323,7 +357,7 @@ def summarize_scenario(
     t0 = time.monotonic()
     seconds_to_first_batch = 0.0
     n_evaluated = 0
-    municipalities = MunicipalityCounter()
+    areas = ImpactCounter()
     shipped = []
     for batch, damage in _evaluate_batches(
         rupture,
@@ -338,7 +372,13 @@ def summarize_scenario(
         if n_evaluated == 0:
             seconds_to_first_batch = time.monotonic() - t0
         n_evaluated += batch.num_rows
-        municipalities.add(batch.column("municipality_code"), damage.damage_state_code)
+        areas.add(
+            batch.column("municipality_code"),
+            batch.column("census_section_code"),
+            damage.damage_state_code,
+            batch.column("num_dwellings").to_numpy(zero_copy_only=False).astype(np.float64),
+            batch.column("built_area_m2").to_numpy(zero_copy_only=False).astype(np.float64),
+        )
         shipped.append(
             shipped_buildings_table(
                 batch.column("building_id"), damage.damage_state_code, damage.probs
@@ -351,7 +391,7 @@ def summarize_scenario(
             pa.array([], pa.string()), np.zeros(0, np.int8), np.zeros((len(DAMAGE_STATES), 0))
         )
     )
-    return ScenarioSummary(n_evaluated, municipalities, shipped_table, seconds_to_first_batch)
+    return ScenarioSummary(n_evaluated, areas, shipped_table, seconds_to_first_batch)
 
 
 def _evaluate_batches(

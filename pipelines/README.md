@@ -121,6 +121,27 @@ spatially joins scenario results against server-side
 stats -- see ADR-0013 for why that join is DuckDB spatial rather than a
 new geopandas/shapely dependency on the scenario service.
 
+### Census sections + population (`exposure.census_sections_cli`)
+
+Downloads INE's 2025 census-section boundaries and per-section population
+by age, places every building in a section, and writes what the scenario
+service's impact estimates read ([ADR-0024](../docs/decisions/0024-census-sections-and-impact-estimates.md),
+[`../docs/impact-estimates.md`](../docs/impact-estimates.md)). Run after a
+crawl, pointed at its `parts_dir`; ~1.5 minutes nationally.
+
+```bash
+uv run python -m exposure.census_sections_cli data/census/raw data/exposure/parts \
+    data/census data/exposure/buildings-cloud-impact.parquet
+cp data/census/sections.pmtiles apps/web/public/data/sections.pmtiles
+```
+
+Outputs: a `<code>.sites.parquet` sidecar per municipality part (the
+columns the scenario engine reads, plus `census_section_code`,
+`num_dwellings`, `built_area_m2`; resumable -- existing sidecars are
+skipped), `data/census/{sections.parquet, sections_meta.parquet,
+municipalities_meta.parquet, sections.pmtiles}`, and the compacted
+`buildings-cloud-impact.parquet` that `bin/twiner` uses when present.
+
 ## `fragility`: Martins & Silva (2020) fragility functions
 
 Downloads a curated subset of the [global fragility/vulnerability function

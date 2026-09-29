@@ -72,6 +72,22 @@ def write_municipality_stats(scenario_id: str, stats: list[dict]) -> None:
     _write_status(scenario_id, municipal_stats_ready=True)
 
 
+def write_section_stats(scenario_id: str, stats: list[dict]) -> None:
+    """Census-section impact rows (impact.ImpactCounter.section_stats) --
+    only damaged sections, so bounded by what the scenario hit, but can
+    still run to tens of thousands for a large one: gzipped, and served
+    filtered (local.py's /results/{id}/section_stats)."""
+    path = scenario_dir(scenario_id) / "section_stats.json.gz"
+    path.write_bytes(gzip.compress(json.dumps(stats).encode("utf-8")))
+
+
+def read_section_stats(scenario_id: str) -> list[dict] | None:
+    path = scenario_dir(scenario_id) / "section_stats.json.gz"
+    if not path.exists():
+        return None
+    return json.loads(gzip.decompress(path.read_bytes()))
+
+
 def write_buildings(scenario_id: str, columns: Mapping[str, Any]) -> None:
     """`columns`: the listed buildings, one column per
     `scenario_results.COLUMNS` entry, already sorted and unique by

@@ -7,13 +7,16 @@ import { Protocol } from "pmtiles";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { DAMAGE_COLORS, DAMAGE_STATES, DEBRIS_COLOR } from "../damageColors";
 import { staticDataUrl } from "../staticData";
+import { impactRows, meanSeverity } from "../impactFormat";
 import {
   getBuildingInfo,
   TILES_API_URL,
+  type AreaImpact,
   type BuildingDamageResult,
   type EvaluatedRegion,
   type Fault,
   type MunicipalityStats,
+  type SectionStats,
 } from "../scenarioApi";
 
 // MapLibre 6 locates its worker at runtime (`new URL("./maplibre-gl-worker.mjs",
@@ -89,12 +92,28 @@ const MUNICIPALITIES_PMTILES_URL = staticDataUrl("municipalities.pmtiles");
 const MUNICIPALITIES_SOURCE_ID = "municipalities";
 const MUNICIPALITIES_LAYER_ID = "municipalities-fill";
 
-// Below this zoom: municipality choropleth, no individual buildings/debris
-// (there are too many to usefully pick one out, and MERISUR-scale damage
-// review starts at "which areas", not "which building"). At/above it:
-// buildings + debris, no choropleth. Picked empirically once buildings
-// render on screen -- no functional reason it has to be exactly 11 beyond
-// "roughly city-district scale."
+// INE census sections (pipelines/exposure census_sections.py, ADR-0024):
+// the middle of three nested choropleth levels -- municipalities below
+// SECTIONS_MINZOOM, sections from there to BUILDING_DETAIL_MINZOOM,
+// buildings above. Same feature-state/filter pattern as municipalities,
+// keyed by the 10-digit section `code`; colored from the scenario's
+// section severities (getSectionSeverity). The selected municipality's
+// sections (sidebar drill-down) also show below SECTIONS_MINZOOM, on their
+// own layer, so a municipality too large to fit at z9 still shows them.
+const SECTIONS_PMTILES_URL = staticDataUrl("sections.pmtiles");
+const SECTIONS_SOURCE_ID = "sections";
+const SECTIONS_LAYER_ID = "sections-fill";
+const SECTIONS_FOCUS_LAYER_ID = "sections-focus-fill";
+const SECTIONS_OUTLINE_LAYER_ID = "sections-selected-outline";
+const MUNICIPALITY_FOCUS_OUTLINE_LAYER_ID = "municipalities-focus-outline";
+const SECTIONS_MINZOOM = 9;
+
+// Below this zoom: municipality/section choropleths, no individual
+// buildings/debris (there are too many to usefully pick one out, and
+// MERISUR-scale damage review starts at "which areas", not "which
+// building"). At/above it: buildings + debris, no choropleth. Picked
+// empirically once buildings render on screen -- no functional reason it
+// has to be exactly 11 beyond "roughly city-district scale."
 const BUILDING_DETAIL_MINZOOM = 11;
 
 // Interpolated over `mean_severity` (the evaluated buildings' damage_state_code
@@ -160,6 +179,7 @@ function buildingsFillColor(
 // `municipalityStats`, see its feature-state effect below) excludes every
 // feature, matching this.
 const NO_MUNICIPALITIES_FILTER: maplibregl.FilterSpecification = ["in", ["get", "ine_code"], ["literal", []]];
+const NO_SECTIONS_FILTER: maplibregl.FilterSpecification = ["in", ["get", "code"], ["literal", []]];
 
 // Faults are a plain GeoJSON source (not tiled): only 201 nationwide --
 // nowhere near the scale that justifies PMTiles the way buildings.pmtiles
@@ -187,6 +207,16 @@ interface Props {
   // `[]` (never absent) when a scenario has run but the backend had no
   // municipalities dataset available -- additive, not required.
   municipalityStats: MunicipalityStats[];
+  // section_code -> mean severity (0-4), damaged sections only -- the
+  // section choropleth's input. Empty before a scenario has run.
+  sectionSeverity: Record<string, number>;
+  // Sidebar drill-down: framed on the map when it changes, its sections
+  // shown at any zoom, and its own choropleth fill hidden underneath them.
+  selectedMunicipality: MunicipalityStats | null;
+  selectedSectionCode: string | null;
+  // A clicked section's figures, for its popup (App.tsx caches per
+  // municipality).
+  loadSectionStats: (municipalityCode: string) => Promise<SectionStats[]>;
   evaluatedRegion: EvaluatedRegion | null;
   faults: Fault[] | null;
   selectedFaultId: string | null;
@@ -270,20 +300,6 @@ function boundsFromRegion(region: EvaluatedRegion): maplibregl.LngLatBounds {
     [region.lon - lonPad, region.lat - latPad],
     [region.lon + lonPad, region.lat + latPad]
   );
-}
-
-// Weighted average of DAMAGE_STATES' own index (0=None .. 4=Complete) over
-// a municipality's evaluated buildings -- the choropleth's severity input
-// (MUNICIPALITY_FILL_COLOR), so its color reads on the same scale as an
-// individual building's (DAMAGE_COLORS[damage_state]) rather than a
-// separately-scaled "fraction affected" ramp.
-function meanSeverity(stats: MunicipalityStats): number {
-  const total = stats.n_evaluated || 1;
-  const weighted = DAMAGE_STATES.reduce(
-    (sum, state, index) => sum + index * (stats.counts[state] ?? 0),
-    0
-  );
-  return weighted / total;
 }
 
 // Proportional-width stacked bar, one segment per damage class -- native
@@ -393,43 +409,37 @@ function renderDebrisPopupHtml(tileProps: Record<string, unknown>): string {
   );
 }
 
-// Municipality choropleth popup: name + aggregate stats if a scenario has
-// touched it (stats param, looked up by ine_code -- null when this
-// municipality has no scenario data yet, same "additive" shape as the
-// fill color's own no-data branch).
-function renderMunicipalityPopupHtml(
-  tileProps: Record<string, unknown>,
-  stats: MunicipalityStats | null
-): string {
-  const nBuildings = Number(tileProps.n_buildings) || 0;
-  const rows: string[] = [
-    `<div style="margin-bottom:2px"><span style="color:#666">Buildings:</span> ${nBuildings.toLocaleString()}</div>`,
-  ];
-  if (stats) {
-    const nAffected = stats.n_evaluated - stats.counts.None;
-    const pct = nBuildings > 0 ? ((nAffected / nBuildings) * 100).toFixed(1) : "—";
-    rows.push(
-      `<div style="margin-bottom:2px"><span style="color:#666">Affected:</span> ${pct}%</div>`
-    );
+// Municipality/section choropleth popup: name + the same impact figures
+// the sidebar shows (impactRows), or a note when there are none.
+function renderAreaPopupHtml(title: string, stats: AreaImpact | null | "loading"): string {
+  let body: string;
+  if (stats === "loading") {
+    body = '<div style="color:#666">loading…</div>';
+  } else if (stats) {
     const total = stats.n_evaluated || 1;
-    rows.push(renderProbabilityBar({
-      building_id: "",
-      damage_state_code: 0,
-      prob_none: stats.counts.None / total,
-      prob_slight: stats.counts.Slight / total,
-      prob_moderate: stats.counts.Moderate / total,
-      prob_extensive: stats.counts.Extensive / total,
-      prob_complete: stats.counts.Complete / total,
-    } as BuildingDamageResult));
+    body =
+      renderProbabilityBar({
+        building_id: "",
+        damage_state_code: 0,
+        prob_none: stats.counts.None / total,
+        prob_slight: stats.counts.Slight / total,
+        prob_moderate: stats.counts.Moderate / total,
+        prob_extensive: stats.counts.Extensive / total,
+        prob_complete: stats.counts.Complete / total,
+      }) +
+      impactRows(stats)
+        .map(
+          (row) =>
+            `<div style="margin-bottom:2px" title="${escapeHtml(row.hint)}"><span style="color:#666">${escapeHtml(row.label)}:</span> ${escapeHtml(row.value)}</div>`
+        )
+        .join("");
   } else {
-    rows.push(
-      '<div style="margin-bottom:2px"><span style="color:#666">Affected:</span> not evaluated</div>'
-    );
+    body = '<div style="color:#666">not evaluated</div>';
   }
   return (
-    `<div style="font-size:0.8rem; max-width:16rem">` +
-    `<h3 style="font-size:0.95rem; font-weight:600; margin:0 0 4px">${escapeHtml(tileProps.name)}</h3>` +
-    rows.join("") +
+    `<div style="font-size:0.8rem; max-width:18rem">` +
+    `<h3 style="font-size:0.95rem; font-weight:600; margin:0 0 4px">${escapeHtml(title)}</h3>` +
+    body +
     `</div>`
   );
 }
@@ -590,6 +600,10 @@ function faultsToFeatureCollection(faults: Fault[]): FeatureCollection {
 export function DamageMap({
   scenarioId,
   municipalityStats,
+  sectionSeverity,
+  selectedMunicipality,
+  selectedSectionCode,
+  loadSectionStats,
   evaluatedRegion,
   faults,
   selectedFaultId,
@@ -610,6 +624,16 @@ export function DamageMap({
   // below skip work when scenarioId hasn't actually changed.
   const buildingsSourceScenarioIdRef = useRef<string | null>(null);
   const loadedMunicipalityCodesRef = useRef<Set<string>>(new Set());
+  const loadedSectionCodesRef = useRef<Set<string>>(new Set());
+  // Codes of every damaged section (sectionSeverity's keys), for the two
+  // section layers' filters -- kept so selecting a municipality can
+  // re-filter without re-applying feature-state.
+  const affectedSectionCodesRef = useRef<string[]>([]);
+  const affectedMunicipalityCodesRef = useRef<string[]>([]);
+  const selectedMunicipalityCodeRef = useRef<string | null>(null);
+  selectedMunicipalityCodeRef.current = selectedMunicipality?.municipality_code ?? null;
+  const loadSectionStatsRef = useRef(loadSectionStats);
+  loadSectionStatsRef.current = loadSectionStats;
   // Municipality popup needs the latest stats (by municipality_code) to
   // show a clicked polygon's breakdown, without re-binding the click
   // handler -- same pattern as evaluatedRegionRef below.
@@ -697,7 +721,7 @@ export function DamageMap({
         type: "fill",
         source: MUNICIPALITIES_SOURCE_ID,
         "source-layer": "municipalities",
-        maxzoom: BUILDING_DETAIL_MINZOOM,
+        maxzoom: SECTIONS_MINZOOM,
         // No scenario has run at load time -- filter excludes every
         // feature until the municipalityStats effect below narrows it to
         // just the municipalities this scenario actually touched.
@@ -707,6 +731,53 @@ export function DamageMap({
           "fill-opacity": 0.75,
           "fill-outline-color": "#00000044",
         },
+      });
+
+      map.addSource(SECTIONS_SOURCE_ID, {
+        type: "vector",
+        url: `pmtiles://${SECTIONS_PMTILES_URL}`,
+        promoteId: "code",
+      });
+      const sectionPaint = {
+        "fill-color": MUNICIPALITY_FILL_COLOR,
+        "fill-opacity": 0.75,
+        "fill-outline-color": "#00000044",
+      };
+      map.addLayer({
+        id: SECTIONS_LAYER_ID,
+        type: "fill",
+        source: SECTIONS_SOURCE_ID,
+        "source-layer": "sections",
+        minzoom: SECTIONS_MINZOOM,
+        maxzoom: BUILDING_DETAIL_MINZOOM,
+        filter: NO_SECTIONS_FILTER,
+        paint: sectionPaint,
+      });
+      map.addLayer({
+        id: SECTIONS_FOCUS_LAYER_ID,
+        type: "fill",
+        source: SECTIONS_SOURCE_ID,
+        "source-layer": "sections",
+        maxzoom: SECTIONS_MINZOOM,
+        filter: NO_SECTIONS_FILTER,
+        paint: sectionPaint,
+      });
+      map.addLayer({
+        id: SECTIONS_OUTLINE_LAYER_ID,
+        type: "line",
+        source: SECTIONS_SOURCE_ID,
+        "source-layer": "sections",
+        maxzoom: BUILDING_DETAIL_MINZOOM,
+        filter: ["==", ["get", "code"], "__none__"],
+        paint: { "line-color": SELECTED_OUTLINE_COLOR, "line-width": 2.5 },
+      });
+      map.addLayer({
+        id: MUNICIPALITY_FOCUS_OUTLINE_LAYER_ID,
+        type: "line",
+        source: MUNICIPALITIES_SOURCE_ID,
+        "source-layer": "municipalities",
+        filter: ["==", ["get", "ine_code"], "__none__"],
+        paint: { "line-color": "#1c1c1c", "line-width": 2 },
       });
 
       addBuildingsSourceAndLayers(map, null);
@@ -876,11 +947,42 @@ export function DamageMap({
 
         const stats =
           municipalityStatsRef.current?.find((m) => m.municipality_code === ineCode) ?? null;
-        new maplibregl.Popup({ closeButton: true, maxWidth: "18rem" })
+        new maplibregl.Popup({ closeButton: true, maxWidth: "20rem" })
           .setLngLat(e.lngLat)
-          .setHTML(renderMunicipalityPopupHtml(tileProps, stats))
+          .setHTML(renderAreaPopupHtml(String(tileProps.name ?? ineCode), stats))
           .addTo(map);
       });
+
+      // Census section popup: its figures are fetched per municipality
+      // (loadSectionStats, cached in App.tsx), so the popup opens at once
+      // and fills in.
+      const onSectionClick = (e: MapLayerMouseEvent) => {
+        const tileProps = (e.features?.[0]?.properties ?? {}) as Record<string, unknown>;
+        const code = tileProps.code as string | undefined;
+        if (!code) return;
+        const title = `${tileProps.municipality_name ?? code.slice(0, 5)} · section ${code.slice(5, 7)}-${code.slice(7)}`;
+        const popup = new maplibregl.Popup({ closeButton: true, maxWidth: "20rem" })
+          .setLngLat(e.lngLat)
+          .setHTML(renderAreaPopupHtml(title, "loading"))
+          .addTo(map);
+        loadSectionStatsRef.current(code.slice(0, 5))
+          .then((rows) => {
+            if (popup.isOpen())
+              popup.setHTML(renderAreaPopupHtml(title, rows.find((r) => r.section_code === code) ?? null));
+          })
+          .catch(() => {
+            if (popup.isOpen()) popup.setHTML(renderAreaPopupHtml(title, null));
+          });
+      };
+      for (const layerId of [SECTIONS_LAYER_ID, SECTIONS_FOCUS_LAYER_ID]) {
+        map.on("click", layerId, onSectionClick);
+        map.on("mouseenter", layerId, () => {
+          map.getCanvas().style.cursor = "pointer";
+        });
+        map.on("mouseleave", layerId, () => {
+          map.getCanvas().style.cursor = "";
+        });
+      }
       map.on("mouseenter", MUNICIPALITIES_LAYER_ID, () => {
         map.getCanvas().style.cursor = "pointer";
       });
@@ -895,7 +997,14 @@ export function DamageMap({
       // clears any highlight since this click hit none of them.
       map.on("click", (e: MapLayerMouseEvent) => {
         const hits = map.queryRenderedFeatures(e.point, {
-          layers: [FAULTS_LAYER_ID, BUILDINGS_LAYER_ID, DEBRIS_LAYER_ID, MUNICIPALITIES_LAYER_ID],
+          layers: [
+            FAULTS_LAYER_ID,
+            BUILDINGS_LAYER_ID,
+            DEBRIS_LAYER_ID,
+            MUNICIPALITIES_LAYER_ID,
+            SECTIONS_LAYER_ID,
+            SECTIONS_FOCUS_LAYER_ID,
+          ],
         });
         if (hits.length === 0) {
           clearSelection();
@@ -1050,12 +1159,8 @@ export function DamageMap({
         affectedCodes.push(stats.municipality_code);
       }
 
-      map.setFilter(
-        MUNICIPALITIES_LAYER_ID,
-        affectedCodes.length === 0
-          ? NO_MUNICIPALITIES_FILTER
-          : (["in", ["get", "ine_code"], ["literal", affectedCodes]] as maplibregl.FilterSpecification)
-      );
+      affectedMunicipalityCodesRef.current = affectedCodes;
+      applyAreaFilters(map);
     };
 
     if (map.isSourceLoaded(MUNICIPALITIES_SOURCE_ID)) {
@@ -1064,6 +1169,88 @@ export function DamageMap({
       map.once("sourcedata", applyMunicipalityFeatureState);
     }
   }, [municipalityStats]);
+
+  // Section choropleth: feature-state per damaged section, same pattern as
+  // municipalities above; the filters (which sections show at all) are
+  // applied by applyAreaFilters, shared with the selection effect below.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapLoadedRef.current) return;
+
+    const applySectionFeatureState = () => {
+      const target = { source: SECTIONS_SOURCE_ID, sourceLayer: "sections" };
+      for (const code of loadedSectionCodesRef.current) {
+        map.removeFeatureState({ ...target, id: code });
+      }
+      loadedSectionCodesRef.current = new Set(Object.keys(sectionSeverity));
+      for (const [code, severity] of Object.entries(sectionSeverity)) {
+        map.setFeatureState({ ...target, id: code }, { mean_severity: severity });
+      }
+      affectedSectionCodesRef.current = Object.keys(sectionSeverity);
+      applyAreaFilters(map);
+    };
+
+    if (map.isSourceLoaded(SECTIONS_SOURCE_ID)) {
+      applySectionFeatureState();
+    } else {
+      map.once("sourcedata", applySectionFeatureState);
+    }
+  }, [sectionSeverity]);
+
+  // Sidebar drill-down: frame the municipality at section level (capped
+  // below BUILDING_DETAIL_MINZOOM so sections, not buildings, are what
+  // shows; a municipality too big for SECTIONS_MINZOOM gets the focus
+  // layer instead), outline it, and hide its own fill under its sections.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapLoadedRef.current) return;
+    applyAreaFilters(map);
+    map.setFilter(MUNICIPALITY_FOCUS_OUTLINE_LAYER_ID, [
+      "==",
+      ["get", "ine_code"],
+      selectedMunicipality?.municipality_code ?? "__none__",
+    ]);
+    if (selectedMunicipality?.bbox) {
+      const [west, south, east, north] = selectedMunicipality.bbox;
+      map.fitBounds(
+        [
+          [west, south],
+          [east, north],
+        ],
+        { padding: 40, maxZoom: BUILDING_DETAIL_MINZOOM - 0.5, duration: 600 }
+      );
+    }
+  }, [selectedMunicipality]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapLoadedRef.current) return;
+    map.setFilter(SECTIONS_OUTLINE_LAYER_ID, ["==", ["get", "code"], selectedSectionCode ?? "__none__"]);
+  }, [selectedSectionCode]);
+
+  // Which municipalities/sections render at all: only damaged ones (see
+  // the municipality effect above for why), minus the selected
+  // municipality's own fill, plus its sections at every zoom.
+  function applyAreaFilters(map: MapLibreMap) {
+    const selected = selectedMunicipalityCodeRef.current;
+    const municipalities = affectedMunicipalityCodesRef.current.filter((c) => c !== selected);
+    const sections = affectedSectionCodesRef.current;
+    map.setFilter(
+      MUNICIPALITIES_LAYER_ID,
+      municipalities.length === 0
+        ? NO_MUNICIPALITIES_FILTER
+        : ["in", ["get", "ine_code"], ["literal", municipalities]]
+    );
+    map.setFilter(
+      SECTIONS_LAYER_ID,
+      sections.length === 0 ? NO_SECTIONS_FILTER : ["in", ["get", "code"], ["literal", sections]]
+    );
+    const focus = selected ? sections.filter((c) => c.startsWith(selected)) : [];
+    map.setFilter(
+      SECTIONS_FOCUS_LAYER_ID,
+      focus.length === 0 ? NO_SECTIONS_FILTER : ["in", ["get", "code"], ["literal", focus]]
+    );
+  }
 
   // Everything else a scenario run changes: the fallback color for
   // buildings with no joined damage_state_code (green inside the evaluated

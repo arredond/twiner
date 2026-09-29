@@ -30,6 +30,14 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 #   TWINER_BUILDINGS_PATH="data/test-municipality/parts/*.buildings.parquet" \
 #   TWINER_EXPOSURE_PATH="data/test-municipality/exposure.parquet" \
 #   twiner start
+# The census-section sites file (ADR-0024: the parts' columns the engine
+# reads, plus each building's census section, dwellings and built area --
+# built by `exposure.census_sections_cli`) when it exists, since impact
+# estimates need it; the parts glob otherwise (damage still works, the
+# impact figures come out without population, cost or debris).
+if [[ -z "${TWINER_BUILDINGS_PATH:-}" && -f "$REPO_ROOT/data/exposure/buildings-cloud-impact.parquet" ]]; then
+  TWINER_BUILDINGS_PATH="data/exposure/buildings-cloud-impact.parquet"
+fi
 : "${TWINER_BUILDINGS_PATH:=data/exposure/parts/*.buildings.parquet}"
 : "${TWINER_EXPOSURE_PATH:=data/exposure/exposure.parquet}"
 

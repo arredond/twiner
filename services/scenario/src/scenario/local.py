@@ -24,16 +24,19 @@ from .building_lookup import get_building
 from .engine import summarize_scenario
 from .faults import faults_payload, get_fault, round_near_point, rupture_anchor
 from .ground_motion import estimate_significant_distance_km
+from .impact import mean_severity
 from .probability_level import ProbabilityLevel, resolve_probability_level
 from .response import evaluated_region, stored_results_columns
 from .results_store import (
     init_scenario,
     read_municipality_stats,
     read_response,
+    read_section_stats,
     read_status,
     write_buildings,
     write_municipality_stats,
     write_response,
+    write_section_stats,
 )
 from .rupture import Rupture, from_fault, from_manual_input
 from .scenario_id import cache_enabled, fault_scenario_id, manual_scenario_id
@@ -175,8 +178,13 @@ def _run_and_serialize(rupture: Rupture, probability_level: str, scenario_id: st
         n_evaluated = summary.n_evaluated
         n_damaged = summary.n_damaged
         # Counted over *every* evaluated building, not just the shipped ones.
-        municipality_stats = summary.municipalities.stats()
+        # Census-section impact figures (impact.py, ADR-0024), rolled up to
+        # municipalities for the response; the section rows themselves
+        # are fetched separately (/results/{id}/section_stats), since a
+        # large scenario can damage tens of thousands of sections.
+        municipality_stats = summary.areas.municipality_stats()
         write_municipality_stats(scenario_id, municipality_stats)
+        write_section_stats(scenario_id, summary.areas.section_stats())
         # Damaged/uncertain buildings only, in the thin frontend-facing
         # shape (see response.py's docstring for why lon/lat/im_value/
         # im_type are dropped and damage_state becomes an int code).
@@ -357,6 +365,29 @@ def scenario_municipality_stats(scenario_id: str) -> list[dict]:
     if stats is None:
         raise HTTPException(status_code=404, detail=f"scenario_id {scenario_id!r} not found")
     return stats
+
+
+@app.get("/results/{scenario_id}/section_stats")
+def scenario_section_stats(scenario_id: str, municipality_code: str | None = None) -> list[dict]:
+    """Damaged census sections' impact rows, optionally just one
+    municipality's (the sidebar's drill-down)."""
+    stats = read_section_stats(scenario_id)
+    if stats is None:
+        raise HTTPException(status_code=404, detail=f"scenario_id {scenario_id!r} not found")
+    if municipality_code is not None:
+        stats = [s for s in stats if s["municipality_code"] == municipality_code]
+    return stats
+
+
+@app.get("/results/{scenario_id}/section_severity")
+def scenario_section_severity(scenario_id: str) -> dict[str, float]:
+    """section_code -> mean damage severity (0-4) for every damaged
+    section: all the map's section choropleth needs, a small fraction of
+    the full rows' size."""
+    stats = read_section_stats(scenario_id)
+    if stats is None:
+        raise HTTPException(status_code=404, detail=f"scenario_id {scenario_id!r} not found")
+    return {s["section_code"]: round(mean_severity(s["counts"]), 3) for s in stats}
 
 
 @app.get("/tiles/{scenario_id}/{z}/{x}/{y}.mvt")

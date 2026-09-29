@@ -79,6 +79,10 @@ def handler(event: dict, context) -> dict:
             body = json.loads(event.get("body") or "{}")
             return _manual_scenario(body)
 
+        section_route = _SECTION_ROUTE.fullmatch(path)
+        if method == "GET" and section_route:
+            return _section_results(section_route["scenario_id"], section_route["kind"], query)
+
         if method == "GET" and path.startswith("/buildings/"):
             building_id = path[len("/buildings/") :]
             return _building_info(building_id)
@@ -86,6 +90,33 @@ def handler(event: dict, context) -> dict:
         return _response(400, {"error": f"invalid request parameters: {e}"})
 
     return _response(404, {"error": f"no route for {method} {path}"})
+
+
+_SECTION_ROUTE = re.compile(
+    r"/results/(?P<scenario_id>[^/]+)/(?P<kind>section_stats|section_severity)"
+)
+
+
+def _section_results(scenario_id: str, kind: str, query: dict) -> dict:
+    """Mirrors local.py's GET /results/{id}/section_stats and
+    /results/{id}/section_severity (ADR-0024)."""
+    if RESULTS_BUCKET is None:
+        return _response(404, {"error": "no results bucket configured"})
+    from tiles.results_store import read_section_stats
+
+    from .impact import mean_severity
+
+    stats = read_section_stats(RESULTS_BUCKET, scenario_id)
+    if stats is None:
+        return _response(404, {"error": f"scenario_id {scenario_id!r} not found"})
+    if kind == "section_severity":
+        return _response(
+            200, {s["section_code"]: round(mean_severity(s["counts"]), 3) for s in stats}
+        )
+    municipality_code = query.get("municipality_code")
+    if municipality_code is not None:
+        stats = [s for s in stats if s["municipality_code"] == municipality_code]
+    return _response(200, stats)
 
 
 def _list_faults() -> dict:
@@ -245,7 +276,7 @@ def _run_and_respond(
         damage_percentile=level_params.damage_percentile,
     )
     t_compute = time.monotonic()
-    municipality_stats = summary.municipalities.stats()
+    municipality_stats = summary.areas.municipality_stats()
 
     # The response itself: everything the frontend needs, and nothing
     # per-building -- building and debris damage reach the map through the
@@ -286,10 +317,12 @@ def _run_and_respond(
             write_buildings,
             write_municipality_stats,
             write_response,
+            write_section_stats,
         )
 
         init_scenario(RESULTS_BUCKET, scenario_id)
         write_municipality_stats(RESULTS_BUCKET, scenario_id, municipality_stats)
+        write_section_stats(RESULTS_BUCKET, scenario_id, summary.areas.section_stats())
         write_buildings(RESULTS_BUCKET, scenario_id, stored_results_columns(summary.shipped))
         # Last: marks this id as a complete, reusable result (the cache).
         write_response(RESULTS_BUCKET, scenario_id, payload)
@@ -313,7 +346,7 @@ def _run_and_respond(
     return _response(200, {**payload, "cached": False})
 
 
-def _response(status_code: int, body: dict) -> dict:
+def _response(status_code: int, body: dict | list) -> dict:
     # Gzipped + base64 (Lambda Function URL requires base64 for a binary
     # body): /faults' trace geometries and a nationwide scenario's
     # municipality_stats are repetitive JSON that compresses well, same

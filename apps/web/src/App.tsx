@@ -1,9 +1,12 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { DamageMap } from "./components/DamageMap";
+import { ImpactSidebar } from "./components/ImpactSidebar";
 import { RuptureForm, type ManualParams } from "./components/RuptureForm";
 import { PROBABILITY_LEVEL_LABELS } from "./probabilityLevels";
 import { DamageLegend } from "./components/DamageLegend";
 import {
+  getSectionSeverity,
+  getSectionStats,
   roundCoord,
   listFaults,
   warmUpScenarioApi,
@@ -12,6 +15,7 @@ import {
   type Fault,
   type ProbabilityLevel,
   type ScenarioResult,
+  type SectionStats,
 } from "./scenarioApi";
 
 // twiner milestone-1 MVP shell: source panel -> run -> damage layer,
@@ -22,6 +26,73 @@ export default function App() {
   const [result, setResult] = useState<ScenarioResult | null>(null);
   const [isRunning, setIsRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Post-scenario impact panel (ADR-0024): opens on every new result, lists
+  // affected municipalities, drills into one's census sections.
+  const [impactOpen, setImpactOpen] = useState(false);
+  const [selectedMunicipalityCode, setSelectedMunicipalityCode] = useState<string | null>(null);
+  const [selectedSectionCode, setSelectedSectionCode] = useState<string | null>(null);
+  const [sections, setSections] = useState<SectionStats[] | null>(null);
+  const [sectionsError, setSectionsError] = useState<string | null>(null);
+  const [sectionSeverity, setSectionSeverity] = useState<Record<string, number>>({});
+  // Per-scenario cache of each municipality's section rows, shared by the
+  // sidebar drill-down and the map's section popups.
+  const sectionCacheRef = useRef<Map<string, Promise<SectionStats[]>>>(new Map());
+
+  const scenarioId = result?.scenario_id ?? null;
+  const selectedMunicipality = useMemo(
+    () => result?.municipality_stats.find((m) => m.municipality_code === selectedMunicipalityCode) ?? null,
+    [result, selectedMunicipalityCode]
+  );
+
+  const loadSectionStats = useCallback(
+    (municipalityCode: string): Promise<SectionStats[]> => {
+      if (!scenarioId) return Promise.resolve([]);
+      let pending = sectionCacheRef.current.get(municipalityCode);
+      if (!pending) {
+        pending = getSectionStats(scenarioId, municipalityCode);
+        // A failed fetch isn't cached, so reopening retries it.
+        pending.catch(() => sectionCacheRef.current.delete(municipalityCode));
+        sectionCacheRef.current.set(municipalityCode, pending);
+      }
+      return pending;
+    },
+    [scenarioId]
+  );
+
+  // New scenario: reset the drill-down, open the panel, fetch the map's
+  // section severities.
+  useEffect(() => {
+    sectionCacheRef.current = new Map();
+    setSelectedMunicipalityCode(null);
+    setSelectedSectionCode(null);
+    setSectionSeverity({});
+    if (!scenarioId) return;
+    setImpactOpen(true);
+    let cancelled = false;
+    getSectionSeverity(scenarioId)
+      .then((severity) => !cancelled && setSectionSeverity(severity))
+      .catch(() => {
+        // The section choropleth just stays empty; municipalities still show.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [scenarioId]);
+
+  useEffect(() => {
+    setSections(null);
+    setSectionsError(null);
+    setSelectedSectionCode(null);
+    if (!selectedMunicipalityCode) return;
+    let cancelled = false;
+    loadSectionStats(selectedMunicipalityCode)
+      .then((rows) => !cancelled && setSections(rows))
+      .catch((e) => !cancelled && setSectionsError(e instanceof Error ? e.message : String(e)));
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedMunicipalityCode, loadSectionStats]);
 
   // Faults are fetched once here (not inside RuptureForm) because both the
   // sidebar dropdown and the map's clickable fault layer need the same
@@ -191,6 +262,14 @@ export default function App() {
             {result.rupture.mag.toFixed(2)}
             {result.rupture.finite_rupture && " (finite rupture plane)"}
             {result.cached && " — cached"}
+            {!impactOpen && (
+              <>
+                {" "}
+                <button onClick={() => setImpactOpen(true)} style={{ padding: "0.1rem 0.4rem", fontSize: "0.8rem" }}>
+                  Show impact
+                </button>
+              </>
+            )}
             <br />
             <span style={{ color: "#666" }}>
               {result.rupture.source} — {PROBABILITY_LEVEL_LABELS[result.rupture.probability_level]}
@@ -215,8 +294,12 @@ export default function App() {
       </aside>
       <main style={{ flex: 1 }}>
         <DamageMap
-          scenarioId={result?.scenario_id ?? null}
+          scenarioId={scenarioId}
           municipalityStats={result?.municipality_stats ?? []}
+          sectionSeverity={sectionSeverity}
+          selectedMunicipality={selectedMunicipality}
+          selectedSectionCode={selectedSectionCode}
+          loadSectionStats={loadSectionStats}
           evaluatedRegion={result?.evaluated_region ?? null}
           faults={faults}
           selectedFaultId={selectedFaultId}
@@ -225,6 +308,18 @@ export default function App() {
           onMapMove={(lat, lon) => setMapCenter({ lat, lon })}
         />
       </main>
+      {result && impactOpen && (
+        <ImpactSidebar
+          municipalities={result.municipality_stats}
+          selectedMunicipality={selectedMunicipality}
+          sections={sections}
+          sectionsError={sectionsError}
+          selectedSectionCode={selectedSectionCode}
+          onSelectMunicipality={setSelectedMunicipalityCode}
+          onSelectSection={setSelectedSectionCode}
+          onClose={() => setImpactOpen(false)}
+        />
+      )}
     </div>
   );
 }

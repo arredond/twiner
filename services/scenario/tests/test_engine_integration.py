@@ -49,6 +49,7 @@ def test_streamed_summary_matches_the_full_result():
     # goes; forcing many small batches here must still give exactly what
     # aggregating run_scenario's full per-building result gives.
     from scenario.engine import summarize_scenario
+    from scenario.impact import AreaMeta
     from scenario.response import (
         compute_municipality_stats,
         count_damaged,
@@ -62,7 +63,7 @@ def test_streamed_summary_matches_the_full_result():
 
     assert summary.n_evaluated == len(full)
     assert summary.n_damaged == count_damaged(full)
-    assert summary.municipalities.stats() == compute_municipality_stats(full)
+    assert summary.areas.municipality_stats(AreaMeta()) == compute_municipality_stats(full)
     shipped = prepare_response_buildings(full)
     assert sorted(summary.shipped.column("building_id").to_pylist()) == sorted(
         shipped["building_id"]

@@ -24,6 +24,7 @@ Lambda handler, never during local dev.
 
 from __future__ import annotations
 
+import gzip
 import json
 import time
 from collections.abc import Callable, Mapping
@@ -76,6 +77,26 @@ def write_municipality_stats(bucket: str, scenario_id: str, stats: list[dict]) -
         ContentType="application/json",
     )
     _write_status(bucket, scenario_id, municipal_stats_ready=True)
+
+
+def write_section_stats(bucket: str, scenario_id: str, stats: list[dict]) -> None:
+    """Census-section impact rows (ADR-0024), gzipped -- same file as the
+    local store's `section_stats.json.gz`."""
+    _client().put_object(
+        Bucket=bucket,
+        Key=_key(scenario_id, "section_stats.json.gz"),
+        Body=gzip.compress(json.dumps(stats).encode("utf-8")),
+        ContentType="application/gzip",
+    )
+
+
+def read_section_stats(bucket: str, scenario_id: str) -> list[dict] | None:
+    s3 = _client()
+    try:
+        obj = s3.get_object(Bucket=bucket, Key=_key(scenario_id, "section_stats.json.gz"))
+    except s3.exceptions.NoSuchKey:
+        return None
+    return json.loads(gzip.decompress(obj["Body"].read()))
 
 
 def write_buildings(bucket: str, scenario_id: str, columns: Mapping[str, Any]) -> None:
