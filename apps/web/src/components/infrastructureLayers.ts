@@ -57,7 +57,19 @@ const AFFECTED: ExpressionSpecification = ["!=", ["feature-state", "intensity"],
 const RADIUS_STOPS: Array<[number, number, number]> = [
   [5, 2.5, 1],
   [9, 4.5, 1.6],
-  [13, 9, 2.5],
+  [11, 6, 2],
+  // From z12 (neighbourhood scale, where buildings show) markers step up
+  // so the icon inside reads at a glance, and keep growing to z16.
+  [12, 9, 2.5],
+  [16, 14, 3],
+];
+// Icon size (px, Maki's 15px glyph scaled) at the same zooms, kept about
+// two thirds of the circle's diameter so a ring of colour shows around it.
+const ICON_PX_STOPS: Array<[number, number]> = [
+  [10, 7],
+  [11, 8.5],
+  [12, 12],
+  [16, 19],
 ];
 const STROKE_STOPS: Array<[number, number]> = [
   [5, 0.5],
@@ -274,7 +286,7 @@ function iconLayout(variant: IconVariant) {
     visibility: "none" as const,
     "icon-image": iconImageExpr(variant),
     // Maki's 15px glyphs, sized to sit inside the marker circle.
-    "icon-size": ["interpolate", ["linear"], ["zoom"], ICONS_MINZOOM, 7 / 15, 13, 12 / 15] as ExpressionSpecification,
+    "icon-size": byZoom(ICON_PX_STOPS.map(([z, px]) => [z, px / 15])),
     "icon-allow-overlap": true,
     "icon-ignore-placement": true,
   };
