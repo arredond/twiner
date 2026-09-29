@@ -1,12 +1,14 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import * as maplibregl from "maplibre-gl";
-import type { GeoJSONSource, Map as MapLibreMap, MapLayerMouseEvent } from "maplibre-gl";
+import type { GeoJSONSource, Map as MapLibreMap, MapLayerMouseEvent, StyleSpecification } from "maplibre-gl";
 import maplibreWorkerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url";
 import type { Feature, FeatureCollection, Geometry } from "geojson";
 import { Protocol } from "pmtiles";
 import "maplibre-gl/dist/maplibre-gl.css";
-import { DAMAGE_COLORS, DAMAGE_STATES, DEBRIS_COLOR, FAULT_COLOR } from "../damageColors";
+import { DAMAGE_COLORS, DAMAGE_STATES, MAP_PALETTE } from "../damageColors";
+import type { I18n } from "../i18n";
+import type { Theme } from "../settings";
 import { staticDataUrl } from "../staticData";
 import { impactRows, meanSeverity } from "../impactFormat";
 import { escapeHtml, renderProbabilityBarHtml } from "../popupHtml";
@@ -206,8 +208,37 @@ const FAULTS_SOURCE_ID = "faults";
 const FAULTS_LAYER_ID = "faults-line";
 const FAULTS_SELECTED_LAYER_ID = "faults-line-selected";
 
-// Free, no-API-key basemap style. Swap for a twiner-branded style later.
-const BASEMAP_STYLE = "https://basemaps.cartocdn.com/gl/positron-gl-style/style.json";
+// Free, no-API-key basemap styles, one per UI theme (Carto Positron and
+// Dark Matter). Swap for twiner-branded styles later.
+const BASEMAP_STYLES: Record<Theme, string> = {
+  light: "https://basemaps.cartocdn.com/gl/positron-gl-style/style.json",
+  dark: "https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json",
+};
+
+// Theme switch: the new basemap's own sources/layers, plus every overlay
+// source and layer twiner added to the old one (anything not from a
+// basemap source), on top as before. Both Carto styles share the same
+// vector source and glyphs, so MapLibre applies this as a diff -- the
+// overlay sources are never reloaded and keep their feature-state
+// (choropleths, infrastructure intensity, selection), filters and paint.
+function keepOverlays(previous: StyleSpecification | undefined, next: StyleSpecification): StyleSpecification {
+  if (!previous) return next;
+  const basemapSourceIds = new Set(Object.keys(next.sources));
+  const previousBasemapSourceIds = new Set(
+    Object.keys(previous.sources).filter((id) => basemapSourceIds.has(id))
+  );
+  const overlaySources = Object.fromEntries(
+    Object.entries(previous.sources).filter(([id]) => !previousBasemapSourceIds.has(id))
+  );
+  const overlayLayers = previous.layers.filter(
+    (layer) => "source" in layer && typeof layer.source === "string" && !basemapSourceIds.has(layer.source)
+  );
+  return {
+    ...next,
+    sources: { ...next.sources, ...overlaySources },
+    layers: [...next.layers, ...overlayLayers],
+  };
+}
 
 // Mainland Spain, zoomed out enough to see most of it at once.
 const SPAIN_CENTER: [number, number] = [-3.7038, 40.0];
@@ -281,14 +312,27 @@ interface Props {
   // panel), in rem: the map is never resized for it, so the camera moves
   // below keep their targets clear of it instead.
   rightInsetRem: number;
+  // Resolved UI theme: picks the basemap and the overlay palette
+  // (MAP_PALETTE).
+  theme: Theme;
+  // Popup text and numbers, in the current language.
+  i18n: I18n;
+  // The settings menu's zoom indicator toggle.
+  showZoom: boolean;
 }
 
 // The API sends `damage_state_code`, the index into this same
 // DAMAGE_STATES ordering (services/scenario/response.py), not a string --
 // decode it back to a label/color here rather than shipping the string
 // itself over the wire on every one of a few hundred thousand rows.
-function damageStateLabel(code: number): string {
-  return DAMAGE_STATES[code] ?? "Unknown";
+function damageStateLabel(code: number, i18n: I18n): string {
+  const state = DAMAGE_STATES[code];
+  return state ? i18n.t(`damage.${state}`) : "—";
+}
+
+// A popup's "label: value" line (value already escaped/HTML).
+function popupRow(label: string, valueHtml: string): string {
+  return `<div style="margin-bottom:2px"><span style="color:var(--text-muted)">${escapeHtml(label)}:</span> ${valueHtml}</div>`;
 }
 
 // Reconstructs a BuildingDamageResult straight from a clicked buildings
@@ -351,14 +395,11 @@ function boundsFromRegion(region: EvaluatedRegion): maplibregl.LngLatBounds {
 // Proportional-width stacked bar, one segment per damage class -- native
 // `title=` gives the hover tooltip (name + percentage) for free, no JS
 // wiring needed inside a Popup's detached DOM.
-function renderProbabilityBar(damage: BuildingDamageResult): string {
-  return renderProbabilityBarHtml([
-    damage.prob_none,
-    damage.prob_slight,
-    damage.prob_moderate,
-    damage.prob_extensive,
-    damage.prob_complete,
-  ]);
+function renderProbabilityBar(damage: BuildingDamageResult, i18n: I18n): string {
+  return renderProbabilityBarHtml(
+    [damage.prob_none, damage.prob_slight, damage.prob_moderate, damage.prob_extensive, damage.prob_complete],
+    i18n
+  );
 }
 
 // Popup content for a clicked building: static exposure attributes come
@@ -373,18 +414,20 @@ function renderBuildingPopupHtml(
   tileProps: Record<string, unknown>,
   damage: BuildingDamageResult | null,
   withinEvaluatedRegion: boolean,
-  buildingInfo: Record<string, unknown> | null | "loading"
+  buildingInfo: Record<string, unknown> | null | "loading",
+  i18n: I18n
 ): string {
+  const { t } = i18n;
   const rows: Array<[string, string]> = [
-    ["Floors", escapeHtml(tileProps.floors)],
-    ["Built", escapeHtml(tileProps.construction_year)],
-    ["Use", escapeHtml(tileProps.current_use)],
+    [t("popup.floors"), escapeHtml(tileProps.floors)],
+    [t("popup.built"), escapeHtml(tileProps.construction_year)],
+    [t("popup.use"), escapeHtml(tileProps.current_use)],
   ];
   if (buildingInfo === "loading") {
-    rows.push(["Construction typology", "loading…"]);
+    rows.push([t("popup.typology"), escapeHtml(t("common.loadingInline"))]);
   } else if (buildingInfo) {
-    rows.push(["Construction typology", escapeHtml(buildingInfo.taxonomy_class)]);
-    rows.push(["Height class", escapeHtml(buildingInfo.height_class)]);
+    rows.push([t("popup.typology"), escapeHtml(buildingInfo.taxonomy_class)]);
+    rows.push([t("popup.heightClass"), escapeHtml(buildingInfo.height_class)]);
   }
 
   let damageHtml: string;
@@ -394,31 +437,24 @@ function renderBuildingPopupHtml(
     // (a genuine close call against the runner-up damage state, see
     // scenarioApi.ts) -- either way we have its real probability
     // breakdown, unlike the not-a-close-call case below.
-    const label = damageStateLabel(damage.damage_state_code);
+    const label = damageStateLabel(damage.damage_state_code, i18n);
     damageHtml =
-      `<div style="margin-bottom:2px"><span style="color:#666">Predicted damage:</span> ` +
-      `<strong>${escapeHtml(label)}</strong></div>${renderProbabilityBar(damage)}`;
+      popupRow(t("popup.predictedDamage"), `<strong>${escapeHtml(label)}</strong>`) +
+      renderProbabilityBar(damage, i18n);
   } else if (withinEvaluatedRegion) {
     // Inside the evaluated circle, but not individually listed -- the API
     // omitted it for being "None"-modal without a genuine close call
     // against another damage state, so no per-building probabilities are
     // available, just the summary.
-    damageHtml =
-      '<div style="margin-bottom:2px"><span style="color:#666">Predicted damage:</span> Likely None (not individually evaluated)</div>';
+    damageHtml = popupRow(t("popup.predictedDamage"), escapeHtml(t("popup.likelyNone")));
   } else {
     // Outside the evaluated circle (or no scenario has run at all) --
     // distinct from the confidently-undamaged case above: this building
     // was never assessed one way or the other.
-    damageHtml =
-      '<div style="margin-bottom:2px"><span style="color:#666">Predicted damage:</span> not evaluated</div>';
+    damageHtml = popupRow(t("popup.predictedDamage"), escapeHtml(t("common.notEvaluated")));
   }
 
-  const body = rows
-    .map(
-      ([label, value]) =>
-        `<div style="margin-bottom:2px"><span style="color:#666">${label}:</span> ${value}</div>`
-    )
-    .join("");
+  const body = rows.map(([label, value]) => popupRow(label, value)).join("");
   return (
     `<div style="font-size:0.8rem; max-width:16rem">` +
     `<h3 style="font-size:0.95rem; font-weight:600; margin:0 0 4px">${escapeHtml(tileProps.building_id)}</h3>` +
@@ -430,23 +466,23 @@ function renderBuildingPopupHtml(
 // triggers it, ring N === DAMAGE_STATES[N] per debris.py's module
 // docstring) -- no volume field exists yet (deferred, ADR-0010), so none is
 // shown rather than fabricated.
-function renderDebrisPopupHtml(tileProps: Record<string, unknown>): string {
+function renderDebrisPopupHtml(tileProps: Record<string, unknown>, i18n: I18n): string {
   const ring = Number(tileProps.ring);
-  const label = Number.isFinite(ring) ? damageStateLabel(ring) : "Unknown";
+  const label = Number.isFinite(ring) ? damageStateLabel(ring, i18n) : "—";
   return (
     `<div style="font-size:0.8rem; max-width:16rem">` +
     `<h3 style="font-size:0.95rem; font-weight:600; margin:0 0 4px">${escapeHtml(tileProps.building_id)}</h3>` +
-    `<div style="margin-bottom:2px"><span style="color:#666">Debris ring:</span> ${escapeHtml(ring)} (${escapeHtml(label)}+)</div>` +
+    popupRow(i18n.t("popup.debrisRing"), `${escapeHtml(ring)} (${escapeHtml(label)}+)`) +
     `</div>`
   );
 }
 
 // Municipality/section choropleth popup: name + the same impact figures
 // the sidebar shows (impactRows), or a note when there are none.
-function renderAreaPopupHtml(title: string, stats: AreaImpact | null | "loading"): string {
+function renderAreaPopupHtml(title: string, stats: AreaImpact | null | "loading", i18n: I18n): string {
   let body: string;
   if (stats === "loading") {
-    body = '<div style="color:#666">loading…</div>';
+    body = `<div style="color:var(--text-muted)">${escapeHtml(i18n.t("common.loadingInline"))}</div>`;
   } else if (stats) {
     const total = stats.n_evaluated || 1;
     body =
@@ -458,15 +494,15 @@ function renderAreaPopupHtml(title: string, stats: AreaImpact | null | "loading"
         prob_moderate: stats.counts.Moderate / total,
         prob_extensive: stats.counts.Extensive / total,
         prob_complete: stats.counts.Complete / total,
-      }) +
-      impactRows(stats)
+      }, i18n) +
+      impactRows(stats, i18n)
         .map(
           (row) =>
-            `<div style="margin-bottom:2px" title="${escapeHtml(row.hint)}"><span style="color:#666">${escapeHtml(row.label)}:</span> ${escapeHtml(row.value)}</div>`
+            `<div style="margin-bottom:2px" title="${escapeHtml(row.hint)}"><span style="color:var(--text-muted)">${escapeHtml(row.label)}:</span> ${escapeHtml(row.value)}</div>`
         )
         .join("");
   } else {
-    body = '<div style="color:#666">not evaluated</div>';
+    body = `<div style="color:var(--text-muted)">${escapeHtml(i18n.t("common.notEvaluated"))}</div>`;
   }
   return (
     `<div style="font-size:0.8rem; max-width:18rem">` +
@@ -569,6 +605,7 @@ function addBuildingsSourceAndLayers(
 function addDebrisSourceAndLayers(
   map: MapLibreMap,
   scenarioId: string | null,
+  color: string,
   beforeId?: string
 ): void {
   map.addSource(DEBRIS_SOURCE_ID, {
@@ -596,7 +633,7 @@ function addDebrisSourceAndLayers(
       // ring already covers what stacking rings 1..N would. A filter, not
       // a zero opacity, so hidden rings aren't hit-testable either.
       filter: ["==", ["get", "ring"], ["get", "damage_state_code"]],
-      paint: { "fill-color": DEBRIS_COLOR, "fill-opacity": DEBRIS_RING_OPACITY },
+      paint: { "fill-color": color, "fill-opacity": DEBRIS_RING_OPACITY },
     },
     beforeId
   );
@@ -652,6 +689,9 @@ export function DamageMap({
   infrastructureResults,
   focusedAsset,
   rightInsetRem,
+  theme,
+  i18n,
+  showZoom,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
@@ -724,6 +764,14 @@ export function DamageMap({
   // Asset popups look up this scenario's row by id; the ids carrying
   // feature-state, to clear on the next scenario.
   const infrastructureByIdRef = useRef<Map<number, InfrastructureResult>>(new Map());
+  // Popups are built in handlers bound once at load, so they read the
+  // current language and palette through refs.
+  const i18nRef = useRef(i18n);
+  i18nRef.current = i18n;
+  const themeRef = useRef(theme);
+  themeRef.current = theme;
+  // The theme the basemap currently shows (the theme effect skips a no-op).
+  const basemapThemeRef = useRef(theme);
   const infrastructureStateIdsRef = useRef<Set<number>>(new Set());
 
   const faultsData = useMemo(
@@ -737,7 +785,7 @@ export function DamageMap({
 
     const map = new maplibregl.Map({
       container: containerRef.current!,
-      style: BASEMAP_STYLE,
+      style: BASEMAP_STYLES[themeRef.current],
       center: SPAIN_CENTER,
       zoom: SPAIN_ZOOM,
       // MapLibre v6 defaults to "splitting" (requesting literal deeper-zoom
@@ -770,6 +818,7 @@ export function DamageMap({
     mapRef.current = map;
 
     map.on("load", () => {
+      const palette = MAP_PALETTE[themeRef.current];
       // Intensity bands (ADR-0025) first, so they sit under every
       // choropleth and building layer: context, not the result itself.
       addIntensityLayers(map);
@@ -844,13 +893,13 @@ export function DamageMap({
         source: MUNICIPALITIES_SOURCE_ID,
         "source-layer": "municipalities",
         filter: ["==", ["get", "ine_code"], "__none__"],
-        paint: { "line-color": "#1c1c1c", "line-width": 2 },
+        paint: { "line-color": palette.focusOutline, "line-width": 2 },
       });
 
       addBuildingsSourceAndLayers(map, null);
       buildingsSourceScenarioIdRef.current = null;
 
-      addDebrisSourceAndLayers(map, null);
+      addDebrisSourceAndLayers(map, null, palette.debris);
 
       // Critical infrastructure (ADR-0025): above buildings and debris,
       // below the fault lines. Hidden until a category is toggled on.
@@ -864,14 +913,14 @@ export function DamageMap({
         id: FAULTS_LAYER_ID,
         type: "line",
         source: FAULTS_SOURCE_ID,
-        paint: { "line-color": FAULT_COLOR, "line-width": 2, "line-dasharray": [2, 1] },
+        paint: { "line-color": palette.fault, "line-width": 2, "line-dasharray": [2, 1] },
       });
       map.addLayer({
         id: FAULTS_SELECTED_LAYER_ID,
         type: "line",
         source: FAULTS_SOURCE_ID,
         filter: ["==", ["get", "fault_id"], "__none__"],
-        paint: { "line-color": FAULT_COLOR, "line-width": 4 },
+        paint: { "line-color": palette.fault, "line-width": 4 },
       });
 
       // Automatic mode: hovering a fault names it; clicking opens its run
@@ -898,7 +947,7 @@ export function DamageMap({
         faultTooltip
           .setLngLat(e.lngLat)
           .setHTML(
-            `<strong>${escapeHtml(props.name)}</strong> · Mmax ${escapeHtml(Number(props.mmax).toFixed(1))}`
+            `<strong>${escapeHtml(props.name)}</strong> · Mmax ${escapeHtml(i18nRef.current.fmtDecimal(Number(props.mmax)))}`
           )
           .addTo(map);
       });
@@ -971,14 +1020,14 @@ export function DamageMap({
         );
         const popup = new maplibregl.Popup({ closeButton: true, maxWidth: "18rem" })
           .setLngLat(e.lngLat)
-          .setHTML(renderBuildingPopupHtml(tileProps, damage, withinEvaluatedRegion, "loading"))
+          .setHTML(renderBuildingPopupHtml(tileProps, damage, withinEvaluatedRegion, "loading", i18nRef.current))
           .addTo(map);
 
         getBuildingInfo(buildingId)
           .then((info) => {
             if (popup.isOpen())
               popup.setHTML(
-                renderBuildingPopupHtml(tileProps, damage, withinEvaluatedRegion, info)
+                renderBuildingPopupHtml(tileProps, damage, withinEvaluatedRegion, info, i18nRef.current)
               );
           })
           .catch(() => {
@@ -986,7 +1035,7 @@ export function DamageMap({
             // taxonomy/height rows, tile-derived info still shows.
             if (popup.isOpen())
               popup.setHTML(
-                renderBuildingPopupHtml(tileProps, damage, withinEvaluatedRegion, null)
+                renderBuildingPopupHtml(tileProps, damage, withinEvaluatedRegion, null, i18nRef.current)
               );
           });
       });
@@ -1018,7 +1067,7 @@ export function DamageMap({
 
         new maplibregl.Popup({ closeButton: true, maxWidth: "18rem" })
           .setLngLat(e.lngLat)
-          .setHTML(renderDebrisPopupHtml(tileProps))
+          .setHTML(renderDebrisPopupHtml(tileProps, i18nRef.current))
           .addTo(map);
       });
       map.on("mouseenter", DEBRIS_LAYER_ID, () => {
@@ -1042,7 +1091,7 @@ export function DamageMap({
           municipalityStatsRef.current?.find((m) => m.municipality_code === ineCode) ?? null;
         new maplibregl.Popup({ closeButton: true, maxWidth: "20rem" })
           .setLngLat(e.lngLat)
-          .setHTML(renderAreaPopupHtml(String(tileProps.name ?? ineCode), stats))
+          .setHTML(renderAreaPopupHtml(String(tileProps.name ?? ineCode), stats, i18nRef.current))
           .addTo(map);
       });
 
@@ -1053,18 +1102,22 @@ export function DamageMap({
         const tileProps = (e.features?.[0]?.properties ?? {}) as Record<string, unknown>;
         const code = tileProps.code as string | undefined;
         if (!code) return;
-        const title = `${tileProps.municipality_name ?? code.slice(0, 5)} · section ${code.slice(5, 7)}-${code.slice(7)}`;
+        const i18n = i18nRef.current;
+        const title = i18n.t("popup.sectionTitle", {
+          municipality: String(tileProps.municipality_name ?? code.slice(0, 5)),
+          label: `${code.slice(5, 7)}-${code.slice(7)}`,
+        });
         const popup = new maplibregl.Popup({ closeButton: true, maxWidth: "20rem" })
           .setLngLat(e.lngLat)
-          .setHTML(renderAreaPopupHtml(title, "loading"))
+          .setHTML(renderAreaPopupHtml(title, "loading", i18n))
           .addTo(map);
         loadSectionStatsRef.current(code.slice(0, 5))
           .then((rows) => {
             if (popup.isOpen())
-              popup.setHTML(renderAreaPopupHtml(title, rows.find((r) => r.section_code === code) ?? null));
+              popup.setHTML(renderAreaPopupHtml(title, rows.find((r) => r.section_code === code) ?? null, i18n));
           })
           .catch(() => {
-            if (popup.isOpen()) popup.setHTML(renderAreaPopupHtml(title, null));
+            if (popup.isOpen()) popup.setHTML(renderAreaPopupHtml(title, null, i18n));
           });
       };
       for (const layerId of [SECTIONS_LAYER_ID, SECTIONS_FOCUS_LAYER_ID]) {
@@ -1100,7 +1153,8 @@ export function DamageMap({
                 infrastructureByIdRef.current.get(assetId) ?? null,
                 region
                   ? { withinEvaluatedRegion: isWithinEvaluatedRegion(region, e.lngLat.lat, e.lngLat.lng) }
-                  : null
+                  : null,
+                i18nRef.current
               )
             )
             .addTo(map);
@@ -1288,7 +1342,7 @@ export function DamageMap({
         ? FAULTS_LAYER_ID
         : undefined;
     addBuildingsSourceAndLayers(map, scenarioId, beforeId);
-    addDebrisSourceAndLayers(map, scenarioId, beforeId);
+    addDebrisSourceAndLayers(map, scenarioId, MAP_PALETTE[themeRef.current].debris, beforeId);
     // A source swap drops any feature-state the removed source held --
     // the previous selection highlight (if any) no longer refers to a
     // feature that still exists, so forget it rather than leaving a
@@ -1496,7 +1550,8 @@ export function DamageMap({
         renderInfrastructurePopupHtml(
           { name: asset.name, subtype: asset.subtype, category: asset.category },
           asset,
-          { withinEvaluatedRegion: true }
+          { withinEvaluatedRegion: true },
+          i18nRef.current
         )
       )
       .addTo(map);
@@ -1536,16 +1591,35 @@ export function DamageMap({
     else map.once("load", apply);
   }, [infrastructureResults]);
 
+  // Theme switch: swap the basemap in place (keepOverlays) and recolour
+  // the overlays whose colours depend on it (MAP_PALETTE).
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || basemapThemeRef.current === theme) return;
+    const apply = () => {
+      basemapThemeRef.current = theme;
+      const palette = MAP_PALETTE[theme];
+      map.setPaintProperty(FAULTS_LAYER_ID, "line-color", palette.fault);
+      map.setPaintProperty(FAULTS_SELECTED_LAYER_ID, "line-color", palette.fault);
+      map.setPaintProperty(MUNICIPALITY_FOCUS_OUTLINE_LAYER_ID, "line-color", palette.focusOutline);
+      if (map.getLayer(DEBRIS_LAYER_ID)) map.setPaintProperty(DEBRIS_LAYER_ID, "fill-color", palette.debris);
+      map.setStyle(BASEMAP_STYLES[theme], { transformStyle: keepOverlays });
+    };
+    if (mapLoadedRef.current) apply();
+    else map.once("load", apply);
+  }, [theme]);
+
   return (
     <div style={{ position: "relative", width: "100%", height: "100%" }}>
       <div ref={containerRef} style={{ width: "100%", height: "100%" }} />
       {runPopup && runPopupContainer && createPortal(runPopup.content, runPopupContainer)}
-      {zoom !== null && (
+      {showZoom && zoom !== null && (
+        // Under the settings gear (App.tsx), which switches it on.
         <div
           style={{
             position: "absolute",
-            top: "0.5rem",
-            right: `${rightInsetRem + 0.5}rem`,
+            top: "3.4rem",
+            right: `${rightInsetRem + 0.75}rem`,
             padding: "0.15rem 0.4rem",
             background: "rgba(0,0,0,0.6)",
             color: "#fff",

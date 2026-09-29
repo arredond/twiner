@@ -2,6 +2,50 @@
   box-sizing: border-box;
 }
 
+/* UI colours as tokens, one set per theme (settings.tsx sets
+   <html data-theme>; index.html sets it before first paint). Components
+   use var(--...) rather than literal colours so they follow the theme. */
+:root,
+:root[data-theme="light"] {
+  --panel-bg: rgba(255, 255, 255, 0.95);
+  --surface: #ffffff;
+  --sunken: #fafafa;
+  --text: #1c1c1c;
+  --text-muted: #666666;
+  --text-subtle: #888888;
+  --border: #dddddd;
+  --border-soft: #e2e2e2;
+  --border-input: #bbbbbb;
+  --accent-bg: #1c1c1c;
+  --accent-fg: #ffffff;
+  --switch-on: #1c1c1c;
+  --switch-off: #c4c4c4;
+  --link: #1c64f2;
+  --danger: #c1121f;
+  --shadow: rgba(0, 0, 0, 0.2);
+  --selected: #ff2d95;
+}
+
+:root[data-theme="dark"] {
+  --panel-bg: rgba(32, 34, 39, 0.95);
+  --surface: #26282e;
+  --sunken: #1c1d21;
+  --text: #e6e6e6;
+  --text-muted: #a3a3a3;
+  --text-subtle: #8a8a8a;
+  --border: #3a3d44;
+  --border-soft: #353840;
+  --border-input: #555a63;
+  --accent-bg: #e6e6e6;
+  --accent-fg: #1c1c1c;
+  --switch-on: #4c8dff;
+  --switch-off: #555a63;
+  --link: #7aa7ff;
+  --danger: #ff6b6b;
+  --shadow: rgba(0, 0, 0, 0.5);
+  --selected: #ff2d95;
+}
+
 html,
 body,
 #root {
@@ -10,6 +54,11 @@ body,
   width: 100%;
   height: 100%;
   font-family: system-ui, -apple-system, sans-serif;
+}
+
+body {
+  background: var(--sunken);
+  color: var(--text);
 }
 
 label {
@@ -28,4 +77,54 @@ button {
   padding: 0.5rem;
   font-size: 0.9rem;
   cursor: pointer;
+}
+
+/* Native form controls on the panel palette (color-scheme, set with the
+   theme, darkens their built-in chrome too). */
+input,
+select,
+button {
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border-input);
+  border-radius: 4px;
+}
+
+/* MapLibre popups and controls. */
+.maplibregl-popup-content {
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: 0 1px 4px var(--shadow);
+}
+.maplibregl-popup-close-button {
+  color: var(--text);
+  background: none;
+  border: none;
+}
+.maplibregl-popup-anchor-top .maplibregl-popup-tip,
+.maplibregl-popup-anchor-top-left .maplibregl-popup-tip,
+.maplibregl-popup-anchor-top-right .maplibregl-popup-tip {
+  border-bottom-color: var(--surface);
+}
+.maplibregl-popup-anchor-bottom .maplibregl-popup-tip,
+.maplibregl-popup-anchor-bottom-left .maplibregl-popup-tip,
+.maplibregl-popup-anchor-bottom-right .maplibregl-popup-tip {
+  border-top-color: var(--surface);
+}
+.maplibregl-popup-anchor-left .maplibregl-popup-tip {
+  border-right-color: var(--surface);
+}
+.maplibregl-popup-anchor-right .maplibregl-popup-tip {
+  border-left-color: var(--surface);
+}
+:root[data-theme="dark"] .maplibregl-ctrl-attrib {
+  background: rgba(20, 21, 24, 0.7);
+  color: var(--text-muted);
+}
+:root[data-theme="dark"] .maplibregl-ctrl-attrib a {
+  color: var(--text-muted);
+}
+:root[data-theme="dark"] .maplibregl-ctrl-attrib-button {
+  filter: invert(1);
+  background-color: transparent;
 }

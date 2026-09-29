@@ -39,7 +39,7 @@ export function Switch({
           position: "absolute",
           inset: 0,
           borderRadius: "0.5rem",
-          background: checked ? "#1c1c1c" : "#c4c4c4",
+          background: checked ? "var(--switch-on)" : "var(--switch-off)",
           transition: "background 120ms",
         }}
       />

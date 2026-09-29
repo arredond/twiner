@@ -6,6 +6,7 @@ import {
   intensityColorExpr,
   subtypeLabel,
 } from "../infrastructure";
+import type { I18n, MessageKey } from "../i18n";
 import type { InfrastructureResult, IntensityBands } from "../scenarioApi";
 import { escapeHtml, renderProbabilityBarHtml } from "../popupHtml";
 import { staticDataUrl } from "../staticData";
@@ -274,11 +275,9 @@ export function applyInfrastructureResults(
   return ids;
 }
 
-const REGISTRY_LABELS: Record<string, string> = {
-  health: "National hospital catalogue (CNH) id",
-  education: "School registry (RCD/RUCT) id",
-  dam: "Dam inventory (IPE) id",
-};
+// Categories whose assets carry an official registry id, labelled
+// infra.popup.registry.<category>.
+const REGISTRY_CATEGORIES = new Set(["health", "education", "dam"]);
 
 // `result`: this scenario's row for the asset, if it was flagged.
 // `scenario`: whether a scenario is showing, and whether the asset lies in
@@ -286,39 +285,46 @@ const REGISTRY_LABELS: Record<string, string> = {
 export function renderInfrastructurePopupHtml(
   props: Record<string, unknown>,
   result: InfrastructureResult | null,
-  scenario: { withinEvaluatedRegion: boolean } | null
+  scenario: { withinEvaluatedRegion: boolean } | null,
+  i18n: I18n
 ): string {
-  const subtype = subtypeLabel(String(props.subtype ?? ""));
+  const { t } = i18n;
+  const subtype = subtypeLabel(i18n, String(props.subtype ?? ""));
   const title = props.name ? String(props.name) : subtype;
-  const rows: Array<[string, string]> = [["Type", subtype]];
-  if (props.detail) rows.push([props.subtype === "bridge" ? "Length" : "Voltage", String(props.detail)]);
-  const registryLabel = REGISTRY_LABELS[String(props.category)];
-  if (registryLabel && props.registry_id) rows.push([registryLabel, String(props.registry_id)]);
-  if (props.building_id) rows.push(["Catastro building", String(props.building_id)]);
+  const rows: Array<[string, string]> = [[t("infra.popup.type"), subtype]];
+  if (props.detail)
+    rows.push([props.subtype === "bridge" ? t("infra.popup.length") : t("infra.popup.voltage"), String(props.detail)]);
+  const category = String(props.category);
+  if (REGISTRY_CATEGORIES.has(category) && props.registry_id)
+    rows.push([t(`infra.popup.registry.${category}` as MessageKey), String(props.registry_id)]);
+  if (props.building_id) rows.push([t("infra.popup.catastroBuilding"), String(props.building_id)]);
 
   let impact = "";
   if (result) {
-    rows.push(["Estimated intensity", `${fmtIntensity(result.intensity)} EMS-98`]);
+    rows.push([t("infra.popup.estimatedIntensity"), `${fmtIntensity(i18n, result.intensity)} EMS-98`]);
     if (result.damage_state_code !== null) {
       // Its building's own result: the state it's labelled with and the
       // whole distribution behind it (the same bar a building popup shows).
-      const state = DAMAGE_STATES[result.damage_state_code] ?? "Unknown";
-      rows.push(["Building damage", state]);
-      if (result.damage_probs) impact = renderProbabilityBarHtml(result.damage_probs);
+      const state = DAMAGE_STATES[result.damage_state_code];
+      rows.push([t("infra.popup.buildingDamage"), state ? t(`damage.${state}`) : "—"]);
+      if (result.damage_probs) impact = renderProbabilityBarHtml(result.damage_probs, i18n);
     }
   } else if (scenario) {
     rows.push([
-      "Estimated intensity",
-      scenario.withinEvaluatedRegion ? "Below VI (not affected)" : "Outside the evaluated area",
+      t("infra.popup.estimatedIntensity"),
+      scenario.withinEvaluatedRegion ? t("infra.popup.belowAffected") : t("infra.popup.outsideEvaluated"),
     ]);
   }
   const body = rows
-    .map(([k, v]) => `<tr><td style="color:#666;padding-right:0.5rem">${escapeHtml(k)}</td><td>${escapeHtml(v)}</td></tr>`)
+    .map(
+      ([k, v]) =>
+        `<tr><td style="color:var(--text-muted);padding-right:0.5rem">${escapeHtml(k)}</td><td>${escapeHtml(v)}</td></tr>`
+    )
     .join("");
   return (
     `<strong>${escapeHtml(title)}</strong>` +
     `<table style="font-size:0.8rem;margin-top:0.3rem">${body}</table>` +
     impact +
-    `<div style="font-size:0.7rem;color:#888;margin-top:0.3rem">Source: IGN Base Topográfica Nacional</div>`
+    `<div style="font-size:0.7rem;color:var(--text-subtle);margin-top:0.3rem">${escapeHtml(t("infra.popup.source"))}</div>`
   );
 }

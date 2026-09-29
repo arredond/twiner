@@ -1,10 +1,28 @@
 <!doctype html>
-<html lang="en">
+<html lang="es">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>web</title>
+    <title>twiner</title>
+    <script>
+      // Theme before first paint, so the dark default never flashes light
+      // first. Mirrors src/settings.tsx (same storage key and defaults).
+      (function () {
+        var pref = "dark";
+        var lang = "es";
+        try {
+          var saved = JSON.parse(localStorage.getItem("twiner.settings") || "{}");
+          if (saved.theme === "light" || saved.theme === "dark" || saved.theme === "auto") pref = saved.theme;
+          if (typeof saved.language === "string") lang = saved.language;
+        } catch (e) {}
+        var theme =
+          pref === "auto" ? (window.matchMedia && matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light") : pref;
+        document.documentElement.dataset.theme = theme;
+        document.documentElement.style.colorScheme = theme;
+        document.documentElement.lang = lang;
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

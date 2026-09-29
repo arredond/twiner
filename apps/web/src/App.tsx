@@ -2,8 +2,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { DamageMap } from "./components/DamageMap";
 import { ImpactSidebar, SIDEBAR_WIDTH_REM } from "./components/ImpactSidebar";
 import { ManualRunForm, type ManualParams } from "./components/RunScenarioPopup";
-import { PROBABILITY_LEVEL_LABELS, PROBABILITY_LEVEL_SHORT_LABELS } from "./probabilityLevels";
 import { DamageLegend } from "./components/DamageLegend";
+import { Segmented } from "./components/Segmented";
+import { SettingsMenu } from "./components/SettingsMenu";
+import type { I18n } from "./i18n";
+import { useSettings } from "./settings";
 import { INFRA_CATEGORY_KEYS, type InfraCategory } from "./infrastructure";
 import {
   getInfrastructure,
@@ -29,6 +32,8 @@ import {
 // with the result's impact (ADR-0024). Closing the panel clears the
 // scenario.
 export default function App() {
+  const { settings, theme, i18n } = useSettings();
+  const { t } = i18n;
   const [result, setResult] = useState<ScenarioResult | null>(null);
   const [isRunning, setIsRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -315,7 +320,12 @@ export default function App() {
           infrastructureResults={infrastructure}
           focusedAsset={focusedAsset}
           rightInsetRem={result ? SIDEBAR_WIDTH_REM : 0}
+          theme={theme}
+          i18n={i18n}
+          showZoom={settings.showZoom}
         />
+
+        <SettingsMenu style={{ top: "0.75rem", right: `${(result ? SIDEBAR_WIDTH_REM : 0) + 0.75}rem` }} />
 
         <div style={{ ...overlayPanel, top: "0.75rem", left: "0.75rem", maxWidth: "17rem" }}>
           {result ? (
@@ -328,69 +338,61 @@ export default function App() {
                 padding: "0.35rem 0.8rem",
                 fontSize: "0.85rem",
                 fontWeight: 600,
-                border: "1px solid #1c1c1c",
+                border: "1px solid var(--accent-bg)",
                 borderRadius: 4,
-                background: "#1c1c1c",
-                color: "#fff",
+                background: "var(--accent-bg)",
+                color: "var(--accent-fg)",
                 cursor: "pointer",
               }}
             >
-              New run
+              {t("app.newRun")}
             </button>
           ) : (
             <>
               <div style={{ display: "flex", alignItems: "baseline", gap: "0.4rem" }}>
                 <strong>twiner</strong>
-                <span style={{ fontSize: "0.75rem", color: "#666" }}>Seismic scenarios — Spain</span>
+                <span style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>{t("app.tagline")}</span>
               </div>
-              <div role="group" aria-label="Scenario mode" style={{ display: "flex", marginTop: "0.5rem" }}>
-                {(["automatic", "manual"] as const).map((m) => (
-                  <button
-                    key={m}
-                    type="button"
-                    onClick={() => changeMode(m)}
-                    aria-pressed={mode === m}
-                    style={{
-                      flex: 1,
-                      padding: "0.3rem 0.5rem",
-                      fontSize: "0.8rem",
-                      border: "1px solid #bbb",
-                      background: mode === m ? "#1c1c1c" : "#fff",
-                      color: mode === m ? "#fff" : "#1c1c1c",
-                      borderRadius: m === "automatic" ? "4px 0 0 4px" : "0 4px 4px 0",
-                    }}
-                  >
-                    {m === "automatic" ? "Automatic" : "Manual"}
-                  </button>
-                ))}
+              <div style={{ marginTop: "0.5rem" }}>
+                <Segmented
+                  label={t("mode.label")}
+                  value={mode}
+                  options={[
+                    { value: "automatic", label: t("mode.automatic") },
+                    { value: "manual", label: t("mode.manual") },
+                  ]}
+                  onChange={changeMode}
+                />
               </div>
               <label style={{ marginTop: "0.5rem", fontSize: "0.8rem" }}>
-                Probability level
+                {t("probability.label")}
                 <select
                   value={probabilityLevel}
                   onChange={(e) => setProbabilityLevel(e.target.value as ProbabilityLevel)}
                   style={{ fontSize: "0.8rem" }}
                 >
-                  {(Object.keys(PROBABILITY_LEVEL_LABELS) as ProbabilityLevel[]).map((level) => (
+                  {PROBABILITY_LEVELS.map((level) => (
                     <option key={level} value={level}>
-                      {PROBABILITY_LEVEL_LABELS[level]}
+                      {t(`probability.${level}`)}
                     </option>
                   ))}
                 </select>
               </label>
-              <p style={{ fontSize: "0.75rem", color: "#666", margin: "0.4rem 0 0" }}>
+              <p style={{ fontSize: "0.75rem", color: "var(--text-muted)", margin: "0.4rem 0 0" }}>
                 {mode === "automatic"
                   ? showFaults
-                    ? "Click a fault (dashed purple line) to run its maximum-magnitude earthquake."
-                    : "Turn faults on in the legend to pick one."
-                  : "Click anywhere on the map to place an earthquake."}
+                    ? t("mode.hintAutomatic")
+                    : t("mode.hintFaultsOff")
+                  : t("mode.hintManual")}
               </p>
             </>
           )}
-          {isRunning && <p style={{ fontSize: "0.8rem", margin: "0.4rem 0 0" }}>Running scenario…</p>}
-          {error && <p style={{ fontSize: "0.8rem", color: "#c1121f", margin: "0.4rem 0 0" }}>{error}</p>}
+          {isRunning && <p style={{ fontSize: "0.8rem", margin: "0.4rem 0 0" }}>{t("app.running")}</p>}
+          {error && <p style={{ fontSize: "0.8rem", color: "var(--danger)", margin: "0.4rem 0 0" }}>{error}</p>}
           {faultsError && (
-            <p style={{ fontSize: "0.8rem", color: "#c1121f", margin: "0.4rem 0 0" }}>Faults: {faultsError}</p>
+            <p style={{ fontSize: "0.8rem", color: "var(--danger)", margin: "0.4rem 0 0" }}>
+              {t("app.faultsError", { message: faultsError })}
+            </p>
           )}
         </div>
 
@@ -406,7 +408,7 @@ export default function App() {
             overflowY: "auto",
           }}
         >
-          <summary style={{ cursor: "pointer", fontWeight: 600 }}>Legend</summary>
+          <summary style={{ cursor: "pointer", fontWeight: 600 }}>{t("legend.title")}</summary>
           <div style={{ marginTop: "0.5rem" }}>
             <DamageLegend
               showFaults={showFaults}
@@ -425,12 +427,15 @@ export default function App() {
         </details>
         {result && (
           <ImpactSidebar
-            title={scenarioTitle(result, faults)}
-            subtitle={
-              `${result.n_evaluated.toLocaleString()} buildings evaluated, ${result.n_damaged.toLocaleString()} damaged` +
-              (result.rupture.finite_rupture ? " · finite rupture plane" : "") +
-              (result.cached ? " · cached" : "")
-            }
+            title={scenarioTitle(result, faults, i18n)}
+            subtitle={[
+              t("scenario.summary", {
+                evaluated: i18n.fmtInt(result.n_evaluated),
+                damaged: i18n.fmtInt(result.n_damaged),
+              }),
+              ...(result.rupture.finite_rupture ? [t("scenario.finiteRupture")] : []),
+              ...(result.cached ? [t("scenario.cached")] : []),
+            ].join(" · ")}
             municipalities={result.municipality_stats}
             selectedMunicipality={selectedMunicipality}
             sections={sections}
@@ -452,9 +457,10 @@ export default function App() {
 const overlayPanel: React.CSSProperties = {
   position: "absolute",
   zIndex: 1,
-  background: "rgba(255,255,255,0.95)",
+  background: "var(--panel-bg)",
+  color: "var(--text)",
   borderRadius: 6,
-  boxShadow: "0 1px 4px rgba(0,0,0,0.2)",
+  boxShadow: "0 1px 4px var(--shadow)",
   padding: "0.6rem 0.75rem",
 };
 
@@ -464,21 +470,24 @@ const STYLE_OF_FAULTING_RAKE: Record<ManualParams["styleOfFaulting"], number> = 
   reverse: 90,
 };
 
+// MERISUR's three tiers (docs/merisur.md §4.7), in selector order.
+const PROBABILITY_LEVELS: ProbabilityLevel[] = ["high", "low", "very_low"];
+
 // "Alhama de Murcia (1/4) - Mmax. 6.7 - High probability" or
 // "Manual - Mag. 8 - Low probability". A fault result's `source` is
-// "fault:<fault_id>:<name>" (services/scenario rupture.py).
-function scenarioTitle(result: ScenarioResult, faults: Fault[] | null): string {
-  const probability = PROBABILITY_LEVEL_SHORT_LABELS[result.rupture.probability_level];
+// "fault:<fault_id>:<name>" (services/scenario rupture.py). Magnitudes get
+// one decimal at most, none when whole (t formats them per locale).
+function scenarioTitle(result: ScenarioResult, faults: Fault[] | null, { t }: I18n): string {
+  const probability = t(`probability.short.${result.rupture.probability_level}`);
   const [kind, faultId, ...nameParts] = result.rupture.source.split(":");
   if (kind === "fault") {
     const fault = faults?.find((f) => f.fault_id === faultId);
     const name = fault?.name ?? (nameParts.join(":") || faultId);
-    return `${name} - Mmax. ${fmtMagnitude(fault?.mmax ?? result.rupture.mag)} - ${probability}`;
+    return t("scenario.titleFault", { name, mag: roundMagnitude(fault?.mmax ?? result.rupture.mag), probability });
   }
-  return `Manual - Mag. ${fmtMagnitude(result.rupture.mag)} - ${probability}`;
+  return t("scenario.titleManual", { mag: roundMagnitude(result.rupture.mag), probability });
 }
 
-// One decimal at most, none when whole: 6.7, 8.
-function fmtMagnitude(mag: number): string {
-  return String(Number(mag.toFixed(1)));
+function roundMagnitude(mag: number): number {
+  return Number(mag.toFixed(1));
 }

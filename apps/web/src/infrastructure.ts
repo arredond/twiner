@@ -1,45 +1,33 @@
 import type { ExpressionSpecification } from "maplibre-gl";
+import type { I18n, MessageKey } from "./i18n";
 
 // Critical infrastructure (ADR-0025): the categories the pipeline
 // (pipelines/exposure infrastructure.py) assigns, in panel order. `letter`
 // marks each asset's map circle -- one glyph from the basemap's own font,
-// no icon sprite needed.
+// no icon sprite needed -- and stays the same in every language (the
+// legend spells each one out). Labels: i18n's infra.category.<key>.
 export const INFRA_CATEGORIES = [
-  { key: "health", label: "Health", letter: "H" },
-  { key: "care", label: "Care homes", letter: "C" },
-  { key: "emergency", label: "Emergency services", letter: "E" },
-  { key: "education", label: "Education", letter: "S" },
-  { key: "power", label: "Power", letter: "P" },
-  { key: "bridge", label: "Bridges", letter: "B" },
-  { key: "dam", label: "Dams", letter: "D" },
+  { key: "health", letter: "H" },
+  { key: "care", letter: "C" },
+  { key: "emergency", letter: "E" },
+  { key: "education", letter: "S" },
+  { key: "power", letter: "P" },
+  { key: "bridge", letter: "B" },
+  { key: "dam", letter: "D" },
 ] as const;
 
 export type InfraCategory = (typeof INFRA_CATEGORIES)[number]["key"];
 
 export const INFRA_CATEGORY_KEYS: InfraCategory[] = INFRA_CATEGORIES.map((c) => c.key);
 
-export const SUBTYPE_LABELS: Record<string, string> = {
-  hospital: "Hospital",
-  health_centre: "Health centre",
-  care_home: "Care home",
-  police: "Police / security",
-  fire_civil_protection: "Fire / civil protection",
-  school: "School",
-  university: "University",
-  substation: "Electrical substation",
-  thermal: "Thermal power plant",
-  hydro: "Hydroelectric plant",
-  nuclear: "Nuclear power plant",
-  solar_pv: "Solar PV plant",
-  combined_cycle: "Combined-cycle plant",
-  wind: "Wind farm",
-  solar_thermal: "Solar thermal plant",
-  bridge: "Bridge",
-  dam: "Dam",
-};
+export function categoryLabel(i18n: I18n, category: InfraCategory): string {
+  return i18n.t(`infra.category.${category}`);
+}
 
-export function subtypeLabel(subtype: string): string {
-  return SUBTYPE_LABELS[subtype] ?? subtype;
+// i18n's infra.subtype.<subtype>; an unknown subtype shows as-is.
+export function subtypeLabel(i18n: I18n, subtype: string): string {
+  const key = `infra.subtype.${subtype}`;
+  return i18n.has(key) ? i18n.t(key as MessageKey) : subtype;
 }
 
 // Estimated macroseismic intensity (EMS-98 scale, from PGV via Worden et
@@ -69,8 +57,8 @@ export function roman(level: number): string {
 }
 
 // "VII (7.4)": the band a value falls in, and the value itself.
-export function fmtIntensity(value: number): string {
-  return `${roman(Math.floor(value))} (${value.toFixed(1)})`;
+export function fmtIntensity(i18n: I18n, value: number): string {
+  return `${roman(Math.floor(value))} (${i18n.fmtDecimal(value)})`;
 }
 
 // Colour for a numeric intensity, by band (floor), for the map paint.

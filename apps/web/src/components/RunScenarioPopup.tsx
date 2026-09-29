@@ -1,3 +1,5 @@
+import { useI18n } from "../settings";
+
 // Content of Manual mode's "run scenario" popup (DamageMap renders it via
 // a portal at the clicked point). The probability level is chosen in the
 // map's mode panel (App.tsx), shared with Automatic mode, where clicking a
@@ -39,6 +41,7 @@ export function ManualRunForm({
   onRun: () => void;
   isRunning: boolean;
 }) {
+  const { t } = useI18n();
   function set<K extends keyof ManualParams>(key: K, value: ManualParams[K]) {
     onChange((p) => ({ ...p, [key]: value }));
   }
@@ -51,10 +54,10 @@ export function ManualRunForm({
       }}
       style={formStyle}
     >
-      <h3 style={{ fontSize: "0.95rem", margin: 0 }}>Manual earthquake</h3>
+      <h3 style={{ fontSize: "0.95rem", margin: 0 }}>{t("manual.title")}</h3>
       <div style={{ display: "flex", gap: "0.5rem" }}>
         <label style={{ flex: 1 }}>
-          Latitude
+          {t("manual.latitude")}
           <input
             type="number"
             step="0.001"
@@ -64,7 +67,7 @@ export function ManualRunForm({
           />
         </label>
         <label style={{ flex: 1 }}>
-          Longitude
+          {t("manual.longitude")}
           <input
             type="number"
             step="0.001"
@@ -76,7 +79,7 @@ export function ManualRunForm({
       </div>
 
       <label>
-        Magnitude (Mw)
+        {t("manual.magnitude")}
         <input
           type="number"
           step="0.1"
@@ -88,26 +91,25 @@ export function ManualRunForm({
       </label>
 
       <label>
-        Style of faulting
+        {t("manual.styleOfFaulting")}
         <select
           value={params.styleOfFaulting}
           onChange={(e) => set("styleOfFaulting", e.target.value as ManualParams["styleOfFaulting"])}
         >
-          <option value="strike-slip">Strike-slip (default)</option>
-          <option value="normal">Normal</option>
-          <option value="reverse">Reverse</option>
+          <option value="strike-slip">{t("manual.strikeSlip")}</option>
+          <option value="normal">{t("manual.normal")}</option>
+          <option value="reverse">{t("manual.reverse")}</option>
         </select>
       </label>
 
       <details open={params.advancedEnabled} onToggle={(e) => set("advancedEnabled", e.currentTarget.open)}>
-        <summary style={{ cursor: "pointer" }}>Advanced: fault geometry (strike/dip/depth)</summary>
-        <p style={{ fontSize: "0.75rem", color: "#666" }}>
-          Computes a real finite rupture plane (length/width derived from magnitude) instead of treating the
-          earthquake as a single point.
+        <summary style={{ cursor: "pointer" }}>{t("manual.advanced")}</summary>
+        <p style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>
+          {t("manual.advancedHint")}
         </p>
         <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
           <label>
-            Strike (°, 0-360, direction the fault runs)
+            {t("manual.strike")}
             <input
               type="number"
               step="1"
@@ -118,7 +120,7 @@ export function ManualRunForm({
             />
           </label>
           <label>
-            Dip (°, 0-90, tilt from horizontal)
+            {t("manual.dip")}
             <input
               type="number"
               step="1"
@@ -129,7 +131,7 @@ export function ManualRunForm({
             />
           </label>
           <label>
-            Depth to top of rupture (km)
+            {t("manual.ztor")}
             <input
               type="number"
               step="0.5"
@@ -142,7 +144,7 @@ export function ManualRunForm({
       </details>
 
       <button type="submit" disabled={isRunning}>
-        {isRunning ? "Running scenario…" : "Run scenario"}
+        {isRunning ? t("app.running") : t("manual.run")}
       </button>
     </form>
   );

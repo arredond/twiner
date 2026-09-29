@@ -1,7 +1,8 @@
 import { useMemo, useState } from "react";
 import { DAMAGE_COLORS, DAMAGE_STATES } from "../damageColors";
-import { fmtInt, fmtMeur, impactRows, meanSeverity } from "../impactFormat";
-import { INFRA_CATEGORIES, INTENSITY_COLORS, fmtIntensity, subtypeLabel } from "../infrastructure";
+import { impactRows, meanSeverity } from "../impactFormat";
+import { INFRA_CATEGORIES, INTENSITY_COLORS, categoryLabel, fmtIntensity, subtypeLabel } from "../infrastructure";
+import { useI18n } from "../settings";
 import type { AreaImpact, InfrastructureResult, MunicipalityStats, SectionStats } from "../scenarioApi";
 
 // Right-hand scenario panel (ADR-0024): shown while there's a result, lists
@@ -59,6 +60,8 @@ export function ImpactSidebar({
   onSelectAsset,
   onClose,
 }: Props) {
+  const i18n = useI18n();
+  const { t, fmtInt, fmtMeur } = i18n;
   const [limit, setLimit] = useState(PAGE_SIZE);
   // Filters whichever list is showing: municipalities (name or INE code)
   // or, drilled in, the municipality's sections (code). Cleared on every
@@ -107,29 +110,36 @@ export function ImpactSidebar({
         width: `${SIDEBAR_WIDTH_REM}rem`,
         display: "flex",
         flexDirection: "column",
-        borderLeft: "1px solid #ddd",
-        boxShadow: "-2px 0 6px rgba(0,0,0,0.08)",
-        background: "#fafafa",
+        borderLeft: "1px solid var(--border)",
+        boxShadow: "-2px 0 6px var(--shadow)",
+        background: "var(--sunken)",
+        color: "var(--text)",
         minHeight: 0,
       }}
     >
-      <header style={{ padding: "0.75rem 1rem", borderBottom: "1px solid #ddd", background: "#fff" }}>
+      <header style={{ padding: "0.75rem 1rem", borderBottom: "1px solid var(--border)", background: "var(--surface)" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "0.5rem" }}>
           <h2 style={{ fontSize: "1rem", margin: 0 }}>{title}</h2>
-          <button onClick={onClose} title="Close scenario" aria-label="Close scenario" style={iconButton}>
+          <button onClick={onClose} title={t("sidebar.close")} aria-label={t("sidebar.close")} style={iconButton}>
             ×
           </button>
         </div>
-        <p style={{ fontSize: "0.75rem", color: "#666", margin: "0.2rem 0 0" }}>{subtitle}</p>
+        <p style={{ fontSize: "0.75rem", color: "var(--text-muted)", margin: "0.2rem 0 0" }}>{subtitle}</p>
         {selectedMunicipality ? (
           <button onClick={() => onSelectMunicipality(null)} style={linkButton}>
-            ← All municipalities
+            {t("sidebar.allMunicipalities")}
           </button>
         ) : (
-          <p style={{ fontSize: "0.8rem", color: "#555", margin: "0.35rem 0 0" }}>
+          <p style={{ fontSize: "0.8rem", color: "var(--text-muted)", margin: "0.35rem 0 0" }}>
             {affected.length === 0
-              ? "No municipality has damaged buildings in this scenario."
-              : `${fmtInt(affected.length)} municipalities affected · ${fmtInt(totals.affected_population)} residents affected, ${fmtInt(totals.displaced_population)} displaced · ${fmtMeur(totals.cost_meur)} · ${fmtInt(totals.debris_t)} t debris`}
+              ? t("sidebar.noDamage")
+              : t("sidebar.summary", {
+                  count: affected.length,
+                  affected: fmtInt(totals.affected_population),
+                  displaced: fmtInt(totals.displaced_population),
+                  cost: fmtMeur(totals.cost_meur),
+                  debris: fmtInt(totals.debris_t),
+                })}
           </p>
         )}
 
@@ -138,8 +148,8 @@ export function ImpactSidebar({
             type="search"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder={selectedMunicipality ? "Search section code…" : "Search municipality or INE code…"}
-            aria-label={selectedMunicipality ? "Search census sections" : "Search municipalities"}
+            placeholder={selectedMunicipality ? t("sidebar.searchSections") : t("sidebar.searchMunicipalities")}
+            aria-label={selectedMunicipality ? t("sidebar.searchSectionsLabel") : t("sidebar.searchMunicipalitiesLabel")}
             style={{ width: "100%", marginTop: "0.5rem", fontSize: "0.85rem" }}
           />
         )}
@@ -158,20 +168,20 @@ export function ImpactSidebar({
               />
             )}
             <h3 style={{ fontSize: "0.85rem", margin: "0.5rem 0 0" }}>
-              Census sections with damage
+              {t("sidebar.sectionsWithDamage")}
               {sortedSections && shownSections
                 ? needle
-                  ? ` (${shownSections.length} of ${sortedSections.length})`
-                  : ` (${sortedSections.length})`
+                  ? ` ${t("sidebar.countOf", { shown: shownSections.length, total: sortedSections.length })}`
+                  : ` (${fmtInt(sortedSections.length)})`
                 : ""}
             </h3>
-            {sectionsError && <p style={{ color: "#c1121f", fontSize: "0.8rem" }}>{sectionsError}</p>}
-            {!sectionsError && !sortedSections && <p style={{ fontSize: "0.8rem", color: "#666" }}>Loading…</p>}
+            {sectionsError && <p style={{ color: "var(--danger)", fontSize: "0.8rem" }}>{sectionsError}</p>}
+            {!sectionsError && !sortedSections && <p style={{ fontSize: "0.8rem", color: "var(--text-muted)" }}>{t("common.loading")}</p>}
             {shownSections?.length === 0 && <NoMatches query={query} />}
             {shownSections?.map((s) => (
               <AreaCard
                 key={s.section_code}
-                title={`Section ${sectionLabel(s.section_code)}`}
+                title={t("sidebar.section", { label: sectionLabel(s.section_code) })}
                 subtitle={s.section_code}
                 area={s}
                 selected={s.section_code === selectedSectionCode}
@@ -200,14 +210,12 @@ export function ImpactSidebar({
             ))}
             {shownMunicipalities.length > limit && (
               <button onClick={() => setLimit((n) => n + PAGE_SIZE)}>
-                Show {Math.min(PAGE_SIZE, shownMunicipalities.length - limit)} more
+                {t("sidebar.showMore", { count: Math.min(PAGE_SIZE, shownMunicipalities.length - limit) })}
               </button>
             )}
           </>
         )}
-        <p style={{ fontSize: "0.7rem", color: "#888" }}>
-          Rough estimates from placeholder parameters -- hover a figure for how it's computed.
-        </p>
+        <p style={{ fontSize: "0.7rem", color: "var(--text-subtle)" }}>{t("sidebar.disclaimer")}</p>
       </div>
     </aside>
   );
@@ -229,17 +237,20 @@ function InfrastructureList({
   focusedAssetId: number | null;
   onSelectAsset: (asset: InfrastructureResult) => void;
 }) {
+  const i18n = useI18n();
+  const { t } = i18n;
   const groups = useMemo(() => {
     const byCategory = new Map<string, InfrastructureResult[]>();
     for (const row of rows) byCategory.set(row.category, [...(byCategory.get(row.category) ?? []), row]);
     return INFRA_CATEGORIES.filter((c) => byCategory.has(c.key)).map((c) => ({
       ...c,
+      label: categoryLabel(i18n, c.key),
       rows: byCategory.get(c.key)!,
     }));
-  }, [rows]);
+  }, [rows, i18n]);
   return (
     <details style={sectionBox}>
-      <summary style={summaryStyle}>Critical infrastructure affected ({fmtInt(rows.length)})</summary>
+      <summary style={summaryStyle}>{t("sidebar.infraTitle", { count: rows.length })}</summary>
       <div style={{ display: "flex", flexDirection: "column", gap: "0.3rem", marginTop: "0.4rem" }}>
         {groups.map((g) => (
           <InfrastructureGroup
@@ -251,10 +262,7 @@ function InfrastructureList({
             onSelectAsset={onSelectAsset}
           />
         ))}
-        <p style={{ fontSize: "0.7rem", color: "#888", margin: 0 }}>
-          Estimated intensity VI or more, or on a damaged building. Only facilities on a building have a damage
-          estimate.
-        </p>
+        <p style={{ fontSize: "0.7rem", color: "var(--text-subtle)", margin: 0 }}>{t("sidebar.infraNote")}</p>
       </div>
     </details>
   );
@@ -273,6 +281,8 @@ function InfrastructureGroup({
   focusedAssetId: number | null;
   onSelectAsset: (asset: InfrastructureResult) => void;
 }) {
+  const i18n = useI18n();
+  const { t, fmtInt } = i18n;
   const [limit, setLimit] = useState(INFRA_PAGE_SIZE);
   return (
     <details>
@@ -284,15 +294,16 @@ function InfrastructureGroup({
           <button
             key={r.asset_id}
             onClick={() => onSelectAsset(r)}
-            title="Show on the map"
+            title={t("sidebar.showOnMap")}
             style={{
               display: "flex",
               alignItems: "center",
               gap: "0.5rem",
               width: "100%",
               textAlign: "left",
-              background: "#fff",
-              border: `1px solid ${r.asset_id === focusedAssetId ? "#ff2d95" : "#e2e2e2"}`,
+              background: "var(--surface)",
+              color: "var(--text)",
+              border: `1px solid ${r.asset_id === focusedAssetId ? "var(--selected)" : "var(--border-soft)"}`,
               borderRadius: 4,
               padding: "0.25rem 0.5rem",
               fontSize: "0.78rem",
@@ -300,7 +311,7 @@ function InfrastructureGroup({
             }}
           >
             <span
-              title="Estimated intensity (EMS-98)"
+              title={t("sidebar.intensityTitle")}
               style={{
                 minWidth: "4.2rem",
                 textAlign: "center",
@@ -311,14 +322,14 @@ function InfrastructureGroup({
                 fontVariantNumeric: "tabular-nums",
               }}
             >
-              {fmtIntensity(r.intensity)}
+              {fmtIntensity(i18n, r.intensity)}
             </span>
             <span style={{ flex: 1, minWidth: 0 }}>
               <span style={{ display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                {r.name ?? subtypeLabel(r.subtype)}
+                {r.name ?? subtypeLabel(i18n, r.subtype)}
               </span>
-              <span style={{ color: "#888", fontSize: "0.7rem" }}>
-                {r.name ? subtypeLabel(r.subtype) : r.municipality_code}
+              <span style={{ color: "var(--text-subtle)", fontSize: "0.7rem" }}>
+                {r.name ? subtypeLabel(i18n, r.subtype) : r.municipality_code}
               </span>
             </span>
             {r.damage_state_code !== null && <DamageChip code={r.damage_state_code} probs={r.damage_probs} />}
@@ -326,7 +337,7 @@ function InfrastructureGroup({
         ))}
         {rows.length > limit && (
           <button onClick={() => setLimit((n) => n + INFRA_PAGE_SIZE)} style={{ ...linkButton, marginTop: 0 }}>
-            Show {Math.min(INFRA_PAGE_SIZE, rows.length - limit)} more
+            {t("sidebar.showMore", { count: Math.min(INFRA_PAGE_SIZE, rows.length - limit) })}
           </button>
         )}
       </div>
@@ -337,13 +348,18 @@ function InfrastructureGroup({
 // A facility's building damage: its labelled state, and the whole
 // distribution as a thin bar under it (hover for the percentages).
 function DamageChip({ code, probs }: { code: number; probs: number[] | null }) {
+  const { t, fmtPct } = useI18n();
   const state = DAMAGE_STATES[code];
+  const stateLabel = state ? t(`damage.${state}`) : "—";
   const breakdown = probs
-    ? DAMAGE_STATES.map((s, i) => `${s} ${Math.round((probs[i] ?? 0) * 100)}%`).join(" · ")
-    : state;
+    ? DAMAGE_STATES.map((s, i) => `${t(`damage.${s}`)} ${fmtPct((probs[i] ?? 0) * 100)}`).join(" · ")
+    : stateLabel;
   return (
-    <span title={`Building damage: ${breakdown}`} style={{ width: "4.5rem", flex: "none", color: "#555" }}>
-      <span style={{ display: "block", fontSize: "0.72rem" }}>{state}</span>
+    <span
+      title={t("sidebar.buildingDamage", { breakdown })}
+      style={{ width: "4.5rem", flex: "none", color: "var(--text-muted)" }}
+    >
+      <span style={{ display: "block", fontSize: "0.72rem" }}>{stateLabel}</span>
       {probs && (
         <span style={{ display: "flex", height: "0.3rem", borderRadius: 1, overflow: "hidden" }}>
           {DAMAGE_STATES.map((s, i) =>
@@ -356,8 +372,8 @@ function DamageChip({ code, probs }: { code: number; probs: number[] | null }) {
 }
 
 const sectionBox: React.CSSProperties = {
-  background: "#fff",
-  border: "1px solid #e2e2e2",
+  background: "var(--surface)",
+  border: "1px solid var(--border-soft)",
   borderRadius: 4,
   padding: "0.4rem 0.6rem",
 };
@@ -371,7 +387,7 @@ const letterBadge: React.CSSProperties = {
   width: "0.95rem",
   height: "0.95rem",
   borderRadius: "50%",
-  border: "1px solid #333",
+  border: "1px solid var(--text)",
   fontSize: "0.58rem",
   fontWeight: 700,
   verticalAlign: "middle",
@@ -392,29 +408,30 @@ function AreaCard({
   selected?: boolean;
   emphasized?: boolean;
 }) {
+  const i18n = useI18n();
   return (
     <div
       onClick={onClick}
       role={onClick ? "button" : undefined}
       style={{
-        background: "#fff",
-        border: `1px solid ${selected ? "#ff2d95" : "#e2e2e2"}`,
+        background: "var(--surface)",
+        border: `1px solid ${selected ? "var(--selected)" : "var(--border-soft)"}`,
         borderLeft: `4px solid ${DAMAGE_COLORS[DAMAGE_STATES[damageClass(area)]]}`,
         borderRadius: 4,
         padding: "0.5rem 0.6rem",
         cursor: onClick ? "pointer" : "default",
-        boxShadow: emphasized ? "0 1px 3px rgba(0,0,0,0.12)" : undefined,
+        boxShadow: emphasized ? "0 1px 3px var(--shadow)" : undefined,
       }}
     >
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: "0.5rem" }}>
         <strong style={{ fontSize: "0.9rem" }}>{title}</strong>
-        {subtitle && <span style={{ fontSize: "0.7rem", color: "#888" }}>{subtitle}</span>}
+        {subtitle && <span style={{ fontSize: "0.7rem", color: "var(--text-subtle)" }}>{subtitle}</span>}
       </div>
       <DamageBar area={area} />
       <dl style={{ display: "grid", gridTemplateColumns: "auto 1fr", gap: "0.1rem 0.6rem", margin: 0, fontSize: "0.78rem" }}>
-        {impactRows(area).map((row) => (
+        {impactRows(area, i18n).map((row) => (
           <div key={row.label} title={row.hint} style={{ display: "contents" }}>
-            <dt style={{ color: "#666" }}>{row.label}</dt>
+            <dt style={{ color: "var(--text-muted)" }}>{row.label}</dt>
             <dd style={{ margin: 0, textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{row.value}</dd>
           </div>
         ))}
@@ -425,6 +442,7 @@ function AreaCard({
 
 // Share of evaluated buildings in each damage state.
 function DamageBar({ area }: { area: AreaImpact }) {
+  const { t, fmtInt, fmtPct } = useI18n();
   const total = area.n_evaluated || 1;
   return (
     <div style={{ display: "flex", height: "0.5rem", borderRadius: 2, overflow: "hidden", margin: "0.35rem 0" }}>
@@ -434,7 +452,7 @@ function DamageBar({ area }: { area: AreaImpact }) {
         return (
           <div
             key={state}
-            title={`${state}: ${fmtInt(n)} (${((100 * n) / total).toFixed(1)}%)`}
+            title={`${t(`damage.${state}`)}: ${fmtInt(n)} (${fmtPct((100 * n) / total)})`}
             style={{ flex: n, background: DAMAGE_COLORS[state] }}
           />
         );
@@ -472,7 +490,8 @@ function normalize(text: string): string {
 }
 
 function NoMatches({ query }: { query: string }) {
-  return <p style={{ fontSize: "0.8rem", color: "#666" }}>No matches for “{query.trim()}”.</p>;
+  const { t } = useI18n();
+  return <p style={{ fontSize: "0.8rem", color: "var(--text-muted)" }}>{t("sidebar.noMatches", { query: query.trim() })}</p>;
 }
 
 function sumImpact(areas: AreaImpact[]) {
@@ -493,6 +512,7 @@ const iconButton: React.CSSProperties = {
   fontSize: "1.2rem",
   lineHeight: 1,
   padding: "0 0.25rem",
+  color: "var(--text)",
 };
 
 const linkButton: React.CSSProperties = {
@@ -500,6 +520,6 @@ const linkButton: React.CSSProperties = {
   background: "none",
   padding: 0,
   marginTop: "0.35rem",
-  color: "#1c64f2",
+  color: "var(--link)",
   fontSize: "0.8rem",
 };
