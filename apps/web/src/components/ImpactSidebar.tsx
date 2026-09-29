@@ -36,13 +36,34 @@ export function ImpactSidebar({
   onClose,
 }: Props) {
   const [limit, setLimit] = useState(PAGE_SIZE);
+  // Filters whichever list is showing: municipalities (name or INE code)
+  // or, drilled in, the municipality's sections (code). Cleared on every
+  // switch between the two, and on a new scenario.
+  const [query, setQuery] = useState("");
+  // Reset during render when the list changes (React's "adjusting state
+  // when a prop changes" pattern) rather than in an effect, which would
+  // render the stale filter once first.
+  const [listIdentity, setListIdentity] = useState({ municipalities, selectedMunicipality });
+  if (listIdentity.municipalities !== municipalities || listIdentity.selectedMunicipality !== selectedMunicipality) {
+    setListIdentity({ municipalities, selectedMunicipality });
+    setQuery("");
+    setLimit(PAGE_SIZE);
+  }
 
   const affected = useMemo(
-    () => municipalities.filter((m) => m.n_damaged > 0).sort(byImpact),
+    () => municipalities.filter((m) => m.n_damaged > 0).sort(bySeverity),
     [municipalities]
   );
   const totals = useMemo(() => sumImpact(affected), [affected]);
-  const sortedSections = useMemo(() => (sections ? [...sections].sort(byImpact) : null), [sections]);
+  const sortedSections = useMemo(() => (sections ? [...sections].sort(bySeverity) : null), [sections]);
+
+  const needle = normalize(query.trim());
+  const shownMunicipalities = needle
+    ? affected.filter((m) => normalize(`${m.name ?? ""} ${m.municipality_code}`).includes(needle))
+    : affected;
+  const shownSections = needle
+    ? sortedSections?.filter((s) => normalize(`${s.section_code} ${sectionLabel(s.section_code)}`).includes(needle))
+    : sortedSections;
 
   return (
     <aside
@@ -73,6 +94,16 @@ export function ImpactSidebar({
               : `${fmtInt(affected.length)} municipalities affected · ${fmtInt(totals.affected_population)} residents affected, ${fmtInt(totals.displaced_population)} displaced · ${fmtMeur(totals.cost_meur)} · ${fmtInt(totals.debris_t)} t debris`}
           </p>
         )}
+        {(selectedMunicipality ? (sortedSections?.length ?? 0) : affected.length) > 1 && (
+          <input
+            type="search"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder={selectedMunicipality ? "Search section code…" : "Search municipality or INE code…"}
+            aria-label={selectedMunicipality ? "Search census sections" : "Search municipalities"}
+            style={{ width: "100%", marginTop: "0.5rem", fontSize: "0.85rem" }}
+          />
+        )}
       </header>
 
       <div style={{ overflowY: "auto", padding: "0.75rem", display: "flex", flexDirection: "column", gap: "0.6rem" }}>
@@ -80,14 +111,20 @@ export function ImpactSidebar({
           <>
             <AreaCard title={selectedMunicipality.name ?? selectedMunicipality.municipality_code} area={selectedMunicipality} emphasized />
             <h3 style={{ fontSize: "0.85rem", margin: "0.5rem 0 0" }}>
-              Census sections with damage{sortedSections ? ` (${sortedSections.length})` : ""}
+              Census sections with damage
+              {sortedSections && shownSections
+                ? needle
+                  ? ` (${shownSections.length} of ${sortedSections.length})`
+                  : ` (${sortedSections.length})`
+                : ""}
             </h3>
             {sectionsError && <p style={{ color: "#c1121f", fontSize: "0.8rem" }}>{sectionsError}</p>}
             {!sectionsError && !sortedSections && <p style={{ fontSize: "0.8rem", color: "#666" }}>Loading…</p>}
-            {sortedSections?.map((s) => (
+            {shownSections?.length === 0 && <NoMatches query={query} />}
+            {shownSections?.map((s) => (
               <AreaCard
                 key={s.section_code}
-                title={`Section ${s.section_code.slice(5, 7)}-${s.section_code.slice(7)}`}
+                title={`Section ${sectionLabel(s.section_code)}`}
                 subtitle={s.section_code}
                 area={s}
                 selected={s.section_code === selectedSectionCode}
@@ -97,7 +134,8 @@ export function ImpactSidebar({
           </>
         ) : (
           <>
-            {affected.slice(0, limit).map((m) => (
+            {needle && shownMunicipalities.length === 0 && <NoMatches query={query} />}
+            {shownMunicipalities.slice(0, limit).map((m) => (
               <AreaCard
                 key={m.municipality_code}
                 title={m.name ?? m.municipality_code}
@@ -106,9 +144,9 @@ export function ImpactSidebar({
                 onClick={() => onSelectMunicipality(m.municipality_code)}
               />
             ))}
-            {affected.length > limit && (
+            {shownMunicipalities.length > limit && (
               <button onClick={() => setLimit((n) => n + PAGE_SIZE)}>
-                Show {Math.min(PAGE_SIZE, affected.length - limit)} more
+                Show {Math.min(PAGE_SIZE, shownMunicipalities.length - limit)} more
               </button>
             )}
           </>
@@ -136,7 +174,6 @@ function AreaCard({
   selected?: boolean;
   emphasized?: boolean;
 }) {
-  const severity = meanSeverity(area);
   return (
     <div
       onClick={onClick}
@@ -144,7 +181,7 @@ function AreaCard({
       style={{
         background: "#fff",
         border: `1px solid ${selected ? "#ff2d95" : "#e2e2e2"}`,
-        borderLeft: `4px solid ${DAMAGE_COLORS[DAMAGE_STATES[Math.min(4, Math.round(severity))]]}`,
+        borderLeft: `4px solid ${DAMAGE_COLORS[DAMAGE_STATES[damageClass(area)]]}`,
         borderRadius: 4,
         padding: "0.5rem 0.6rem",
         cursor: onClick ? "pointer" : "default",
@@ -188,9 +225,36 @@ function DamageBar({ area }: { area: AreaImpact }) {
   );
 }
 
-// Most affected residents first, then most damaged buildings.
-function byImpact(a: AreaImpact, b: AreaImpact): number {
-  return b.affected_population - a.affected_population || b.n_damaged - a.n_damaged;
+// An area's damage class: its mean damage state (0 None .. 4 Complete)
+// rounded to the nearest state -- the same class its card's left border
+// is colored by, so the list order and the colors agree.
+function damageClass(area: AreaImpact): number {
+  return Math.min(4, Math.round(meanSeverity(area)));
+}
+
+// Worst damage class first; within a class, highest share of buildings
+// affected, then most damaged buildings as a tie-break.
+function bySeverity(a: AreaImpact, b: AreaImpact): number {
+  return (
+    damageClass(b) - damageClass(a) ||
+    (b.pct_buildings_affected ?? 0) - (a.pct_buildings_affected ?? 0) ||
+    b.n_damaged - a.n_damaged
+  );
+}
+
+// "01-003": district-section, the part of a section code that's unique
+// within its municipality.
+function sectionLabel(code: string): string {
+  return `${code.slice(5, 7)}-${code.slice(7)}`;
+}
+
+// Case- and accent-insensitive ("malaga" finds "Málaga").
+function normalize(text: string): string {
+  return text.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+}
+
+function NoMatches({ query }: { query: string }) {
+  return <p style={{ fontSize: "0.8rem", color: "#666" }}>No matches for “{query.trim()}”.</p>;
 }
 
 function sumImpact(areas: AreaImpact[]) {
