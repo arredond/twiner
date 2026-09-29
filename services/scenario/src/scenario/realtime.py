@@ -30,8 +30,6 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from . import roads
-
 # DATEX II v3.7, the DGT's National Access Point. The older v3.6 URL now
 # 301s here; the v1 infocar.dgt.es feed is gone (404).
 DGT_URL = "https://nap.dgt.es/datex2/v3/dgt/SituationPublication/datex2_v37.xml"
@@ -140,6 +138,10 @@ def dgt_incidents() -> dict:
     loaded = {k: v for k, v in results.items() if isinstance(v, dict)}
     if not loaded:
         raise RealtimeUnavailable("; ".join(str(v) for v in results.values()))
+    # Deferred: roads.py pulls in shapely/scipy/numpy, which the Lambda's
+    # other routes shouldn't pay for at import.
+    from . import roads
+
     # Copies: roads.locate edits properties, and the per-feed results are
     # cached and shared between calls.
     features = [
