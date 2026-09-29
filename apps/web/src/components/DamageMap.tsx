@@ -37,6 +37,7 @@ import {
   addIntensityLayers,
   applyInfrastructureResults,
   selectAsset,
+  setInfrastructurePaint,
   renderInfrastructurePopupHtml,
   setInfrastructureCategories,
   setIntensityBands,
@@ -817,6 +818,8 @@ export function DamageMap({
   // switch (basemapLabels.ts).
   const basemapLabelsRef = useRef<BasemapLabels>(new Map());
   const infrastructureStateIdsRef = useRef<Set<number>>(new Set());
+  const infrastructureResultsRef = useRef(infrastructureResults);
+  infrastructureResultsRef.current = infrastructureResults;
 
   const faultsData = useMemo(
     () => (faults ? faultsToFeatureCollection(faults) : null),
@@ -963,7 +966,7 @@ export function DamageMap({
 
       // Critical infrastructure (ADR-0025): above buildings and debris,
       // below the fault lines. Hidden until a category is toggled on.
-      addInfrastructureLayers(map);
+      addInfrastructureLayers(map, themeRef.current);
 
       map.addSource(FAULTS_SOURCE_ID, {
         type: "geojson",
@@ -1667,7 +1670,8 @@ export function DamageMap({
       infrastructureStateIdsRef.current = applyInfrastructureResults(
         map,
         infrastructureStateIdsRef.current,
-        infrastructureResults
+        infrastructureResults,
+        themeRef.current
       );
     };
     if (mapLoadedRef.current) apply();
@@ -1686,6 +1690,7 @@ export function DamageMap({
       map.setPaintProperty(FAULTS_SELECTED_LAYER_ID, "line-color", palette.fault);
       map.setPaintProperty(MUNICIPALITY_FOCUS_OUTLINE_LAYER_ID, "line-color", palette.focusOutline);
       if (map.getLayer(DEBRIS_LAYER_ID)) map.setPaintProperty(DEBRIS_LAYER_ID, "fill-color", palette.debris);
+      setInfrastructurePaint(map, infrastructureResultsRef.current !== null, theme);
       map.setStyle(BASEMAP_STYLES[theme], {
         transformStyle: (previous, next) => {
           // The new basemap's labels, in the current language.

@@ -88,8 +88,8 @@ export function iconInnerSvg(name: InfraIconName): string {
   return /<svg[^>]*>([\s\S]*)<\/svg>/.exec(INFRA_ICON_SVGS[name])?.[1] ?? "";
 }
 
-// The two colourings drawn on the map: dark on the light circles, light on
-// the two darkest intensity bands (infrastructureLayers.ts picks per asset).
+// The two colourings drawn on the map: black icons on light-theme markers,
+// white on dark-theme ones (infrastructureLayers.ts' MARKER_STYLES).
 export const ICON_VARIANTS = { dark: "#1c1c1c", light: "#ffffff" } as const;
 export type IconVariant = keyof typeof ICON_VARIANTS;
 

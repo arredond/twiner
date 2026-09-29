@@ -156,8 +156,8 @@ export function DamageLegend({
           />
         }
       >
-        {/* Also the colour of affected infrastructure, whether or not the
-            bands themselves are on. */}
+        {/* Also the colour of an asset's intensity chip in the sidebar
+            (map markers themselves are plain black and white). */}
         <div style={{ display: "flex" }}>
           {INTENSITY_LEVELS.map((level) => (
             <div key={level} style={{ flex: 1, textAlign: "center" }}>

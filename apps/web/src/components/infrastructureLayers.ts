@@ -10,6 +10,7 @@ import {
   type IconVariant,
 } from "../infraIcons";
 import type { I18n, MessageKey } from "../i18n";
+import type { Theme } from "../settings";
 import type { InfrastructureResult, IntensityBands } from "../scenarioApi";
 import { escapeHtml, renderProbabilityBarHtml } from "../popupHtml";
 import { staticDataUrl } from "../staticData";
@@ -21,7 +22,7 @@ const INFRASTRUCTURE_PMTILES_URL = staticDataUrl("infrastructure.pmtiles");
 export const INFRA_SOURCE_ID = "infrastructure";
 // Real geometry of plants/substations (polygons) and bridges/dams (lines),
 // from z12; every asset's marker circle and its Maki icon (infraIcons.ts),
-// one icon layer per colouring (see iconOpacity).
+// one icon layer per icon colouring (see assetPaint).
 export const INFRA_SHAPES_FILL_LAYER_ID = "infrastructure-shapes-fill";
 export const INFRA_SHAPES_LINE_LAYER_ID = "infrastructure-shapes-line";
 export const INFRA_POINTS_LAYER_ID = "infrastructure-points";
@@ -42,8 +43,16 @@ export const INTENSITY_SOURCE_ID = "intensity-bands";
 export const INTENSITY_FILL_LAYER_ID = "intensity-bands-fill";
 const INTENSITY_LINE_LAYER_ID = "intensity-bands-line";
 
-const NEUTRAL_FILL = "#ffffff";
-const NEUTRAL_STROKE = "#333333";
+// Markers are plain black and white, not coloured by intensity (a ramp of
+// blues was hard to tell apart and fought Dark Matter's own greys; the
+// intensity is in each asset's popup and the sidebar). Inverted per theme
+// so a marker always stands out from its basemap: white with black icon
+// and ring on Positron, black with white on Dark Matter -- the same as the
+// legend/sidebar badges (InfraIcon.tsx), which follow the UI theme.
+const MARKER_STYLES: Record<Theme, { fill: string; ink: string; icon: IconVariant }> = {
+  light: { fill: "#ffffff", ink: "#1c1c1c", icon: "dark" },
+  dark: { fill: "#1c1c1c", ink: "#ffffff", icon: "light" },
+};
 // Assets a showing scenario didn't flag: kept on the map for context, but
 // as small plain grey dots (no outline, no icon) so the affected ones
 // are what stands out.
@@ -88,9 +97,10 @@ function byZoom(stops: Array<[number, number | ExpressionSpecification]>): Expre
 }
 
 // Point/icon/shape paint, before any scenario (`scenario` false: every
-// asset a white marker with its icon) or with one showing (affected assets by
-// intensity, the rest inactive grey dots).
-function assetPaint(scenario: boolean) {
+// asset a full marker with its icon) or with one showing (affected -- and
+// selected -- assets as full markers, the rest inactive grey dots).
+function assetPaint(scenario: boolean, theme: Theme) {
+  const style = MARKER_STYLES[theme];
   // `active` for everything without a scenario; with one, `active` for
   // affected assets and `inactive` for the rest.
   const whenInactive = (
@@ -103,39 +113,40 @@ function assetPaint(scenario: boolean) {
   // A constant, typed to sit alongside the expressions (MapLibre takes
   // either for these properties).
   const plain = (value: number | string) => value as unknown as ExpressionSpecification;
-  // Icon colouring: white on the two darkest intensity bands, dark on
-  // everything else; neither on an inactive dot. icon-image is a layout
-  // property, which can't read feature-state, so the choice is made by
-  // opacity between the two icon layers instead.
-  const onDarkBand: ExpressionSpecification = [">=", ["to-number", ["feature-state", "intensity"], 0], 9];
-  const iconOpacity = (variant: IconVariant): ExpressionSpecification => {
-    const active: ExpressionSpecification =
-      variant === "light" ? ["case", onDarkBand, 1, 0] : ["case", onDarkBand, 0, 1];
-    return whenInactive(active, 0);
-  };
+  // The theme's icon layer on every full marker, none on an inactive dot;
+  // the other colouring's layer hidden.
+  const iconOpacity = (variant: IconVariant): ExpressionSpecification =>
+    variant === style.icon ? whenInactive(1, 0) : plain(0);
   return {
     circleRadius: byZoom(RADIUS_STOPS.map(([z, r, small]) => [z, scenario ? whenInactive(r, small) : r])),
-    circleColor: scenario ? whenInactive(ASSET_COLOR, INACTIVE_COLOR) : ASSET_COLOR,
-    circleStrokeColor: whenSelected(SELECTED_COLOR, NEUTRAL_STROKE),
+    circleColor: whenInactive(style.fill, INACTIVE_COLOR),
+    circleStrokeColor: whenSelected(SELECTED_COLOR, style.ink),
     circleStrokeWidth: byZoom(
       STROKE_STOPS.map(([z, w]) => [z, whenSelected(w + SELECTED_EXTRA_STROKE, scenario ? whenInactive(w, 0) : w)])
     ),
     iconOpacity: { dark: iconOpacity("dark"), light: iconOpacity("light") },
-    fillColor: scenario ? whenInactive(ASSET_COLOR, INACTIVE_COLOR) : ASSET_COLOR,
-    fillOpacity: scenario ? whenInactive(0.6, 0.25) : plain(0.6),
-    lineColor: whenSelected(SELECTED_COLOR, scenario ? whenInactive(ASSET_COLOR, INACTIVE_COLOR) : plain(NEUTRAL_STROKE)),
+    // Shapes: a light wash of the marker ink, outlined in it.
+    fillColor: whenInactive(style.ink, INACTIVE_COLOR),
+    fillOpacity: whenInactive(0.3, 0.2),
+    lineColor: whenSelected(SELECTED_COLOR, whenInactive(style.ink, INACTIVE_COLOR)),
   };
 }
 
-// Colour by the asset's estimated intensity once a scenario has flagged it
-// as affected (feature-state `intensity`, set from the API's rows), neutral
-// otherwise.
-const ASSET_COLOR: ExpressionSpecification = [
-  "case",
-  ["!=", ["feature-state", "intensity"], null],
-  intensityColorExpr(["to-number", ["feature-state", "intensity"]]),
-  NEUTRAL_FILL,
-];
+// Every paint property assetPaint decides, on the live layers: after a new
+// result (applyInfrastructureResults) and on a theme switch.
+export function setInfrastructurePaint(map: MapLibreMap, scenario: boolean, theme: Theme): void {
+  const paint = assetPaint(scenario, theme);
+  map.setPaintProperty(INFRA_POINTS_LAYER_ID, "circle-radius", paint.circleRadius);
+  map.setPaintProperty(INFRA_POINTS_LAYER_ID, "circle-color", paint.circleColor);
+  map.setPaintProperty(INFRA_POINTS_LAYER_ID, "circle-stroke-color", paint.circleStrokeColor);
+  map.setPaintProperty(INFRA_POINTS_LAYER_ID, "circle-stroke-width", paint.circleStrokeWidth);
+  for (const variant of Object.keys(ICON_VARIANTS) as IconVariant[]) {
+    map.setPaintProperty(INFRA_ICON_LAYER_IDS[variant], "icon-opacity", paint.iconOpacity[variant]);
+  }
+  map.setPaintProperty(INFRA_SHAPES_FILL_LAYER_ID, "fill-color", paint.fillColor);
+  map.setPaintProperty(INFRA_SHAPES_FILL_LAYER_ID, "fill-opacity", paint.fillOpacity);
+  map.setPaintProperty(INFRA_SHAPES_LINE_LAYER_ID, "line-color", paint.lineColor);
+}
 
 // An asset's icon in one colouring: by subtype, else by category, else none.
 function iconImageExpr(variant: IconVariant): ExpressionSpecification {
@@ -207,7 +218,8 @@ export function setIntensityBands(map: MapLibreMap, bands: IntensityBands | null
   }
 }
 
-export function addInfrastructureLayers(map: MapLibreMap, beforeId?: string): void {
+export function addInfrastructureLayers(map: MapLibreMap, theme: Theme, beforeId?: string): void {
+  const paint = assetPaint(false, theme);
   map.addSource(INFRA_SOURCE_ID, {
     type: "vector",
     url: `pmtiles://${INFRASTRUCTURE_PMTILES_URL}`,
@@ -224,7 +236,7 @@ export function addInfrastructureLayers(map: MapLibreMap, beforeId?: string): vo
       minzoom: SHAPES_MINZOOM,
       filter: ["==", ["geometry-type"], "Polygon"],
       layout: hidden,
-      paint: { "fill-color": assetPaint(false).fillColor, "fill-opacity": 0.6 },
+      paint: { "fill-color": paint.fillColor, "fill-opacity": paint.fillOpacity },
     },
     beforeId
   );
@@ -237,7 +249,7 @@ export function addInfrastructureLayers(map: MapLibreMap, beforeId?: string): vo
       minzoom: SHAPES_MINZOOM,
       layout: hidden,
       paint: {
-        "line-color": assetPaint(false).lineColor,
+        "line-color": paint.lineColor,
         // Bridges and dams are lines: thick enough to see and click.
         "line-width": [
           "case",
@@ -257,10 +269,10 @@ export function addInfrastructureLayers(map: MapLibreMap, beforeId?: string): vo
       "source-layer": "points",
       layout: hidden,
       paint: {
-        "circle-radius": assetPaint(false).circleRadius,
-        "circle-color": ASSET_COLOR,
-        "circle-stroke-color": assetPaint(false).circleStrokeColor,
-        "circle-stroke-width": assetPaint(false).circleStrokeWidth,
+        "circle-radius": paint.circleRadius,
+        "circle-color": paint.circleColor,
+        "circle-stroke-color": paint.circleStrokeColor,
+        "circle-stroke-width": paint.circleStrokeWidth,
       },
     },
     beforeId
@@ -273,7 +285,7 @@ export function addInfrastructureLayers(map: MapLibreMap, beforeId?: string): vo
       "source-layer": "points",
       minzoom: ICONS_MINZOOM,
       layout: iconLayout("dark"),
-      paint: { "icon-opacity": assetPaint(false).iconOpacity.dark },
+      paint: { "icon-opacity": paint.iconOpacity.dark },
     },
     beforeId
   );
@@ -285,7 +297,7 @@ export function addInfrastructureLayers(map: MapLibreMap, beforeId?: string): vo
       "source-layer": "points",
       minzoom: ICONS_MINZOOM,
       layout: iconLayout("light"),
-      paint: { "icon-opacity": assetPaint(false).iconOpacity.light },
+      paint: { "icon-opacity": paint.iconOpacity.light },
     },
     beforeId
   );
@@ -325,10 +337,13 @@ export function setInfrastructureCategories(map: MapLibreMap, categories: string
 // Replaces the previous scenario's per-asset feature-state with this one's.
 // With a scenario, assets it didn't flag fade back so the affected ones
 // stand out. Returns the ids now carrying state, for the next call to clear.
+// (`intensity` now only decides affected or not -- and feeds the popup --
+// not a colour.)
 export function applyInfrastructureResults(
   map: MapLibreMap,
   previousIds: Iterable<number>,
-  rows: InfrastructureResult[] | null
+  rows: InfrastructureResult[] | null,
+  theme: Theme
 ): Set<number> {
   for (const id of previousIds) {
     for (const sourceLayer of ["points", "shapes"]) {
@@ -346,21 +361,10 @@ export function applyInfrastructureResults(
     }
     ids.add(row.asset_id);
   }
-  const paint = assetPaint(rows !== null);
-  map.setPaintProperty(INFRA_POINTS_LAYER_ID, "circle-radius", paint.circleRadius);
-  map.setPaintProperty(INFRA_POINTS_LAYER_ID, "circle-color", paint.circleColor);
-  map.setPaintProperty(INFRA_POINTS_LAYER_ID, "circle-stroke-width", paint.circleStrokeWidth);
-  for (const variant of Object.keys(ICON_VARIANTS) as IconVariant[]) {
-    map.setPaintProperty(INFRA_ICON_LAYER_IDS[variant], "icon-opacity", paint.iconOpacity[variant]);
-  }
-  map.setPaintProperty(INFRA_SHAPES_FILL_LAYER_ID, "fill-color", paint.fillColor);
-  map.setPaintProperty(INFRA_SHAPES_FILL_LAYER_ID, "fill-opacity", paint.fillOpacity);
-  map.setPaintProperty(INFRA_SHAPES_LINE_LAYER_ID, "line-color", paint.lineColor);
+  setInfrastructurePaint(map, rows !== null, theme);
   return ids;
 }
 
-// Categories whose assets carry an official registry id, labelled
-// infra.popup.registry.<category>.
 // Moves the selection highlight from `previousId` to `id` (null: none) on
 // both the asset's marker and its shape. Returns the now-selected id.
 export function selectAsset(map: MapLibreMap, previousId: number | null, id: number | null): number | null {
@@ -373,6 +377,8 @@ export function selectAsset(map: MapLibreMap, previousId: number | null, id: num
   return id;
 }
 
+// Categories whose assets carry an official registry id, labelled
+// infra.popup.registry.<category>.
 const REGISTRY_CATEGORIES = new Set(["health", "education", "dam"]);
 
 // `result`: this scenario's row for the asset, if it was flagged.
