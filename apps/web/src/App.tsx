@@ -3,6 +3,21 @@ import { DamageMap } from "./components/DamageMap";
 import { ImpactSidebar, SIDEBAR_WIDTH_REM } from "./components/ImpactSidebar";
 import { ManualRunForm, type ManualParams } from "./components/RunScenarioPopup";
 import { DamageLegend } from "./components/DamageLegend";
+import { RealtimePanel } from "./components/RealtimePanel";
+import { useRealtimeLayer } from "./useRealtimeLayer";
+import {
+  AEMET_REFRESH_MS,
+  AEMET_WARNINGS_REFRESH_MS,
+  DEFAULT_AEMET_METRIC,
+  DGT_REFRESH_MS,
+  getAemetObservations,
+  getAemetWarnings,
+  warningWindowMs,
+  getDgtIncidents,
+  type AemetMetricKey,
+  type WarningWindow,
+  type DgtCategory,
+} from "./realtime";
 import { Segmented } from "./components/Segmented";
 import { SettingsMenu } from "./components/SettingsMenu";
 import type { I18n } from "./i18n";
@@ -147,6 +162,34 @@ export default function App() {
       cancelled = true;
     };
   }, [scenarioId, hasInfrastructure]);
+
+  // Real-time layers (ADR-0026): off until asked for, then polled while on.
+  // Independent of any scenario -- "New run" leaves them as they are.
+  const [realtimeOpen, setRealtimeOpen] = useState(false);
+  // DGT incidents: the categories drawn (none by default), like critical
+  // infrastructure's; the feed is fetched while any is on.
+  const [dgtCategories, setDgtCategories] = useState<DgtCategory[]>([]);
+  const showDgt = dgtCategories.length > 0;
+  const [showAemet, setShowAemet] = useState(false);
+  const [aemetMetric, setAemetMetric] = useState<AemetMetricKey>(DEFAULT_AEMET_METRIC);
+  const dgt = useRealtimeLayer(showDgt, getDgtIncidents, DGT_REFRESH_MS);
+  const aemet = useRealtimeLayer(showAemet, getAemetObservations, AEMET_REFRESH_MS);
+  const [showWarnings, setShowWarnings] = useState(false);
+  const [warningWindow, setWarningWindow] = useState<WarningWindow>("now");
+  const warnings = useRealtimeLayer(showWarnings, getAemetWarnings, AEMET_WARNINGS_REFRESH_MS);
+  // "Now" moves: the window is re-anchored every minute while warnings are
+  // on, and whenever they (re)load.
+  const [tick, setTick] = useState(0);
+  useEffect(() => {
+    if (!showWarnings) return;
+    const timer = window.setInterval(() => setTick((n) => n + 1), 60_000);
+    return () => window.clearInterval(timer);
+  }, [showWarnings]);
+  const warningWindowRange = useMemo(
+    () => warningWindowMs(warningWindow, Date.now()),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- tick and data only re-anchor Date.now()
+    [warningWindow, tick, warnings.data]
+  );
 
   // Faults feed both the map's fault layer and the fault popup.
   const [faults, setFaults] = useState<Fault[] | null>(null);
@@ -319,6 +362,12 @@ export default function App() {
           infrastructureCategories={infraCategories}
           infrastructureResults={infrastructure}
           focusedAsset={focusedAsset}
+          dgtIncidents={showDgt ? dgt.data : null}
+          dgtCategories={dgtCategories}
+          aemetObservations={showAemet ? aemet.data : null}
+          aemetMetric={aemetMetric}
+          aemetWarnings={showWarnings ? warnings.data : null}
+          warningWindow={warningWindowRange}
           rightInsetRem={result ? SIDEBAR_WIDTH_REM : 0}
           theme={theme}
           i18n={i18n}
@@ -396,35 +445,65 @@ export default function App() {
           )}
         </div>
 
-        <details
-          open={legendOpen}
-          onToggle={(e) => setLegendOpen(e.currentTarget.open)}
+        {/* Bottom-left stack: Real time above the Legend, both collapsible,
+            sharing the height left under the mode panel. */}
+        <div
           style={{
-            ...overlayPanel,
+            position: "absolute",
+            zIndex: 1,
             bottom: "1.75rem",
             left: "0.75rem",
-            fontSize: "0.8rem",
             maxHeight: "calc(100vh - 12rem)",
-            overflowY: "auto",
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "flex-start",
+            gap: "0.5rem",
           }}
         >
-          <summary style={{ cursor: "pointer", fontWeight: 600 }}>{t("legend.title")}</summary>
-          <div style={{ marginTop: "0.5rem" }}>
-            <DamageLegend
-              showFaults={showFaults}
-              onShowFaultsChange={setShowFaults}
-              damageStatus={isRunning ? "loading" : result ? "ready" : "idle"}
-              showDamage={showDamage}
-              onShowDamageChange={setShowDamage}
-              intensityStatus={isRunning ? "loading" : intensityBands ? "ready" : "idle"}
-              showIntensity={showIntensity}
-              onShowIntensityChange={setShowIntensity}
-              infraCategories={infraCategories}
-              onInfraCategoriesChange={setInfraCategories}
-              infraCounts={result?.infrastructure_summary ?? null}
-            />
-          </div>
-        </details>
+          <details open={realtimeOpen} onToggle={(e) => setRealtimeOpen(e.currentTarget.open)} style={stackedPanel}>
+            <summary style={{ cursor: "pointer", fontWeight: 600 }}>{t("realtime.title")}</summary>
+            <div style={{ marginTop: "0.5rem" }}>
+              <RealtimePanel
+                dgt={dgt}
+                dgtCategories={dgtCategories}
+                onDgtCategoriesChange={setDgtCategories}
+                aemet={aemet}
+                showAemet={showAemet}
+                onShowAemetChange={setShowAemet}
+                aemetMetric={aemetMetric}
+                onAemetMetricChange={setAemetMetric}
+                warnings={warnings}
+                showWarnings={showWarnings}
+                onShowWarningsChange={setShowWarnings}
+                warningWindow={warningWindow}
+                onWarningWindowChange={setWarningWindow}
+                warningWindowRange={warningWindowRange}
+              />
+            </div>
+          </details>
+          <details
+            open={legendOpen}
+            onToggle={(e) => setLegendOpen(e.currentTarget.open)}
+            style={stackedPanel}
+          >
+            <summary style={{ cursor: "pointer", fontWeight: 600 }}>{t("legend.title")}</summary>
+            <div style={{ marginTop: "0.5rem" }}>
+              <DamageLegend
+                showFaults={showFaults}
+                onShowFaultsChange={setShowFaults}
+                damageStatus={isRunning ? "loading" : result ? "ready" : "idle"}
+                showDamage={showDamage}
+                onShowDamageChange={setShowDamage}
+                intensityStatus={isRunning ? "loading" : intensityBands ? "ready" : "idle"}
+                showIntensity={showIntensity}
+                onShowIntensityChange={setShowIntensity}
+                infraCategories={infraCategories}
+                onInfraCategoriesChange={setInfraCategories}
+                infraCounts={result?.infrastructure_summary ?? null}
+              />
+            </div>
+          </details>
+        </div>
         {result && (
           <ImpactSidebar
             title={scenarioTitle(result, faults, i18n)}
@@ -462,6 +541,16 @@ const overlayPanel: React.CSSProperties = {
   borderRadius: 6,
   boxShadow: "0 1px 4px var(--shadow)",
   padding: "0.6rem 0.75rem",
+};
+
+// One of the bottom-left collapsible panels: in the stack's flow (not
+// absolutely placed), scrolling on its own when the two don't fit.
+const stackedPanel: React.CSSProperties = {
+  ...overlayPanel,
+  position: "static",
+  fontSize: "0.8rem",
+  minHeight: 0,
+  overflowY: "auto",
 };
 
 const STYLE_OF_FAULTING_RAKE: Record<ManualParams["styleOfFaulting"], number> = {

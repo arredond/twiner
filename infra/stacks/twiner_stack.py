@@ -11,6 +11,7 @@ Gateway -- nothing here needs its extra features yet).
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 from aws_cdk import CfnOutput, Duration, RemovalPolicy, Stack
@@ -217,6 +218,15 @@ class TwinerStack(Stack):
                 # "0" to force every request to recompute.
                 "TWINER_SCENARIO_CACHE": "1",
                 "TWINER_DATA_VERSION": DATA_VERSION,
+                # Real-time layers (ADR-0026): the AEMET OpenData key, taken
+                # from the deploying shell. Unset, the AEMET layer 503s and
+                # the rest of the app is unaffected -- but a deploy without
+                # it also *removes* a key a previous deploy set.
+                **(
+                    {"TWINER_AEMET_API_KEY": os.environ["TWINER_AEMET_API_KEY"]}
+                    if os.environ.get("TWINER_AEMET_API_KEY")
+                    else {}
+                ),
             },
         )
         data_bucket.grant_read(scenario_fn)

@@ -61,6 +61,19 @@ fi
 : "${TWINER_SCENARIO_CACHE:=0}"
 : "${TWINER_DATA_VERSION:=dev}"
 
+# AEMET OpenData API key for the real-time stations layer (ADR-0026; free,
+# requested by email at https://opendata.aemet.es/centrodedescargas/altaUsuario).
+# Kept out of the repo: taken from the environment, else from
+# ~/.config/twiner/aemet_api_key (shared by every worktree). Keys EXPIRE
+# after ~3 months (the current one on 2027-01-07) -- AEMET then answers
+# 401 and the layer reports itself unavailable; request a new one and
+# replace the file. Unset, only that one layer is affected.
+AEMET_KEY_FILE="$HOME/.config/twiner/aemet_api_key"
+if [[ -z "${TWINER_AEMET_API_KEY:-}" && -r "$AEMET_KEY_FILE" ]]; then
+  TWINER_AEMET_API_KEY="$(tr -d '[:space:]' < "$AEMET_KEY_FILE")"
+fi
+: "${TWINER_AEMET_API_KEY:=}"
+
 # The deployed Lambda Function URLs (infra's `ScenarioFunctionUrl`/
 # `TilesFunctionUrl` CDK outputs, docs/deploy-aws-setup.md step 7/9) --
 # override if you've deployed your own stack/account, e.g.:
@@ -86,7 +99,7 @@ free_port() {
 # dotenv juggling needed. --strictPort: fail rather than let Vite drift to
 # a port other than the one printed.
 build_cmds() {
-  API_CMD="cd '$REPO_ROOT' && TWINER_BUILDINGS_PATH='$TWINER_BUILDINGS_PATH' TWINER_EXPOSURE_PATH='$TWINER_EXPOSURE_PATH' TWINER_SCENARIO_CACHE='$TWINER_SCENARIO_CACHE' TWINER_DATA_VERSION='$TWINER_DATA_VERSION' uv run --package twiner-scenario uvicorn scenario.local:app --port $API_PORT --reload"
+  API_CMD="cd '$REPO_ROOT' && TWINER_BUILDINGS_PATH='$TWINER_BUILDINGS_PATH' TWINER_EXPOSURE_PATH='$TWINER_EXPOSURE_PATH' TWINER_SCENARIO_CACHE='$TWINER_SCENARIO_CACHE' TWINER_DATA_VERSION='$TWINER_DATA_VERSION' TWINER_AEMET_API_KEY='$TWINER_AEMET_API_KEY' uv run --package twiner-scenario uvicorn scenario.local:app --port $API_PORT --reload"
   WEB_CMD_LOCAL="cd '$REPO_ROOT/apps/web' && VITE_SCENARIO_API_URL='http://localhost:$API_PORT' npm run dev -- --port $WEB_PORT --strictPort"
   WEB_CMD_PROD="cd '$REPO_ROOT/apps/web' && VITE_SCENARIO_API_URL='$TWINER_PROD_SCENARIO_API_URL' VITE_TILES_API_URL='$TWINER_PROD_TILES_API_URL' npm run dev -- --port $WEB_PORT --strictPort"
 }

@@ -78,6 +78,12 @@ uv run python -m exposure.census_sections_cli data/census/raw data/exposure/part
 uv run python -m exposure.infrastructure_cli data/infrastructure/raw data/exposure/parts \
     data/exposure/municipalities.parquet data/infrastructure
 
+# 1e. (Shelved, ADR-0026) Road network for drawing traffic stretches as
+# lines: IGN's "Redes de transporte" roads GeoPackage is a MANUAL download
+# into data/roads/raw/ first -- see pipelines/exposure/src/exposure/roads.py.
+# Only used with TWINER_TRAFFIC_LINES=1.
+uv run python -m exposure.roads_cli data/roads/raw data/roads
+
 # 2. Copy whichever buildings.pmtiles/debris.pmtiles/municipalities.pmtiles
 # you built into the frontend's static assets
 cp data/exposure/buildings.pmtiles apps/web/public/data/buildings.pmtiles

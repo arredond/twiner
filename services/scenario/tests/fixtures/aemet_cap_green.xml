@@ -1,0 +1,185 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<alert xmlns = "urn:oasis:names:tc:emergency:cap:1.2">
+  <identifier>2.49.0.0.724.0.ES.20260928215001.61VV61COCO01221790632201</identifier>
+  <sender>http://www.aemet.es</sender>
+  <sent>2026-09-28T21:50:01-00:00</sent>
+  <status>Actual</status>
+  <msgType>Alert</msgType>
+  <scope>Public</scope>
+  <info>
+    <language>es-ES</language>
+    <category>Met</category>
+    <event>Aviso de costeros de nivel verde</event>
+    <responseType>None</responseType>
+    <urgency>Future</urgency>
+    <severity>Minor</severity>
+    <certainty>Likely</certainty>
+    <eventCode>
+      <valueName>AEMET-Meteoalerta fenomeno</valueName>
+      <value>CO;Costeros</value>
+    </eventCode>
+    <effective>2026-09-28T23:50:01+02:00</effective>
+    <onset>2026-10-01T00:00:00+02:00</onset>
+    <expires>2026-10-01T23:59:59+02:00</expires>
+    <senderName>AEMET. Agencia Estatal de Meteorología</senderName>
+    <headline>Aviso de costeros de nivel verde. CCAA</headline>
+    <web>https://www.aemet.es/es/eltiempo/prediccion/avisos</web>
+    <contact>AEMET</contact>
+    <parameter>
+      <valueName>AEMET-Meteoalerta nivel</valueName>
+      <value>verde</value>
+    </parameter>
+    <area>
+      <areaDesc>Costa - Poniente y Almería Capital</areaDesc>
+      <polygon>36.42,-3.11 36.5,-3.12 36.75,-3.13 36.75,-3.11 36.75,-3.02 36.74,-2.98 36.75,-2.92 36.7,-2.86 36.71,-2.82 36.68,-2.77 36.68,-2.7 36.7,-2.64 36.73,-2.62 36.78,-2.6 36.82,-2.56 36.84,-2.47 36.81,-2.43 36.84,-2.37 36.82,-2.29 36.77,-2.23 36.73,-2.2 36.39,-2.15 36.39,-2.26 36.41,-2.33 36.44,-2.42 36.38,-2.51 36.36,-2.59 36.35,-2.68 36.35,-2.76 36.37,-2.85 36.42,-3.0 36.42,-3.11</polygon>
+      <geocode>
+        <valueName>AEMET-Meteoalerta zona</valueName>
+        <value>610403C</value>
+      </geocode>
+    </area>
+    <area>
+      <areaDesc>Costa - Levante almeriense</areaDesc>
+      <polygon>36.73,-2.2 36.72,-2.19 36.73,-2.12 36.76,-2.11 36.76,-2.1 36.78,-2.06 36.81,-2.06 36.85,-1.99 36.89,-1.99 36.9,-1.98 36.93,-1.95 36.94,-1.93 36.94,-1.91 36.94,-1.9 37.01,-1.89 37.01,-1.88 37.07,-1.85 37.17,-1.82 37.23,-1.8 37.3,-1.71 37.36,-1.67 37.38,-1.63 37.37,-1.63 37.11,-1.35 37.09,-1.4 37.06,-1.43 36.85,-1.5 36.78,-1.54 36.72,-1.59 36.51,-1.81 36.46,-1.88 36.43,-1.96 36.4,-2.04 36.39,-2.15 36.73,-2.2</polygon>
+      <geocode>
+        <valueName>AEMET-Meteoalerta zona</valueName>
+        <value>610404C</value>
+      </geocode>
+    </area>
+    <area>
+      <areaDesc>Costa - Litoral gaditano</areaDesc>
+      <polygon>36.62,-6.86 36.76,-6.48 36.8,-6.34 36.74,-6.44 36.71,-6.43 36.63,-6.39 36.62,-6.31 36.58,-6.27 36.57,-6.22 36.51,-6.24 36.51,-6.18 36.5,-6.19 36.45,-6.25 36.39,-6.22 36.37,-6.18 36.3,-6.14 36.29,-6.11 36.2,-6.05 36.18,-5.98 36.19,-5.92 36.13,-5.84 35.92,-5.96 35.83,-6.02 35.85,-6.05 35.85,-6.09 35.87,-6.17 35.89,-6.24 35.93,-6.31 35.98,-6.36 36.09,-6.47 36.14,-6.5 36.2,-6.57 36.3,-6.62 36.37,-6.68 36.42,-6.71 36.45,-6.74 36.51,-6.78 36.56,-6.82 36.62,-6.86</polygon>
+      <geocode>
+        <valueName>AEMET-Meteoalerta zona</valueName>
+        <value>611103C</value>
+      </geocode>
+    </area>
+    <area>
+      <areaDesc>Costa - Estrecho</areaDesc>
+      <polygon>35.83,-6.02 35.92,-5.96 36.13,-5.84 36.08,-5.8 36.09,-5.77 36.06,-5.71 36.05,-5.65 36.01,-5.61 36.02,-5.57 36.06,-5.48 36.05,-5.46 36.08,-5.42 36.14,-5.45 36.18,-5.43 36.18,-5.38 36.15,-5.34 36.23,-5.31 36.25,-5.29 36.31,-5.25 36.12,-4.9 36.07,-4.93 36.06,-4.92 36.04,-5.06 36.01,-5.24 35.98,-5.46 35.91,-5.46 35.9,-5.49 35.84,-5.54 35.82,-5.6 35.81,-5.74 35.79,-5.92 35.78,-5.93 35.83,-6.02</polygon>
+      <geocode>
+        <valueName>AEMET-Meteoalerta zona</valueName>
+        <value>611104C</value>
+      </geocode>
+    </area>
+    <area>
+      <areaDesc>Costa - Costa granadina</areaDesc>
+      <polygon>36.42,-3.11 36.42,-3.16 36.39,-3.25 36.37,-3.33 36.36,-3.41 36.37,-3.49 36.4,-3.76 36.7,-3.78 36.74,-3.78 36.73,-3.73 36.73,-3.68 36.75,-3.66 36.74,-3.6 36.72,-3.55 36.72,-3.51 36.7,-3.48 36.69,-3.42 36.71,-3.39 36.74,-3.34 36.74,-3.3 36.76,-3.25 36.75,-3.14 36.75,-3.13 36.5,-3.12 36.42,-3.11</polygon>
+      <geocode>
+        <valueName>AEMET-Meteoalerta zona</valueName>
+        <value>611804C</value>
+      </geocode>
+    </area>
+    <area>
+      <areaDesc>Costa - Litoral de Huelva</areaDesc>
+      <polygon>36.62,-6.86 36.68,-6.88 36.76,-6.88 36.86,-7.12 36.84,-7.36 36.96,-7.39 37.16,-7.41 37.25,-7.43 37.18,-7.41 37.17,-7.36 37.19,-7.32 37.2,-7.28 37.21,-7.15 37.2,-7.03 37.15,-6.91 37.12,-6.79 37.02,-6.59 36.97,-6.51 36.89,-6.44 36.81,-6.4 36.8,-6.34 36.76,-6.48 36.62,-6.86</polygon>
+      <geocode>
+        <valueName>AEMET-Meteoalerta zona</valueName>
+        <value>612103C</value>
+      </geocode>
+    </area>
+    <area>
+      <areaDesc>Costa - Sol y Guadalhorce</areaDesc>
+      <polygon>36.37,-4.24 36.29,-4.32 36.24,-4.39 36.2,-4.46 36.18,-4.55 36.17,-4.64 36.17,-4.83 36.15,-4.88 36.12,-4.9 36.31,-5.25 36.37,-5.22 36.42,-5.16 36.45,-5.08 36.47,-4.99 36.48,-4.98 36.5,-4.93 36.51,-4.87 36.49,-4.75 36.49,-4.7 36.51,-4.64 36.56,-4.61 36.58,-4.56 36.58,-4.53 36.6,-4.51 36.72,-4.42 36.72,-4.39 36.71,-4.31 36.37,-4.24</polygon>
+      <geocode>
+        <valueName>AEMET-Meteoalerta zona</valueName>
+        <value>612903C</value>
+      </geocode>
+    </area>
+    <area>
+      <areaDesc>Costa - Axarquía</areaDesc>
+      <polygon>36.71,-4.23 36.71,-4.22 36.72,-4.2 36.72,-4.19 36.72,-4.18 36.73,-4.11 36.75,-4.07 36.73,-3.96 36.74,-3.9 36.75,-3.83 36.75,-3.8 36.75,-3.79 36.74,-3.78 36.7,-3.78 36.4,-3.76 36.42,-3.85 36.4,-4.21 36.37,-4.24 36.71,-4.31 36.71,-4.23</polygon>
+      <geocode>
+        <valueName>AEMET-Meteoalerta zona</valueName>
+        <value>612904C</value>
+      </geocode>
+    </area>
+  </info>
+  <info>
+    <language>en-GB</language>
+    <category>Met</category>
+    <event>Minor coastalevent warning</event>
+    <responseType>None</responseType>
+    <urgency>Future</urgency>
+    <severity>Minor</severity>
+    <certainty>Likely</certainty>
+    <eventCode>
+      <valueName>AEMET-Meteoalerta fenomeno</valueName>
+      <value>CO;Costeros</value>
+    </eventCode>
+    <effective>2026-09-28T23:50:01+02:00</effective>
+    <onset>2026-10-01T00:00:00+02:00</onset>
+    <expires>2026-10-01T23:59:59+02:00</expires>
+    <senderName>AEMET. State Meteorological Agency</senderName>
+    <headline>Minor coastalevent warning. CCAA</headline>
+    <web>https://www.aemet.es/en/eltiempo/prediccion/avisos</web>
+    <contact>AEMET</contact>
+    <parameter>
+      <valueName>AEMET-Meteoalerta nivel</valueName>
+      <value>verde</value>
+    </parameter>
+    <area>
+      <areaDesc>Costa - Poniente y Almería Capital</areaDesc>
+      <polygon>36.42,-3.11 36.5,-3.12 36.75,-3.13 36.75,-3.11 36.75,-3.02 36.74,-2.98 36.75,-2.92 36.7,-2.86 36.71,-2.82 36.68,-2.77 36.68,-2.7 36.7,-2.64 36.73,-2.62 36.78,-2.6 36.82,-2.56 36.84,-2.47 36.81,-2.43 36.84,-2.37 36.82,-2.29 36.77,-2.23 36.73,-2.2 36.39,-2.15 36.39,-2.26 36.41,-2.33 36.44,-2.42 36.38,-2.51 36.36,-2.59 36.35,-2.68 36.35,-2.76 36.37,-2.85 36.42,-3.0 36.42,-3.11</polygon>
+      <geocode>
+        <valueName>AEMET-Meteoalerta zona</valueName>
+        <value>610403C</value>
+      </geocode>
+    </area>
+    <area>
+      <areaDesc>Costa - Levante almeriense</areaDesc>
+      <polygon>36.73,-2.2 36.72,-2.19 36.73,-2.12 36.76,-2.11 36.76,-2.1 36.78,-2.06 36.81,-2.06 36.85,-1.99 36.89,-1.99 36.9,-1.98 36.93,-1.95 36.94,-1.93 36.94,-1.91 36.94,-1.9 37.01,-1.89 37.01,-1.88 37.07,-1.85 37.17,-1.82 37.23,-1.8 37.3,-1.71 37.36,-1.67 37.38,-1.63 37.37,-1.63 37.11,-1.35 37.09,-1.4 37.06,-1.43 36.85,-1.5 36.78,-1.54 36.72,-1.59 36.51,-1.81 36.46,-1.88 36.43,-1.96 36.4,-2.04 36.39,-2.15 36.73,-2.2</polygon>
+      <geocode>
+        <valueName>AEMET-Meteoalerta zona</valueName>
+        <value>610404C</value>
+      </geocode>
+    </area>
+    <area>
+      <areaDesc>Costa - Litoral gaditano</areaDesc>
+      <polygon>36.62,-6.86 36.76,-6.48 36.8,-6.34 36.74,-6.44 36.71,-6.43 36.63,-6.39 36.62,-6.31 36.58,-6.27 36.57,-6.22 36.51,-6.24 36.51,-6.18 36.5,-6.19 36.45,-6.25 36.39,-6.22 36.37,-6.18 36.3,-6.14 36.29,-6.11 36.2,-6.05 36.18,-5.98 36.19,-5.92 36.13,-5.84 35.92,-5.96 35.83,-6.02 35.85,-6.05 35.85,-6.09 35.87,-6.17 35.89,-6.24 35.93,-6.31 35.98,-6.36 36.09,-6.47 36.14,-6.5 36.2,-6.57 36.3,-6.62 36.37,-6.68 36.42,-6.71 36.45,-6.74 36.51,-6.78 36.56,-6.82 36.62,-6.86</polygon>
+      <geocode>
+        <valueName>AEMET-Meteoalerta zona</valueName>
+        <value>611103C</value>
+      </geocode>
+    </area>
+    <area>
+      <areaDesc>Costa - Estrecho</areaDesc>
+      <polygon>35.83,-6.02 35.92,-5.96 36.13,-5.84 36.08,-5.8 36.09,-5.77 36.06,-5.71 36.05,-5.65 36.01,-5.61 36.02,-5.57 36.06,-5.48 36.05,-5.46 36.08,-5.42 36.14,-5.45 36.18,-5.43 36.18,-5.38 36.15,-5.34 36.23,-5.31 36.25,-5.29 36.31,-5.25 36.12,-4.9 36.07,-4.93 36.06,-4.92 36.04,-5.06 36.01,-5.24 35.98,-5.46 35.91,-5.46 35.9,-5.49 35.84,-5.54 35.82,-5.6 35.81,-5.74 35.79,-5.92 35.78,-5.93 35.83,-6.02</polygon>
+      <geocode>
+        <valueName>AEMET-Meteoalerta zona</valueName>
+        <value>611104C</value>
+      </geocode>
+    </area>
+    <area>
+      <areaDesc>Costa - Costa granadina</areaDesc>
+      <polygon>36.42,-3.11 36.42,-3.16 36.39,-3.25 36.37,-3.33 36.36,-3.41 36.37,-3.49 36.4,-3.76 36.7,-3.78 36.74,-3.78 36.73,-3.73 36.73,-3.68 36.75,-3.66 36.74,-3.6 36.72,-3.55 36.72,-3.51 36.7,-3.48 36.69,-3.42 36.71,-3.39 36.74,-3.34 36.74,-3.3 36.76,-3.25 36.75,-3.14 36.75,-3.13 36.5,-3.12 36.42,-3.11</polygon>
+      <geocode>
+        <valueName>AEMET-Meteoalerta zona</valueName>
+        <value>611804C</value>
+      </geocode>
+    </area>
+    <area>
+      <areaDesc>Costa - Litoral de Huelva</areaDesc>
+      <polygon>36.62,-6.86 36.68,-6.88 36.76,-6.88 36.86,-7.12 36.84,-7.36 36.96,-7.39 37.16,-7.41 37.25,-7.43 37.18,-7.41 37.17,-7.36 37.19,-7.32 37.2,-7.28 37.21,-7.15 37.2,-7.03 37.15,-6.91 37.12,-6.79 37.02,-6.59 36.97,-6.51 36.89,-6.44 36.81,-6.4 36.8,-6.34 36.76,-6.48 36.62,-6.86</polygon>
+      <geocode>
+        <valueName>AEMET-Meteoalerta zona</valueName>
+        <value>612103C</value>
+      </geocode>
+    </area>
+    <area>
+      <areaDesc>Costa - Sol y Guadalhorce</areaDesc>
+      <polygon>36.37,-4.24 36.29,-4.32 36.24,-4.39 36.2,-4.46 36.18,-4.55 36.17,-4.64 36.17,-4.83 36.15,-4.88 36.12,-4.9 36.31,-5.25 36.37,-5.22 36.42,-5.16 36.45,-5.08 36.47,-4.99 36.48,-4.98 36.5,-4.93 36.51,-4.87 36.49,-4.75 36.49,-4.7 36.51,-4.64 36.56,-4.61 36.58,-4.56 36.58,-4.53 36.6,-4.51 36.72,-4.42 36.72,-4.39 36.71,-4.31 36.37,-4.24</polygon>
+      <geocode>
+        <valueName>AEMET-Meteoalerta zona</valueName>
+        <value>612903C</value>
+      </geocode>
+    </area>
+    <area>
+      <areaDesc>Costa - Axarquía</areaDesc>
+      <polygon>36.71,-4.23 36.71,-4.22 36.72,-4.2 36.72,-4.19 36.72,-4.18 36.73,-4.11 36.75,-4.07 36.73,-3.96 36.74,-3.9 36.75,-3.83 36.75,-3.8 36.75,-3.79 36.74,-3.78 36.7,-3.78 36.4,-3.76 36.42,-3.85 36.4,-4.21 36.37,-4.24 36.71,-4.31 36.71,-4.23</polygon>
+      <geocode>
+        <valueName>AEMET-Meteoalerta zona</valueName>
+        <value>612904C</value>
+      </geocode>
+    </area>
+  </info>
+</alert>

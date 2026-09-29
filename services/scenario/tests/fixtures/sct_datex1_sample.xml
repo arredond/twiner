@@ -1,0 +1,214 @@
+<?xml version="1.0" encoding="UTF-8"?><d2LogicalModel modelBaseVersion="1.0" xsi:schemaLocation="http://datex2.eu/schema/1_0/1_0 http://datex2.eu/schema/1_0/1_0/DATEXIISchema_1_0_1_0.xsd" xmlns="http://datex2.eu/schema/1_0/1_0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <exchange>
+    <supplierIdentification>
+      <country>es</country>
+      <nationalIdentifier>dgt</nationalIdentifier>
+    </supplierIdentification>
+  </exchange>
+  <payloadPublication xsi:type="_0:SituationPublication" lang="es" xmlns:_0="http://datex2.eu/schema/1_0/1_0" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xs="http://www.w3.org/2001/XMLSchema">
+    <_0:publicationTime>2026-09-29T17:48:23.619+02:00</_0:publicationTime>
+    <_0:publicationCreator>
+      <_0:country>es</_0:country>
+      <_0:nationalIdentifier>sct</_0:nationalIdentifier>
+    </_0:publicationCreator>
+        <_0:situation id="GUID-1514005">
+      <_0:headerInformation>
+        <_0:confidentiality>noRestriction</_0:confidentiality>
+        <_0:informationStatus>real</_0:informationStatus>
+      </_0:headerInformation>
+      <_0:situationRecord xsi:type="_0:AbnormalTraffic" id="GUID-1514005-1">
+        <_0:situationRecordCreationReference>1514005</_0:situationRecordCreationReference>
+        <_0:situationRecordCreationTime>2026-09-29T06:20:08+02:00</_0:situationRecordCreationTime>
+        <_0:situationRecordVersion>5</_0:situationRecordVersion>
+        <_0:situationRecordVersionTime>2026-09-29T13:42:27+02:00</_0:situationRecordVersionTime>
+        <_0:situationRecordFirstSupplierVersionTime>2026-09-29T06:20:08+02:00</_0:situationRecordFirstSupplierVersionTime>
+        <_0:probabilityOfOccurrence>certain</_0:probabilityOfOccurrence>
+        <_0:validity>
+          <_0:validityStatus>active</_0:validityStatus>
+          <_0:validityTimeSpecification>
+            <_0:overallStartTime>2026-09-29T06:20:08+02:00</_0:overallStartTime>
+          </_0:validityTimeSpecification>
+        </_0:validity>
+        <_0:cause xsi:type="_0:NonManagedCause">
+          <_0:causeDescription>
+            <_0:value>circulacio</_0:value>
+          </_0:causeDescription>
+          <_0:causeType>congestion</_0:causeType>
+        </_0:cause>
+        <_0:groupOfLocations>
+          <_0:locationContainedInGroup xsi:type="_0:Linear">
+            <_0:tpeglinearLocation>
+              <_0:tpegDirection>southBound</_0:tpegDirection>
+              <_0:tpegLocationType>segment</_0:tpegLocationType>
+              <_0:to xsi:type="_0:TPEGNonJunctionPoint">
+                <_0:pointCoordinates>
+                  <_0:latitude>41.420326</_0:latitude>
+                  <_0:longitude>2.2227426</_0:longitude>
+                </_0:pointCoordinates>
+                <_0:name>
+                  <_0:descriptor>
+                    <_0:value>B-10</_0:value>
+                  </_0:descriptor>
+                  <_0:tpegDescriptorType>linkName</_0:tpegDescriptorType>
+                </_0:name>
+                <_0:name>
+                  <_0:descriptor>
+                    <_0:value>BARCELONA</_0:value>
+                  </_0:descriptor>
+                  <_0:tpegDescriptorType>townName</_0:tpegDescriptorType>
+                </_0:name>
+              </_0:to>
+              <_0:from xsi:type="_0:TPEGNonJunctionPoint">
+                <_0:pointCoordinates>
+                  <_0:latitude>41.381912</_0:latitude>
+                  <_0:longitude>2.1854143</_0:longitude>
+                </_0:pointCoordinates>
+                <_0:name>
+                  <_0:descriptor>
+                    <_0:value>B-10</_0:value>
+                  </_0:descriptor>
+                  <_0:tpegDescriptorType>linkName</_0:tpegDescriptorType>
+                </_0:name>
+                <_0:name>
+                  <_0:descriptor>
+                    <_0:value>BARCELONA</_0:value>
+                  </_0:descriptor>
+                  <_0:tpegDescriptorType>townName</_0:tpegDescriptorType>
+                </_0:name>
+              </_0:from>
+            </_0:tpeglinearLocation>
+            <_0:alertCLinear xsi:type="_0:AlertCMethod4Linear">
+              <_0:alertCLocationCountryCode>E</_0:alertCLocationCountryCode>
+              <_0:alertCLocationTableNumber>17</_0:alertCLocationTableNumber>
+              <_0:alertCLocationTableVersion>2.1</_0:alertCLocationTableVersion>
+              <_0:alertCDirection>
+                <_0:alertCDirectionCoded>both</_0:alertCDirectionCoded>
+              </_0:alertCDirection>
+              <_0:alertCMethod4PrimaryPointLocation>
+                <_0:alertCLocation>
+                  <_0:specificLocation>62402</_0:specificLocation>
+                </_0:alertCLocation>
+                <_0:offsetDistance>
+                  <_0:offsetDistance>0</_0:offsetDistance>
+                </_0:offsetDistance>
+              </_0:alertCMethod4PrimaryPointLocation>
+              <_0:alertCMethod4SecondaryPointLocation>
+                <_0:alertCLocation>
+                  <_0:specificLocation>5205</_0:specificLocation>
+                </_0:alertCLocation>
+                <_0:offsetDistance>
+                  <_0:offsetDistance>0</_0:offsetDistance>
+                </_0:offsetDistance>
+              </_0:alertCMethod4SecondaryPointLocation>
+            </_0:alertCLinear>
+            <_0:referencePointLinear>
+              <_0:referencePointPrimaryLocation>
+                <_0:referencePoint>
+                  <_0:referencePointIdentifier>519</_0:referencePointIdentifier>
+                  <_0:administrativeArea>
+                    <_0:value lang="es">Barcelona</_0:value>
+                  </_0:administrativeArea>
+                  <_0:roadName>
+                    <_0:value>B-10</_0:value>
+                  </_0:roadName>
+                  <_0:roadNumber>B-10</_0:roadNumber>
+                  <_0:directionBound>southBound</_0:directionBound>
+                  <_0:referencePointDescription>
+                    <_0:value>NUS LLOBREGAT (BARCELONÈS)</_0:value>
+                  </_0:referencePointDescription>
+                  <_0:referencePointDistance>9500.0</_0:referencePointDistance>
+                  <_0:referencePointExtension>
+                    <_0:ExtendedReferencePoint>
+                      <_0:referencePointIdentifier>519</_0:referencePointIdentifier>
+                      <_0:directionNamed>NUS LLOBREGAT</_0:directionNamed>
+                    </_0:ExtendedReferencePoint>
+                  </_0:referencePointExtension>
+                </_0:referencePoint>
+              </_0:referencePointPrimaryLocation>
+              <_0:referencePointSecondaryLocation>
+                <_0:referencePoint>
+                  <_0:referencePointIdentifier>519</_0:referencePointIdentifier>
+                  <_0:administrativeArea>
+                    <_0:value lang="es">Barcelona</_0:value>
+                  </_0:administrativeArea>
+                  <_0:roadName>
+                    <_0:value>B-10</_0:value>
+                  </_0:roadName>
+                  <_0:roadNumber>B-10</_0:roadNumber>
+                  <_0:directionBound>southBound</_0:directionBound>
+                  <_0:referencePointDescription>
+                    <_0:value>NUS LLOBREGAT (BARCELONÈS)</_0:value>
+                  </_0:referencePointDescription>
+                  <_0:referencePointDistance>4000.0</_0:referencePointDistance>
+                  <_0:referencePointExtension>
+                    <_0:ExtendedReferencePoint>
+                      <_0:referencePointIdentifier>519</_0:referencePointIdentifier>
+                      <_0:directionNamed>NUS LLOBREGAT</_0:directionNamed>
+                    </_0:ExtendedReferencePoint>
+                  </_0:referencePointExtension>
+                </_0:referencePoint>
+              </_0:referencePointSecondaryLocation>
+            </_0:referencePointLinear>
+          </_0:locationContainedInGroup>
+        </_0:groupOfLocations>
+      </_0:situationRecord>
+    </_0:situation>
+    <_0:situation id="GUID-1356063">
+      <_0:headerInformation>
+        <_0:confidentiality>noRestriction</_0:confidentiality>
+        <_0:informationStatus>real</_0:informationStatus>
+      </_0:headerInformation>
+      <_0:situationRecord xsi:type="_0:MaintenanceWorks" id="GUID-1356063-1">
+        <_0:situationRecordCreationReference>1356063</_0:situationRecordCreationReference>
+        <_0:situationRecordCreationTime>2024-10-22T17:29:55+02:00</_0:situationRecordCreationTime>
+        <_0:situationRecordVersion>2</_0:situationRecordVersion>
+        <_0:situationRecordVersionTime>2024-10-22T17:32:59+02:00</_0:situationRecordVersionTime>
+        <_0:situationRecordFirstSupplierVersionTime>2024-10-22T17:29:55+02:00</_0:situationRecordFirstSupplierVersionTime>
+        <_0:probabilityOfOccurrence>certain</_0:probabilityOfOccurrence>
+        <_0:validity>
+          <_0:validityStatus>active</_0:validityStatus>
+          <_0:validityTimeSpecification>
+            <_0:overallStartTime>2024-10-22T17:29:55+02:00</_0:overallStartTime>
+          </_0:validityTimeSpecification>
+        </_0:validity>
+        <_0:groupOfLocations>
+          <_0:locationContainedInGroup xsi:type="_0:Linear">
+            <_0:referencePointLinear>
+              <_0:referencePointPrimaryLocation>
+                <_0:referencePoint>
+                  <_0:referencePointIdentifier>1428</_0:referencePointIdentifier>
+                  <_0:administrativeArea>
+                    <_0:value lang="es">Barcelona</_0:value>
+                  </_0:administrativeArea>
+                  <_0:roadName>
+                    <_0:value>N-152z</_0:value>
+                  </_0:roadName>
+                  <_0:roadNumber>N-152z</_0:roadNumber>
+                  <_0:directionRelative>both</_0:directionRelative>
+                  <_0:referencePointDistance>12200.0</_0:referencePointDistance>
+                </_0:referencePoint>
+              </_0:referencePointPrimaryLocation>
+              <_0:referencePointSecondaryLocation>
+                <_0:referencePoint>
+                  <_0:referencePointIdentifier>1428</_0:referencePointIdentifier>
+                  <_0:administrativeArea>
+                    <_0:value lang="es">Barcelona</_0:value>
+                  </_0:administrativeArea>
+                  <_0:roadName>
+                    <_0:value>N-152z</_0:value>
+                  </_0:roadName>
+                  <_0:roadNumber>N-152z</_0:roadNumber>
+                  <_0:directionRelative>both</_0:directionRelative>
+                  <_0:referencePointDistance>16800.0</_0:referencePointDistance>
+                </_0:referencePoint>
+              </_0:referencePointSecondaryLocation>
+            </_0:referencePointLinear>
+          </_0:locationContainedInGroup>
+        </_0:groupOfLocations>
+        <_0:effectOnRoadLayout>roadLayoutUnchanged</_0:effectOnRoadLayout>
+        <_0:roadMaintenanceType>maintenanceWork</_0:roadMaintenanceType>
+      </_0:situationRecord>
+    </_0:situation>
+
+  </payloadPublication>
+</d2LogicalModel>

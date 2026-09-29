@@ -4,8 +4,8 @@ Thin adapter only (see docs/decisions/0001-compute-and-iac.md) -- all
 domain logic lives in engine.py/rupture.py/ground_motion.py/damage.py/
 faults.py/building_lookup.py, shared with the local dev server in
 local.py. Mirrors local.py's five routes (`/scenarios/manual`, `/faults`,
-`/scenarios/fault`, `/buildings/{id}`, `/warmup`) plus `/health` and the
-`/results/{id}/...` reads.
+`/scenarios/fault`, `/buildings/{id}`, `/warmup`) plus `/health`, the
+`/results/{id}/...` reads and the `/realtime/...` layers.
 
 A Lambda Function URL has no *routing rules* the way API Gateway does (no
 per-route Lambda mapping, no path-parameter extraction), but the event
@@ -37,6 +37,7 @@ from . import numba_cache
 from .building_lookup import get_building
 from .faults import faults_payload, get_fault, round_near_point, rupture_anchor
 from .probability_level import resolve_probability_level
+from .realtime import RealtimeUnavailable, aemet_observations, aemet_warnings, dgt_incidents
 from .response import evaluated_region, stored_results_columns
 from .rupture import Rupture, from_fault, from_manual_input
 from .scenario_id import cache_enabled, fault_scenario_id, manual_scenario_id
@@ -73,6 +74,13 @@ def handler(event: dict, context) -> dict:
         if method == "GET" and path == "/warmup":
             return _response(200, warm_up(BUILDINGS_PATH, EXPOSURE_PATH))
 
+        # ADR-0026: real-time layers, proxied (no CORS upstream / API key).
+        if method == "GET" and path in _REALTIME_ROUTES:
+            try:
+                return _response(200, _REALTIME_ROUTES[path]())
+            except RealtimeUnavailable as e:
+                return _response(503, {"error": str(e)})
+
         if method == "GET" and path == "/scenarios/fault":
             return _fault_scenario(query)
 
@@ -95,6 +103,12 @@ def handler(event: dict, context) -> dict:
 
     return _response(404, {"error": f"no route for {method} {path}"})
 
+
+_REALTIME_ROUTES = {
+    "/realtime/dgt-incidents": dgt_incidents,
+    "/realtime/aemet-observations": aemet_observations,
+    "/realtime/aemet-warnings": aemet_warnings,
+}
 
 _SECTION_ROUTE = re.compile(
     r"/results/(?P<scenario_id>[^/]+)/(?P<kind>section_stats|section_severity)"

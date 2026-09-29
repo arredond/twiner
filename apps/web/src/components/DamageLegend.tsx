@@ -14,7 +14,7 @@ import { Switch } from "./Switch";
 
 export type LayerStatus = "idle" | "loading" | "ready";
 
-function LegendRow({ color, label }: { color: string; label: string }) {
+export function LegendRow({ color, label }: { color: string; label: string }) {
   return (
     <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
       <span
@@ -38,7 +38,7 @@ function LegendRow({ color, label }: { color: string; label: string }) {
 // through "loading" for the duration of one request -- this exists so the
 // UI already has the right shape once compute becomes an async job the
 // frontend polls for, one layer's readiness at a time.
-function LayerSection({
+export function LayerSection({
   title,
   status,
   toggle,

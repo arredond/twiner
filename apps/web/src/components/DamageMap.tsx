@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 import * as maplibregl from "maplibre-gl";
 import type { GeoJSONSource, Map as MapLibreMap, MapLayerMouseEvent, StyleSpecification } from "maplibre-gl";
 import maplibreWorkerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url";
-import type { Feature, FeatureCollection, Geometry } from "geojson";
+import type { Feature, FeatureCollection, Geometry, Point } from "geojson";
 import { Protocol } from "pmtiles";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { DAMAGE_COLORS, DAMAGE_STATES, MAP_PALETTE, SELECTED_COLOR } from "../damageColors";
@@ -42,6 +42,29 @@ import {
   setInfrastructureCategories,
   setIntensityBands,
 } from "./infrastructureLayers";
+import {
+  AEMET_LAYER_ID,
+  DGT_LAYER_ID,
+  DGT_LINE_LAYER_ID,
+  REALTIME_CLICKABLE_LAYER_IDS,
+  WARNINGS_FILL_LAYER_ID,
+  addRealtimeLayers,
+  renderAemetPopupHtml,
+  renderDgtPopupHtml,
+  renderWarningsPopupHtml,
+  setAemetStations,
+  setAemetWarnings,
+  setDgtIncidents,
+  setRealtimePaint,
+} from "./realtimeLayers";
+import {
+  aemetMetric,
+  type AemetMetricKey,
+  type AemetObservations,
+  type AemetWarnings,
+  type DgtCategory,
+  type DgtIncidents,
+} from "../realtime";
 
 // MapLibre 6 locates its worker at runtime (`new URL("./maplibre-gl-worker.mjs",
 // import.meta.url)` built from a template string), which Vite's production
@@ -317,6 +340,14 @@ interface Props {
   // An asset picked in the sidebar: flown to, with its popup open. A new
   // `key` flies again even for the same asset.
   focusedAsset: { key: number; asset: InfrastructureResult } | null;
+  // Real-time layers (ADR-0026): null data = layer off.
+  dgtIncidents: DgtIncidents | null;
+  dgtCategories: DgtCategory[];
+  aemetObservations: AemetObservations | null;
+  aemetMetric: AemetMetricKey;
+  // AEMET warnings overlapping `warningWindow` ([start, end) epoch ms).
+  aemetWarnings: AemetWarnings | null;
+  warningWindow: [number, number];
   // Width of whatever floats over the map's right edge (the scenario
   // panel), in rem: the map is never resized for it, so the camera moves
   // below keep their targets clear of it instead.
@@ -697,6 +728,12 @@ export function DamageMap({
   infrastructureCategories,
   infrastructureResults,
   focusedAsset,
+  dgtIncidents,
+  dgtCategories,
+  aemetObservations,
+  aemetMetric: aemetMetricKey,
+  aemetWarnings,
+  warningWindow,
   rightInsetRem,
   theme,
   i18n,
@@ -818,6 +855,8 @@ export function DamageMap({
   // switch (basemapLabels.ts).
   const basemapLabelsRef = useRef<BasemapLabels>(new Map());
   const infrastructureStateIdsRef = useRef<Set<number>>(new Set());
+  const aemetMetricRef = useRef(aemetMetricKey);
+  aemetMetricRef.current = aemetMetricKey;
   const infrastructureResultsRef = useRef(infrastructureResults);
   infrastructureResultsRef.current = infrastructureResults;
 
@@ -967,6 +1006,8 @@ export function DamageMap({
       // Critical infrastructure (ADR-0025): above buildings and debris,
       // below the fault lines. Hidden until a category is toggled on.
       addInfrastructureLayers(map, themeRef.current);
+      // Real-time layers (ADR-0026): above the scenario's, below faults.
+      addRealtimeLayers(map, themeRef.current);
 
       map.addSource(FAULTS_SOURCE_ID, {
         type: "geojson",
@@ -1242,13 +1283,42 @@ export function DamageMap({
         });
       }
 
+      // Real-time layers: a popup with the incident's / station's reading.
+      const realtimePopups: Array<[string, (props: Record<string, unknown>) => string]> = [
+        [DGT_LAYER_ID, (props) => renderDgtPopupHtml(props, i18nRef.current)],
+        [DGT_LINE_LAYER_ID, (props) => renderDgtPopupHtml(props, i18nRef.current)],
+        [AEMET_LAYER_ID, (props) => renderAemetPopupHtml(props, aemetMetric(aemetMetricRef.current), i18nRef.current)],
+      ];
+      for (const [layerId, render] of realtimePopups) {
+        map.on("click", layerId, (e: MapLayerMouseEvent) => {
+          const feature = e.features?.[0];
+          if (!feature) return;
+          clearSelection();
+          // A marker's popup sits on the marker; a stretch's where clicked.
+          const at: [number, number] =
+            feature.geometry.type === "Point"
+              ? ((feature.geometry as Point).coordinates as [number, number])
+              : [e.lngLat.lng, e.lngLat.lat];
+          new maplibregl.Popup({ closeButton: true, maxWidth: "20rem" })
+            .setLngLat(at)
+            .setHTML(render((feature.properties ?? {}) as Record<string, unknown>))
+            .addTo(map);
+        });
+        map.on("mouseenter", layerId, () => {
+          map.getCanvas().style.cursor = "pointer";
+        });
+        map.on("mouseleave", layerId, () => {
+          map.getCanvas().style.cursor = "";
+        });
+      }
+
       // General map click (manual mode's rupture popup) -- skips clicks
       // that landed on a building, debris ring, municipality or section
       // (handled by their own popup click handlers above), and on a fault
       // line in automatic mode, so one click doesn't trigger two different
       // behaviors at once; clears any highlight since this click hit none
-      // of them. Never switches mode itself (App.tsx ignores it outside
-      // manual mode).
+      // of them. Never switches mode itself: onMapClick only fires in
+      // manual mode; in automatic mode the click can open AEMET warnings.
       map.on("click", (e: MapLayerMouseEvent) => {
         const hits = map.queryRenderedFeatures(e.point, {
           layers: [
@@ -1258,12 +1328,32 @@ export function DamageMap({
             MUNICIPALITIES_LAYER_ID,
             SECTIONS_LAYER_ID,
             SECTIONS_FOCUS_LAYER_ID,
-            ...INFRA_CLICKABLE_LAYER_IDS.filter((id) => map.getLayoutProperty(id, "visibility") !== "none"),
+            ...[...INFRA_CLICKABLE_LAYER_IDS, ...REALTIME_CLICKABLE_LAYER_IDS].filter(
+              (id) => map.getLayoutProperty(id, "visibility") !== "none"
+            ),
           ],
         });
         if (hits.length === 0) {
           clearSelection();
-          onMapClickRef.current(e.lngLat.lat, e.lngLat.lng);
+          if (modeRef.current === "manual") {
+            onMapClickRef.current(e.lngLat.lat, e.lngLat.lng);
+            return;
+          }
+          // AEMET warnings (ADR-0026) cover whole forecast zones, so they
+          // only answer a click nothing else took, and never in Manual
+          // mode, where a click places the earthquake.
+          if (map.getLayoutProperty(WARNINGS_FILL_LAYER_ID, "visibility") === "none") return;
+          const warnings = map.queryRenderedFeatures(e.point, { layers: [WARNINGS_FILL_LAYER_ID] });
+          if (warnings.length === 0) return;
+          new maplibregl.Popup({ closeButton: true, maxWidth: "22rem" })
+            .setLngLat(e.lngLat)
+            .setHTML(
+              renderWarningsPopupHtml(
+                warnings.map((w) => (w.properties ?? {}) as Record<string, unknown>),
+                i18nRef.current
+              )
+            )
+            .addTo(map);
         }
       });
 
@@ -1678,6 +1768,30 @@ export function DamageMap({
     else map.once("load", apply);
   }, [infrastructureResults]);
 
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    const apply = () => setDgtIncidents(map, dgtIncidents, dgtCategories);
+    if (mapLoadedRef.current) apply();
+    else map.once("load", apply);
+  }, [dgtIncidents, dgtCategories]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    const apply = () => setAemetStations(map, aemetObservations, aemetMetric(aemetMetricKey), i18n.locale);
+    if (mapLoadedRef.current) apply();
+    else map.once("load", apply);
+  }, [aemetObservations, aemetMetricKey, i18n.locale]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    const apply = () => setAemetWarnings(map, aemetWarnings, warningWindow);
+    if (mapLoadedRef.current) apply();
+    else map.once("load", apply);
+  }, [aemetWarnings, warningWindow]);
+
   // Theme switch: swap the basemap in place (keepOverlays) and recolour
   // the overlays whose colours depend on it (MAP_PALETTE).
   useEffect(() => {
@@ -1691,6 +1805,7 @@ export function DamageMap({
       map.setPaintProperty(MUNICIPALITY_FOCUS_OUTLINE_LAYER_ID, "line-color", palette.focusOutline);
       if (map.getLayer(DEBRIS_LAYER_ID)) map.setPaintProperty(DEBRIS_LAYER_ID, "fill-color", palette.debris);
       setInfrastructurePaint(map, infrastructureResultsRef.current !== null, theme);
+      setRealtimePaint(map, theme);
       map.setStyle(BASEMAP_STYLES[theme], {
         transformStyle: (previous, next) => {
           // The new basemap's labels, in the current language.

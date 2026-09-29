@@ -27,6 +27,7 @@ from .ground_motion import estimate_significant_distance_km
 from .impact import mean_severity
 from .infrastructure import facility_building_ids, summarize_assets, summarize_infrastructure
 from .probability_level import ProbabilityLevel, resolve_probability_level
+from .realtime import RealtimeUnavailable, aemet_observations, aemet_warnings, dgt_incidents
 from .response import evaluated_region, stored_results_columns
 from .results_store import (
     INFRASTRUCTURE_FILE,
@@ -474,6 +475,33 @@ async def _joined_tile(
         # empty, same as the static archive itself would return.
         return Response(status_code=204)
     return Response(content=tile, media_type="application/vnd.mapbox-vector-tile")
+
+
+@app.get("/realtime/dgt-incidents")
+def realtime_dgt_incidents() -> dict:
+    """ADR-0026: active DGT traffic incidents, as GeoJSON."""
+    try:
+        return dgt_incidents()
+    except RealtimeUnavailable as e:
+        raise HTTPException(status_code=503, detail=str(e)) from e
+
+
+@app.get("/realtime/aemet-observations")
+def realtime_aemet_observations() -> dict:
+    """ADR-0026: each AEMET station's latest reading, as GeoJSON."""
+    try:
+        return aemet_observations()
+    except RealtimeUnavailable as e:
+        raise HTTPException(status_code=503, detail=str(e)) from e
+
+
+@app.get("/realtime/aemet-warnings")
+def realtime_aemet_warnings() -> dict:
+    """ADR-0026: AEMET's current and upcoming weather warnings, as GeoJSON."""
+    try:
+        return aemet_warnings()
+    except RealtimeUnavailable as e:
+        raise HTTPException(status_code=503, detail=str(e)) from e
 
 
 @app.get("/warmup")

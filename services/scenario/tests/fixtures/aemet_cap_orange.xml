@@ -1,0 +1,94 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<alert xmlns = "urn:oasis:names:tc:emergency:cap:1.2">
+  <identifier>2.49.0.0.724.0.ES.20260929055520.690801PRP129161790661320</identifier>
+  <sender>http://www.aemet.es</sender>
+  <sent>2026-09-29T05:55:20-00:00</sent>
+  <status>Actual</status>
+  <msgType>Update</msgType>
+  <scope>Public</scope>
+  <references>http://www.aemet.es,2.49.0.0.724.0.ES.20260928171716.690801PRP129161790615836,2026-09-28T17:17:16-00:00 http://www.aemet.es,2.49.0.0.724.0.ES.20260928171716.690801PRP129071790615836,2026-09-28T17:17:16-00:00</references>
+  <info>
+    <language>es-ES</language>
+    <category>Met</category>
+    <event>Aviso de lluvias de nivel naranja</event>
+    <responseType>Monitor</responseType>
+    <urgency>Immediate</urgency>
+    <severity>Severe</severity>
+    <certainty>Likely</certainty>
+    <eventCode>
+      <valueName>AEMET-Meteoalerta fenomeno</valueName>
+      <value>PR;Lluvias</value>
+    </eventCode>
+    <effective>2026-09-29T07:55:20+02:00</effective>
+    <onset>2026-09-29T07:00:00+02:00</onset>
+    <expires>2026-09-29T17:59:59+02:00</expires>
+    <senderName>AEMET. Agencia Estatal de Meteorología</senderName>
+    <headline>Aviso de lluvias de nivel naranja. Prepirineo de Barcelona</headline>
+    <description>Precipitación acumulada en una hora: 40 mm.</description>
+    <instruction>Esté preparado. Tome precauciones y manténgase informado de la predicción meteorológica más actualizada. Se pueden producir daños graves a personas y bienes, especialmente a aquellos vulnerables o en zonas expuestas al fenómeno.</instruction>
+    <web>https://www.aemet.es/es/eltiempo/prediccion/avisos</web>
+    <contact>AEMET</contact>
+    <parameter>
+      <valueName>AEMET-Meteoalerta nivel</valueName>
+      <value>naranja</value>
+    </parameter>
+    <parameter>
+      <valueName>AEMET-Meteoalerta parametro</valueName>
+      <value>P1;Precipitación acumulada en una hora;40 mm</value>
+    </parameter>
+    <parameter>
+      <valueName>AEMET-Meteoalerta probabilidad</valueName>
+      <value>40%-70%</value>
+    </parameter>
+    <area>
+      <areaDesc>Prepirineo de Barcelona</areaDesc>
+      <polygon>42.31,1.84 42.32,1.9 42.3,1.98 42.31,2.02 42.29,2.07 42.26,2.03 42.19,2.06 42.15,2.01 42.13,2.15 42.14,2.27 42.12,2.32 42.12,2.37 42.07,2.41 42.07,2.47 42.04,2.49 42.0,2.5 41.94,2.45 41.92,2.48 41.89,2.44 41.9,2.41 41.87,2.38 41.89,2.34 41.93,2.36 41.95,2.32 41.98,2.34 42.0,2.32 42.05,2.3 42.1,2.25 42.07,2.18 42.1,2.14 42.11,2.07 42.09,2.04 42.13,1.94 42.1,1.91 42.12,1.83 42.07,1.8 42.04,1.81 42.04,1.75 41.99,1.77 41.95,1.75 41.94,1.69 41.96,1.65 41.98,1.72 42.01,1.66 42.04,1.67 42.11,1.71 42.15,1.71 42.19,1.74 42.21,1.68 42.24,1.7 42.28,1.69 42.31,1.84</polygon>
+      <geocode>
+        <valueName>AEMET-Meteoalerta zona</valueName>
+        <value>690801</value>
+      </geocode>
+    </area>
+  </info>
+  <info>
+    <language>en-GB</language>
+    <category>Met</category>
+    <event>Severe rain warning</event>
+    <responseType>Monitor</responseType>
+    <urgency>Immediate</urgency>
+    <severity>Severe</severity>
+    <certainty>Likely</certainty>
+    <eventCode>
+      <valueName>AEMET-Meteoalerta fenomeno</valueName>
+      <value>PR;Lluvias</value>
+    </eventCode>
+    <effective>2026-09-29T07:55:20+02:00</effective>
+    <onset>2026-09-29T07:00:00+02:00</onset>
+    <expires>2026-09-29T17:59:59+02:00</expires>
+    <senderName>AEMET. State Meteorological Agency</senderName>
+    <headline>Severe rain warning. Prepirineo de Barcelona</headline>
+    <description>One-hour accumulated precipitation: 40 mm.</description>
+    <instruction>Be prepared. Take precautions and keep up to date with the latest weather forecast. Severe damages to people and properties may occur, especially to those vulnerable or in exposed areas.</instruction>
+    <web>https://www.aemet.es/en/eltiempo/prediccion/avisos</web>
+    <contact>AEMET</contact>
+    <parameter>
+      <valueName>AEMET-Meteoalerta nivel</valueName>
+      <value>naranja</value>
+    </parameter>
+    <parameter>
+      <valueName>AEMET-Meteoalerta parametro</valueName>
+      <value>P1;One-hour accumulated precipitation;40 mm</value>
+    </parameter>
+    <parameter>
+      <valueName>AEMET-Meteoalerta probabilidad</valueName>
+      <value>40%-70%</value>
+    </parameter>
+    <area>
+      <areaDesc>Prepirineo de Barcelona</areaDesc>
+      <polygon>42.31,1.84 42.32,1.9 42.3,1.98 42.31,2.02 42.29,2.07 42.26,2.03 42.19,2.06 42.15,2.01 42.13,2.15 42.14,2.27 42.12,2.32 42.12,2.37 42.07,2.41 42.07,2.47 42.04,2.49 42.0,2.5 41.94,2.45 41.92,2.48 41.89,2.44 41.9,2.41 41.87,2.38 41.89,2.34 41.93,2.36 41.95,2.32 41.98,2.34 42.0,2.32 42.05,2.3 42.1,2.25 42.07,2.18 42.1,2.14 42.11,2.07 42.09,2.04 42.13,1.94 42.1,1.91 42.12,1.83 42.07,1.8 42.04,1.81 42.04,1.75 41.99,1.77 41.95,1.75 41.94,1.69 41.96,1.65 41.98,1.72 42.01,1.66 42.04,1.67 42.11,1.71 42.15,1.71 42.19,1.74 42.21,1.68 42.24,1.7 42.28,1.69 42.31,1.84</polygon>
+      <geocode>
+        <valueName>AEMET-Meteoalerta zona</valueName>
+        <value>690801</value>
+      </geocode>
+    </area>
+  </info>
+</alert>
