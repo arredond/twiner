@@ -34,6 +34,12 @@ interface Props {
   onClose: () => void;
 }
 
+// The panel floats over the map's right edge rather than sitting beside
+// it, so opening or closing it never resizes the map (and so never moves
+// the view). DamageMap keeps its own camera moves clear of it
+// (`rightInsetRem`).
+export const SIDEBAR_WIDTH_REM = 23;
+
 // Enough to cover a typical scenario at a glance without rendering
 // thousands of cards for a nationwide one up front.
 const PAGE_SIZE = 100;
@@ -93,10 +99,16 @@ export function ImpactSidebar({
   return (
     <aside
       style={{
-        width: "23rem",
+        position: "absolute",
+        top: 0,
+        right: 0,
+        bottom: 0,
+        zIndex: 2,
+        width: `${SIDEBAR_WIDTH_REM}rem`,
         display: "flex",
         flexDirection: "column",
         borderLeft: "1px solid #ddd",
+        boxShadow: "-2px 0 6px rgba(0,0,0,0.08)",
         background: "#fafafa",
         minHeight: 0,
       }}

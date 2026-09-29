@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { DamageMap } from "./components/DamageMap";
-import { ImpactSidebar } from "./components/ImpactSidebar";
+import { ImpactSidebar, SIDEBAR_WIDTH_REM } from "./components/ImpactSidebar";
 import { ManualRunForm, type ManualParams } from "./components/RunScenarioPopup";
 import { PROBABILITY_LEVEL_LABELS, PROBABILITY_LEVEL_SHORT_LABELS } from "./probabilityLevels";
 import { DamageLegend } from "./components/DamageLegend";
@@ -314,6 +314,7 @@ export default function App() {
           infrastructureCategories={infraCategories}
           infrastructureResults={infrastructure}
           focusedAsset={focusedAsset}
+          rightInsetRem={result ? SIDEBAR_WIDTH_REM : 0}
         />
 
         <div style={{ ...overlayPanel, top: "0.75rem", left: "0.75rem", maxWidth: "17rem" }}>
@@ -422,28 +423,28 @@ export default function App() {
             />
           </div>
         </details>
+        {result && (
+          <ImpactSidebar
+            title={scenarioTitle(result, faults)}
+            subtitle={
+              `${result.n_evaluated.toLocaleString()} buildings evaluated, ${result.n_damaged.toLocaleString()} damaged` +
+              (result.rupture.finite_rupture ? " · finite rupture plane" : "") +
+              (result.cached ? " · cached" : "")
+            }
+            municipalities={result.municipality_stats}
+            selectedMunicipality={selectedMunicipality}
+            sections={sections}
+            sectionsError={sectionsError}
+            selectedSectionCode={selectedSectionCode}
+            onSelectMunicipality={setSelectedMunicipalityCode}
+            onSelectSection={setSelectedSectionCode}
+            infrastructure={infrastructure}
+            focusedAssetId={focusedAsset?.asset.asset_id ?? null}
+            onSelectAsset={focusAsset}
+            onClose={clearScenario}
+          />
+        )}
       </main>
-      {result && (
-        <ImpactSidebar
-          title={scenarioTitle(result, faults)}
-          subtitle={
-            `${result.n_evaluated.toLocaleString()} buildings evaluated, ${result.n_damaged.toLocaleString()} damaged` +
-            (result.rupture.finite_rupture ? " · finite rupture plane" : "") +
-            (result.cached ? " · cached" : "")
-          }
-          municipalities={result.municipality_stats}
-          selectedMunicipality={selectedMunicipality}
-          sections={sections}
-          sectionsError={sectionsError}
-          selectedSectionCode={selectedSectionCode}
-          onSelectMunicipality={setSelectedMunicipalityCode}
-          onSelectSection={setSelectedSectionCode}
-          infrastructure={infrastructure}
-          focusedAssetId={focusedAsset?.asset.asset_id ?? null}
-          onSelectAsset={focusAsset}
-          onClose={clearScenario}
-        />
-      )}
     </div>
   );
 }

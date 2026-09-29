@@ -277,6 +277,10 @@ interface Props {
   // An asset picked in the sidebar: flown to, with its popup open. A new
   // `key` flies again even for the same asset.
   focusedAsset: { key: number; asset: InfrastructureResult } | null;
+  // Width of whatever floats over the map's right edge (the scenario
+  // panel), in rem: the map is never resized for it, so the camera moves
+  // below keep their targets clear of it instead.
+  rightInsetRem: number;
 }
 
 // The API sends `damage_state_code`, the index into this same
@@ -647,6 +651,7 @@ export function DamageMap({
   infrastructureCategories,
   infrastructureResults,
   focusedAsset,
+  rightInsetRem,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
@@ -706,6 +711,16 @@ export function DamageMap({
   evaluatedRegionRef.current = evaluatedRegion;
   const showDamageRef = useRef(showDamage);
   showDamageRef.current = showDamage;
+  const rightInsetRemRef = useRef(rightInsetRem);
+  rightInsetRemRef.current = rightInsetRem;
+  // Camera helpers for the right inset: fitBounds padding (more on the
+  // right), and an easeTo/flyTo offset that puts the target in the middle
+  // of the uncovered part. Both per call -- map.setPadding would itself
+  // move the view.
+  const rightInsetPx = () =>
+    rightInsetRemRef.current * parseFloat(getComputedStyle(document.documentElement).fontSize);
+  const insetPadding = (px: number) => ({ top: px, bottom: px, left: px, right: px + rightInsetPx() });
+  const insetOffset = (): [number, number] => [-rightInsetPx() / 2, 0];
   // Asset popups look up this scenario's row by id; the ids carrying
   // feature-state, to clear on the next scenario.
   const infrastructureByIdRef = useRef<Map<number, InfrastructureResult>>(new Map());
@@ -1398,7 +1413,7 @@ export function DamageMap({
           [west, south],
           [east, north],
         ],
-        { padding: 40, maxZoom: BUILDING_DETAIL_MINZOOM - 0.5, duration: 600 }
+        { padding: insetPadding(40), maxZoom: BUILDING_DETAIL_MINZOOM - 0.5, duration: 600 }
       );
     }
   }, [selectedMunicipality]);
@@ -1416,6 +1431,7 @@ export function DamageMap({
       map.easeTo({
         center: [(west + east) / 2, (south + north) / 2],
         zoom: SECTION_FOCUS_ZOOM,
+        offset: insetOffset(),
         duration: 600,
       });
     }
@@ -1436,7 +1452,11 @@ export function DamageMap({
     applyDamageLayers(map);
 
     if (evaluatedRegion) {
-      map.fitBounds(boundsFromRegion(evaluatedRegion), { padding: 48, maxZoom: 15, duration: 500 });
+      map.fitBounds(boundsFromRegion(evaluatedRegion), {
+        padding: insetPadding(48),
+        maxZoom: 15,
+        duration: 500,
+      });
     }
   }, [evaluatedRegion]);
 
@@ -1464,7 +1484,12 @@ export function DamageMap({
     const map = mapRef.current;
     if (!map || !mapLoadedRef.current || !focusedAsset) return;
     const { asset } = focusedAsset;
-    map.flyTo({ center: [asset.lon, asset.lat], zoom: Math.max(map.getZoom(), 15), duration: 800 });
+    map.flyTo({
+      center: [asset.lon, asset.lat],
+      zoom: Math.max(map.getZoom(), 15),
+      offset: insetOffset(),
+      duration: 800,
+    });
     const popup = new maplibregl.Popup({ closeButton: true, maxWidth: "20rem" })
       .setLngLat([asset.lon, asset.lat])
       .setHTML(
@@ -1520,7 +1545,7 @@ export function DamageMap({
           style={{
             position: "absolute",
             top: "0.5rem",
-            right: "0.5rem",
+            right: `${rightInsetRem + 0.5}rem`,
             padding: "0.15rem 0.4rem",
             background: "rgba(0,0,0,0.6)",
             color: "#fff",
