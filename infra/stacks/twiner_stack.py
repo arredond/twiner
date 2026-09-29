@@ -39,7 +39,7 @@ FRONTEND_ORIGINS = ["https://twiner.arredon.do", "http://localhost:5173"]
 # fragility/faults parquet. Any string works; a date keeps it readable.
 # (Calculation-code changes are covered separately, by scenario_id.py's
 # API_VERSION.) See docs/decisions/0018-scenario-result-cache.md.
-DATA_VERSION = "2026-09-24"
+DATA_VERSION = "2026-09-29"  # census sections + impact columns (ADR-0024)
 
 
 class TwinerStack(Stack):
@@ -186,12 +186,17 @@ class TwinerStack(Stack):
                 # same missing $HOME when writing its config cache.
                 "HOME": "/tmp",
                 "MPLCONFIGDIR": "/tmp/matplotlib",
-                # buildings-cloud.parquet: a single spatially-sorted file
-                # (pipelines/exposure/compact_cloud_cli.py), not the
-                # `parts/*.buildings.parquet` glob local dev uses -- see
-                # region.compact_buildings_for_cloud's docstring for why
-                # the glob doesn't work well over S3.
-                "TWINER_BUILDINGS_PATH": f"s3://{data_bucket.bucket_name}/exposure/buildings-cloud.parquet",
+                # buildings-cloud-impact.parquet: a single spatially-sorted
+                # file (pipelines/exposure census_sections_cli, ADR-0024),
+                # not the `parts/*.buildings.parquet` glob local dev once
+                # used -- see region.compact_buildings_for_cloud's docstring
+                # for why the glob doesn't work well over S3. Same columns
+                # as the older buildings-cloud.parquet plus each building's
+                # census section, dwellings and built area.
+                "TWINER_BUILDINGS_PATH": f"s3://{data_bucket.bucket_name}/exposure/buildings-cloud-impact.parquet",
+                # Census section/municipality totals (population, dwellings,
+                # bbox) the impact estimates divide by (impact.AreaMeta).
+                "TWINER_CENSUS_DIR": f"s3://{data_bucket.bucket_name}/census",
                 "TWINER_EXPOSURE_PATH": f"s3://{data_bucket.bucket_name}/exposure/exposure.parquet",
                 "TWINER_FRAGILITY_PATH": f"s3://{data_bucket.bucket_name}/fragility/fragility.parquet",
                 # Missing here would 500 every fault-mode (non-manual)

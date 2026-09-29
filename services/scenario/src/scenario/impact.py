@@ -110,12 +110,24 @@ class AreaMeta:
 
     @classmethod
     def load(cls, census_dir: str = CENSUS_DIR) -> AreaMeta:
-        import pyarrow.parquet as pq
+        """Local paths or `s3://` (the deployed stack), through the same
+        shared DuckDB + httpfs every other S3 read in this service uses."""
+        import duckdb
+
+        from .db import ensure_httpfs, get_connection
+
+        con = get_connection()
+        if census_dir.startswith("s3://"):
+            ensure_httpfs(con)
+
+        def read(name: str) -> list[dict]:
+            result = con.execute("SELECT * FROM read_parquet(?)", [f"{census_dir}/{name}"])
+            return result.arrow().read_all().to_pylist()
 
         try:
-            sections = pq.read_table(f"{census_dir}/sections_meta.parquet").to_pylist()
-            municipalities = pq.read_table(f"{census_dir}/municipalities_meta.parquet").to_pylist()
-        except (FileNotFoundError, OSError):
+            sections = read("sections_meta.parquet")
+            municipalities = read("municipalities_meta.parquet")
+        except duckdb.IOException:
             return cls()
         return cls(
             sections={row["code"]: row for row in sections},
