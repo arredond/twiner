@@ -107,14 +107,18 @@ const SECTIONS_FOCUS_LAYER_ID = "sections-focus-fill";
 const SECTIONS_OUTLINE_LAYER_ID = "sections-selected-outline";
 const MUNICIPALITY_FOCUS_OUTLINE_LAYER_ID = "municipalities-focus-outline";
 const SECTIONS_MINZOOM = 9;
+// Where a section clicked in the sidebar is centered: as close as the map
+// gets while still showing sections rather than individual buildings.
+const SECTION_FOCUS_ZOOM = 11.5;
 
 // Below this zoom: municipality/section choropleths, no individual
 // buildings/debris (there are too many to usefully pick one out, and
 // MERISUR-scale damage review starts at "which areas", not "which
 // building"). At/above it: buildings + debris, no choropleth. Picked
 // empirically once buildings render on screen -- no functional reason it
-// has to be exactly 11 beyond "roughly city-district scale."
-const BUILDING_DETAIL_MINZOOM = 11;
+// has to be exactly 12 beyond "roughly neighbourhood scale" (it was 11
+// until census sections took the zoom band just below it).
+const BUILDING_DETAIL_MINZOOM = 12;
 
 // Interpolated over `mean_severity` (the evaluated buildings' damage_state_code
 // average, 0=all None .. 4=all Complete -- see its own feature-state comment
@@ -213,7 +217,8 @@ interface Props {
   // Sidebar drill-down: framed on the map when it changes, its sections
   // shown at any zoom, and its own choropleth fill hidden underneath them.
   selectedMunicipality: MunicipalityStats | null;
-  selectedSectionCode: string | null;
+  // Sidebar section click: outlined, and centered at SECTION_FOCUS_ZOOM.
+  selectedSection: SectionStats | null;
   // A clicked section's figures, for its popup (App.tsx caches per
   // municipality).
   loadSectionStats: (municipalityCode: string) => Promise<SectionStats[]>;
@@ -602,7 +607,7 @@ export function DamageMap({
   municipalityStats,
   sectionSeverity,
   selectedMunicipality,
-  selectedSectionCode,
+  selectedSection,
   loadSectionStats,
   evaluatedRegion,
   faults,
@@ -1037,6 +1042,30 @@ export function DamageMap({
     };
   }, []);
 
+  // Which municipalities/sections render at all: only damaged ones (see
+  // the municipality effect above for why), minus the selected
+  // municipality's own fill, plus its sections at every zoom.
+  function applyAreaFilters(map: MapLibreMap) {
+    const selected = selectedMunicipalityCodeRef.current;
+    const municipalities = affectedMunicipalityCodesRef.current.filter((c) => c !== selected);
+    const sections = affectedSectionCodesRef.current;
+    map.setFilter(
+      MUNICIPALITIES_LAYER_ID,
+      municipalities.length === 0
+        ? NO_MUNICIPALITIES_FILTER
+        : ["in", ["get", "ine_code"], ["literal", municipalities]]
+    );
+    map.setFilter(
+      SECTIONS_LAYER_ID,
+      sections.length === 0 ? NO_SECTIONS_FILTER : ["in", ["get", "code"], ["literal", sections]]
+    );
+    const focus = selected ? sections.filter((c) => c.startsWith(selected)) : [];
+    map.setFilter(
+      SECTIONS_FOCUS_LAYER_ID,
+      focus.length === 0 ? NO_SECTIONS_FILTER : ["in", ["get", "code"], ["literal", focus]]
+    );
+  }
+
   // Faults data can arrive (or change) after the map has already loaded --
   // update the source in place rather than requiring load-order luck.
   useEffect(() => {
@@ -1225,32 +1254,20 @@ export function DamageMap({
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !mapLoadedRef.current) return;
-    map.setFilter(SECTIONS_OUTLINE_LAYER_ID, ["==", ["get", "code"], selectedSectionCode ?? "__none__"]);
-  }, [selectedSectionCode]);
-
-  // Which municipalities/sections render at all: only damaged ones (see
-  // the municipality effect above for why), minus the selected
-  // municipality's own fill, plus its sections at every zoom.
-  function applyAreaFilters(map: MapLibreMap) {
-    const selected = selectedMunicipalityCodeRef.current;
-    const municipalities = affectedMunicipalityCodesRef.current.filter((c) => c !== selected);
-    const sections = affectedSectionCodesRef.current;
-    map.setFilter(
-      MUNICIPALITIES_LAYER_ID,
-      municipalities.length === 0
-        ? NO_MUNICIPALITIES_FILTER
-        : ["in", ["get", "ine_code"], ["literal", municipalities]]
-    );
-    map.setFilter(
-      SECTIONS_LAYER_ID,
-      sections.length === 0 ? NO_SECTIONS_FILTER : ["in", ["get", "code"], ["literal", sections]]
-    );
-    const focus = selected ? sections.filter((c) => c.startsWith(selected)) : [];
-    map.setFilter(
-      SECTIONS_FOCUS_LAYER_ID,
-      focus.length === 0 ? NO_SECTIONS_FILTER : ["in", ["get", "code"], ["literal", focus]]
-    );
-  }
+    map.setFilter(SECTIONS_OUTLINE_LAYER_ID, [
+      "==",
+      ["get", "code"],
+      selectedSection?.section_code ?? "__none__",
+    ]);
+    if (selectedSection?.bbox) {
+      const [west, south, east, north] = selectedSection.bbox;
+      map.easeTo({
+        center: [(west + east) / 2, (south + north) / 2],
+        zoom: SECTION_FOCUS_ZOOM,
+        duration: 600,
+      });
+    }
+  }, [selectedSection]);
 
   // Everything else a scenario run changes: the fallback color for
   // buildings with no joined damage_state_code (green inside the evaluated

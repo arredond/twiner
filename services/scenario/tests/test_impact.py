@@ -21,6 +21,10 @@ META = AreaMeta(
             "pop_65_plus": 250,
             "n_buildings": 10,
             "n_dwellings": 400,
+            "bbox_xmin": -1.71,
+            "bbox_ymin": 37.67,
+            "bbox_xmax": -1.69,
+            "bbox_ymax": 37.68,
         },
         "3002401002": {
             "code": "3002401002",
@@ -75,6 +79,8 @@ def test_section_stats_spread_population_by_dwellings():
     assert first["displaced_population"] == 250
     assert first["pct_buildings_affected"] == 20.0  # 2 of 10
     assert first["name"] == "Lorca 01-001"
+    assert first["bbox"] == [-1.71, 37.67, -1.69, 37.68]
+    assert rows["3002401002"]["bbox"] is None  # no bbox in its census row
 
 
 def test_section_without_dwellings_falls_back_to_building_share():

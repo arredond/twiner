@@ -191,6 +191,7 @@ class ImpactCounter:
                         "section_code": key,
                         "municipality_code": key[:5],
                         "name": _section_label(key, static),
+                        "bbox": _bbox(static),
                     },
                     sums,
                     row,
@@ -237,14 +238,9 @@ class ImpactCounter:
                 )
                 continue
             static = meta.municipalities.get(code, {})
-            bbox = (
-                [static[k] for k in ("bbox_xmin", "bbox_ymin", "bbox_xmax", "bbox_ymax")]
-                if static
-                else None
-            )
             rows.append(
                 _report(
-                    {"municipality_code": code, "name": static.get("name"), "bbox": bbox},
+                    {"municipality_code": code, "name": static.get("name"), "bbox": _bbox(static)},
                     sums,
                     figures,
                     static,
@@ -335,6 +331,13 @@ def _report(ident: dict, sums: np.ndarray, figures: dict[str, float], static: di
         "truck_rotations": math.ceil(figures["debris_t"] / TRUCK_PAYLOAD_T),
         "shoring_props": round(figures["shoring_props"]),
     }
+
+
+def _bbox(static: dict) -> list[float] | None:
+    """[west, south, east, north], or None without census data (or from a
+    sections_meta built before sections carried one)."""
+    keys = ("bbox_xmin", "bbox_ymin", "bbox_xmax", "bbox_ymax")
+    return [static[k] for k in keys] if all(k in static for k in keys) else None
 
 
 def _pct(part: float, whole: float) -> float | None:

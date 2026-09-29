@@ -45,6 +45,11 @@ export default function App() {
     [result, selectedMunicipalityCode]
   );
 
+  const selectedSection = useMemo(
+    () => sections?.find((s) => s.section_code === selectedSectionCode) ?? null,
+    [sections, selectedSectionCode]
+  );
+
   const loadSectionStats = useCallback(
     (municipalityCode: string): Promise<SectionStats[]> => {
       if (!scenarioId) return Promise.resolve([]);
@@ -298,7 +303,7 @@ export default function App() {
           municipalityStats={result?.municipality_stats ?? []}
           sectionSeverity={sectionSeverity}
           selectedMunicipality={selectedMunicipality}
-          selectedSectionCode={selectedSectionCode}
+          selectedSection={selectedSection}
           loadSectionStats={loadSectionStats}
           evaluatedRegion={result?.evaluated_region ?? null}
           faults={faults}

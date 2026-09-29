@@ -93,9 +93,12 @@ placeholders elsewhere.
   municipalities, sorted by affected population.
 - Clicking one fetches its sections, frames the municipality below
   building zoom, and lists its sections with the same figures.
+- Clicking a section in the sidebar outlines it and centers it at z11.5,
+  the closest view that still shows sections.
 - The map gets a third choropleth level: municipalities below z9, sections
-  z9–z11 (`sections.pmtiles`, same severity colors), buildings from z11 as
-  before.
+  z9–z12 (`sections.pmtiles`, same severity colors), buildings from z12.
+  Buildings used to start at z11; they moved up a level so sections get a
+  usable zoom band.
 - A selected municipality's sections also show below z9, on their own
   layer, so a large municipality framed at z8 still shows them. Its own
   municipality fill is hidden underneath.

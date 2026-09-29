@@ -356,11 +356,16 @@ def section_building_totals(sites_glob: str) -> pd.DataFrame:
 def build_sections_table(
     sections: gpd.GeoDataFrame, population: pd.DataFrame, totals: pd.DataFrame
 ) -> gpd.GeoDataFrame:
-    """Boundaries + population + building totals, one row per section."""
+    """Boundaries + population + building totals, one row per section, plus
+    its bbox (the sidebar zooms to a clicked section, and the service's
+    sections_meta has no geometry)."""
     out = sections.merge(population, on="code", how="left").merge(totals, on="code", how="left")
     for col in ["population", "pop_under_15", "pop_65_plus", "n_buildings", "n_dwellings"]:
         out[col] = out[col].fillna(0).astype(np.int64)
     out["built_area_m2"] = out["built_area_m2"].fillna(0.0)
+    bounds = out.geometry.bounds
+    out["bbox_xmin"], out["bbox_ymin"] = bounds["minx"], bounds["miny"]
+    out["bbox_xmax"], out["bbox_ymax"] = bounds["maxx"], bounds["maxy"]
     return gpd.GeoDataFrame(out, geometry="geometry", crs=sections.crs)
 
 

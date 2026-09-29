@@ -126,6 +126,9 @@ export interface MunicipalityStats extends AreaImpact {
 export interface SectionStats extends AreaImpact {
   section_code: string;
   municipality_code: string;
+  // [west, south, east, north] -- the sidebar's zoom-to target (null only
+  // without the census dataset on the backend).
+  bbox: [number, number, number, number] | null;
 }
 
 export interface ScenarioResult {
