@@ -25,6 +25,12 @@ import {
   type SectionStats,
 } from "../scenarioApi";
 import {
+  applyBasemapLanguage,
+  collectBasemapLabels,
+  localizeLayers,
+  type BasemapLabels,
+} from "./basemapLabels";
+import {
   INFRA_CLICKABLE_LAYER_IDS,
   INFRA_SHAPES_FILL_LAYER_ID,
   addInfrastructureLayers,
@@ -772,6 +778,9 @@ export function DamageMap({
   themeRef.current = theme;
   // The theme the basemap currently shows (the theme effect skips a no-op).
   const basemapThemeRef = useRef(theme);
+  // The basemap's English-name label fields, re-localized on a language
+  // switch (basemapLabels.ts).
+  const basemapLabelsRef = useRef<BasemapLabels>(new Map());
   const infrastructureStateIdsRef = useRef<Set<number>>(new Set());
 
   const faultsData = useMemo(
@@ -819,6 +828,12 @@ export function DamageMap({
 
     map.on("load", () => {
       const palette = MAP_PALETTE[themeRef.current];
+
+      // Basemap labels in the UI language. Captured now, while the style
+      // holds nothing but the basemap.
+      const basemap = map.getStyle();
+      basemapLabelsRef.current = collectBasemapLabels(basemap.layers, new Set(Object.keys(basemap.sources)));
+      applyBasemapLanguage(map, basemapLabelsRef.current, i18nRef.current.lang);
       // Intensity bands (ADR-0025) first, so they sit under every
       // choropleth and building layer: context, not the result itself.
       addIntensityLayers(map);
@@ -931,6 +946,7 @@ export function DamageMap({
         closeOnClick: false,
         className: "fault-tooltip",
         offset: 8,
+        maxWidth: "none",
       });
       map.on("click", FAULTS_LAYER_ID, (e: MapLayerMouseEvent) => {
         if (modeRef.current !== "automatic") return;
@@ -1603,11 +1619,24 @@ export function DamageMap({
       map.setPaintProperty(FAULTS_SELECTED_LAYER_ID, "line-color", palette.fault);
       map.setPaintProperty(MUNICIPALITY_FOCUS_OUTLINE_LAYER_ID, "line-color", palette.focusOutline);
       if (map.getLayer(DEBRIS_LAYER_ID)) map.setPaintProperty(DEBRIS_LAYER_ID, "fill-color", palette.debris);
-      map.setStyle(BASEMAP_STYLES[theme], { transformStyle: keepOverlays });
+      map.setStyle(BASEMAP_STYLES[theme], {
+        transformStyle: (previous, next) => {
+          // The new basemap's labels, in the current language.
+          basemapLabelsRef.current = collectBasemapLabels(next.layers, new Set(Object.keys(next.sources)));
+          const merged = keepOverlays(previous, next);
+          return { ...merged, layers: localizeLayers(merged.layers, basemapLabelsRef.current, i18nRef.current.lang) };
+        },
+      });
     };
     if (mapLoadedRef.current) apply();
     else map.once("load", apply);
   }, [theme]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapLoadedRef.current) return;
+    applyBasemapLanguage(map, basemapLabelsRef.current, i18n.lang);
+  }, [i18n.lang]);
 
   return (
     <div style={{ position: "relative", width: "100%", height: "100%" }}>

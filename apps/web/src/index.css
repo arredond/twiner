@@ -90,32 +90,40 @@ button {
   border-radius: 4px;
 }
 
-/* MapLibre popups and controls. */
-.maplibregl-popup-content {
+/* MapLibre popups and controls. Prefixed with .maplibregl-map so these
+   outrank maplibre-gl.css itself, which is imported after this file (by
+   DamageMap.tsx) and would otherwise win at equal specificity. */
+.maplibregl-map .maplibregl-popup-content {
   background: var(--surface);
   color: var(--text);
   box-shadow: 0 1px 4px var(--shadow);
 }
-.maplibregl-popup-close-button {
+.maplibregl-map .maplibregl-popup-close-button {
   color: var(--text);
   background: none;
   border: none;
 }
-.maplibregl-popup-anchor-top .maplibregl-popup-tip,
-.maplibregl-popup-anchor-top-left .maplibregl-popup-tip,
-.maplibregl-popup-anchor-top-right .maplibregl-popup-tip {
+.maplibregl-map .maplibregl-popup-anchor-top .maplibregl-popup-tip,
+.maplibregl-map .maplibregl-popup-anchor-top-left .maplibregl-popup-tip,
+.maplibregl-map .maplibregl-popup-anchor-top-right .maplibregl-popup-tip {
   border-bottom-color: var(--surface);
 }
-.maplibregl-popup-anchor-bottom .maplibregl-popup-tip,
-.maplibregl-popup-anchor-bottom-left .maplibregl-popup-tip,
-.maplibregl-popup-anchor-bottom-right .maplibregl-popup-tip {
+.maplibregl-map .maplibregl-popup-anchor-bottom .maplibregl-popup-tip,
+.maplibregl-map .maplibregl-popup-anchor-bottom-left .maplibregl-popup-tip,
+.maplibregl-map .maplibregl-popup-anchor-bottom-right .maplibregl-popup-tip {
   border-top-color: var(--surface);
 }
-.maplibregl-popup-anchor-left .maplibregl-popup-tip {
+.maplibregl-map .maplibregl-popup-anchor-left .maplibregl-popup-tip {
   border-right-color: var(--surface);
 }
-.maplibregl-popup-anchor-right .maplibregl-popup-tip {
+.maplibregl-map .maplibregl-popup-anchor-right .maplibregl-popup-tip {
   border-left-color: var(--surface);
+}
+/* The fault hover tooltip: one compact line. */
+.maplibregl-map .fault-tooltip .maplibregl-popup-content {
+  padding: 4px 8px;
+  font-size: 0.8rem;
+  white-space: nowrap;
 }
 :root[data-theme="dark"] .maplibregl-ctrl-attrib {
   background: rgba(20, 21, 24, 0.7);
