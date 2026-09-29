@@ -9,6 +9,7 @@ import {
   type InfraCategory,
 } from "../infrastructure";
 import { useI18n, useSettings } from "../settings";
+import { InfraIcon } from "./InfraIcon";
 import { Switch } from "./Switch";
 
 export type LayerStatus = "idle" | "loading" | "ready";
@@ -181,7 +182,7 @@ export function DamageLegend({
         <div style={{ display: "flex", flexDirection: "column", gap: "0.15rem" }}>
           {INFRA_CATEGORIES.map((c) => (
             <div key={c.key} style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
-              <span style={badge}>{c.letter}</span>
+              <InfraIcon category={c.key} />
               <span style={{ flex: 1 }}>{categoryLabel(i18n, c.key)}</span>
               {infraCounts && (
                 <span
@@ -203,17 +204,3 @@ export function DamageLegend({
     </div>
   );
 }
-
-const badge: React.CSSProperties = {
-  display: "inline-flex",
-  alignItems: "center",
-  justifyContent: "center",
-  flex: "none",
-  width: "0.95rem",
-  height: "0.95rem",
-  borderRadius: "50%",
-  border: "1px solid var(--text)",
-  background: "var(--surface)",
-  fontSize: "0.58rem",
-  fontWeight: 700,
-};

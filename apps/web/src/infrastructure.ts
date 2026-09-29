@@ -2,18 +2,16 @@ import type { ExpressionSpecification } from "maplibre-gl";
 import type { I18n, MessageKey } from "./i18n";
 
 // Critical infrastructure (ADR-0025): the categories the pipeline
-// (pipelines/exposure infrastructure.py) assigns, in panel order. `letter`
-// marks each asset's map circle -- one glyph from the basemap's own font,
-// no icon sprite needed -- and stays the same in every language (the
-// legend spells each one out). Labels: i18n's infra.category.<key>.
+// (pipelines/exposure infrastructure.py) assigns, in panel order. Labels:
+// i18n's infra.category.<key>; icons: infraIcons.ts.
 export const INFRA_CATEGORIES = [
-  { key: "health", letter: "H" },
-  { key: "care", letter: "C" },
-  { key: "emergency", letter: "E" },
-  { key: "education", letter: "S" },
-  { key: "power", letter: "P" },
-  { key: "bridge", letter: "B" },
-  { key: "dam", letter: "D" },
+  { key: "health" },
+  { key: "care" },
+  { key: "emergency" },
+  { key: "education" },
+  { key: "power" },
+  { key: "bridge" },
+  { key: "dam" },
 ] as const;
 
 export type InfraCategory = (typeof INFRA_CATEGORIES)[number]["key"];

@@ -10,6 +10,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@mapbox/maki": "^8.2.0",
     "maplibre-gl": "^6.9.1",
     "pmtiles": "^4.5.0",
     "react": "^19.2.8",

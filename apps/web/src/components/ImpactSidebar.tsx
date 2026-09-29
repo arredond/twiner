@@ -1,8 +1,16 @@
 import { useMemo, useState } from "react";
 import { DAMAGE_COLORS, DAMAGE_STATES } from "../damageColors";
 import { impactRows, meanSeverity } from "../impactFormat";
-import { INFRA_CATEGORIES, INTENSITY_COLORS, categoryLabel, fmtIntensity, subtypeLabel } from "../infrastructure";
+import {
+  INFRA_CATEGORIES,
+  INTENSITY_COLORS,
+  categoryLabel,
+  fmtIntensity,
+  subtypeLabel,
+  type InfraCategory,
+} from "../infrastructure";
 import { useI18n } from "../settings";
+import { InfraIcon } from "./InfraIcon";
 import type { AreaImpact, InfrastructureResult, MunicipalityStats, SectionStats } from "../scenarioApi";
 
 // Right-hand scenario panel (ADR-0024): shown while there's a result, lists
@@ -256,7 +264,7 @@ function InfrastructureList({
           <InfrastructureGroup
             key={g.key}
             label={g.label}
-            letter={g.letter}
+            category={g.key}
             rows={g.rows}
             focusedAssetId={focusedAssetId}
             onSelectAsset={onSelectAsset}
@@ -270,13 +278,13 @@ function InfrastructureList({
 
 function InfrastructureGroup({
   label,
-  letter,
+  category,
   rows,
   focusedAssetId,
   onSelectAsset,
 }: {
   label: string;
-  letter: string;
+  category: InfraCategory;
   rows: InfrastructureResult[];
   focusedAssetId: number | null;
   onSelectAsset: (asset: InfrastructureResult) => void;
@@ -287,7 +295,7 @@ function InfrastructureGroup({
   return (
     <details>
       <summary style={{ cursor: "pointer", fontSize: "0.8rem" }}>
-        <span style={letterBadge}>{letter}</span> {label} ({fmtInt(rows.length)})
+        <InfraIcon category={category} /> {label} ({fmtInt(rows.length)})
       </summary>
       <div style={{ display: "flex", flexDirection: "column", gap: "0.2rem", margin: "0.3rem 0 0.2rem" }}>
         {rows.slice(0, limit).map((r) => (
@@ -379,19 +387,6 @@ const sectionBox: React.CSSProperties = {
 };
 
 const summaryStyle: React.CSSProperties = { cursor: "pointer", fontSize: "0.85rem", fontWeight: 600 };
-
-const letterBadge: React.CSSProperties = {
-  display: "inline-flex",
-  alignItems: "center",
-  justifyContent: "center",
-  width: "0.95rem",
-  height: "0.95rem",
-  borderRadius: "50%",
-  border: "1px solid var(--text)",
-  fontSize: "0.58rem",
-  fontWeight: 700,
-  verticalAlign: "middle",
-};
 
 function AreaCard({
   title,
