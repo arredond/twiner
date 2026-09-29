@@ -46,20 +46,35 @@ def assets_path(tmp_path, monkeypatch):
     return path
 
 
-def _shipped(ids, codes) -> pa.Table:
+def _tracked(rows: dict[str, tuple[int, list[float]]]) -> pa.Table:
+    """ScenarioSummary.tracked-shaped rows: building_id -> (code, probs)."""
+    ids = list(rows)
     return pa.table(
-        {"building_id": pa.array(ids, pa.string()), "damage_state_code": pa.array(codes, pa.int8())}
+        {
+            "building_id": pa.array(ids, pa.string()),
+            "damage_state_code": pa.array([rows[i][0] for i in ids], pa.int64()),
+            **{
+                f"prob_{state}": pa.array([rows[i][1][k] for i in ids], pa.float64())
+                for k, state in enumerate(["none", "slight", "moderate", "extensive", "complete"])
+            },
+        }
     )
 
 
 def test_evaluate_assets(assets_path):
     rupture = from_manual_input(lat=LAT, lon=LON, mag=6.5, rake=0.0)
-    rows = infra.evaluate_assets(rupture, 250.0, 0.0, _shipped(["b1"], [3]))
+    probs = [0.05, 0.15, 0.2, 0.35, 0.25]
+    rows = infra.evaluate_assets(rupture, 250.0, 0.0, _tracked({"b1": (3, probs)}))
     assert rows is not None
     by_id = {r["asset_id"]: r for r in rows}
     assert set(by_id) == {10, 11, 13}
+    # The facility carries its building's whole distribution, not just the
+    # most likely state.
     assert by_id[10]["damage_state_code"] == 3
+    assert by_id[10]["damage_probs"] == probs
     assert by_id[11]["damage_state_code"] is None
+    assert by_id[11]["damage_probs"] is None
+    assert (by_id[11]["lon"], by_id[11]["lat"]) == (round(LON + 0.01, 5), LAT)
     intensities = [r["intensity"] for r in rows]
     assert intensities == sorted(intensities, reverse=True)
     assert infra.summarize_assets(rows) == {"health": 1, "bridge": 1, "power": 1}
@@ -67,24 +82,41 @@ def test_evaluate_assets(assets_path):
 
 def test_a_damaged_facility_is_kept_below_the_intensity_threshold(assets_path):
     rupture = from_manual_input(lat=LAT, lon=LON, mag=6.5, rake=0.0)
-    rows = infra.evaluate_assets(rupture, 250.0, 0.0, _shipped(["b9"], [1]))
+    rows = infra.evaluate_assets(
+        rupture, 250.0, 0.0, _tracked({"b9": (1, [0.4, 0.45, 0.1, 0.05, 0.0])})
+    )
     assert rows is not None
     school = next(r for r in rows if r["asset_id"] == 12)
     assert school["intensity"] < infra.AFFECTED_INTENSITY
     assert school["damage_state_code"] == 1
 
 
-def test_an_undamaged_facility_building_reports_none(assets_path):
+def test_an_undamaged_facility_building_reports_its_distribution(assets_path):
     rupture = from_manual_input(lat=LAT, lon=LON, mag=6.5, rake=0.0)
-    rows = infra.evaluate_assets(rupture, 250.0, 0.0, _shipped([], []))
+    probs = [0.9, 0.08, 0.02, 0.0, 0.0]
+    rows = infra.evaluate_assets(rupture, 250.0, 0.0, _tracked({"b1": (0, probs)}))
     assert rows is not None
-    assert next(r for r in rows if r["asset_id"] == 10)["damage_state_code"] == 0
+    hospital = next(r for r in rows if r["asset_id"] == 10)
+    assert (hospital["damage_state_code"], hospital["damage_probs"]) == (0, probs)
+
+
+def test_a_facility_whose_building_was_not_evaluated_has_no_damage(assets_path):
+    rupture = from_manual_input(lat=LAT, lon=LON, mag=6.5, rake=0.0)
+    rows = infra.evaluate_assets(rupture, 250.0, 0.0, _tracked({}))
+    assert rows is not None
+    hospital = next(r for r in rows if r["asset_id"] == 10)
+    assert hospital["damage_state_code"] is None and hospital["damage_probs"] is None
+
+
+def test_facility_building_ids(assets_path):
+    ids = infra.facility_building_ids()
+    assert ids is not None and sorted(ids.to_pylist()) == ["b1", "b9"]
 
 
 def test_no_asset_data(tmp_path, monkeypatch):
     monkeypatch.setenv("TWINER_INFRA_SITES_PATH", str(tmp_path / "missing.parquet"))
     rupture = from_manual_input(lat=LAT, lon=LON, mag=6.5, rake=0.0)
-    assert infra.evaluate_assets(rupture, 100.0, 0.0, _shipped([], [])) is None
+    assert infra.evaluate_assets(rupture, 100.0, 0.0, None) is None
 
 
 def test_intensity_bands_nest_around_the_epicentre(tmp_path, monkeypatch):

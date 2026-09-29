@@ -288,7 +288,11 @@ def _run_and_respond(
     t0 = time.monotonic()
     from .engine import summarize_scenario
     from .ground_motion import estimate_significant_distance_km
-    from .infrastructure import summarize_assets, summarize_infrastructure
+    from .infrastructure import (
+        facility_building_ids,
+        summarize_assets,
+        summarize_infrastructure,
+    )
 
     t_import = time.monotonic()
     level_params = resolve_probability_level(probability_level)
@@ -303,11 +307,14 @@ def _run_and_respond(
         max_distance_km=radius_km,
         sigma_multiplier=level_params.sigma_multiplier,
         damage_percentile=level_params.damage_percentile,
+        # Critical-infrastructure facilities' buildings (ADR-0025): kept in
+        # full, so each facility reports its building's distribution.
+        track_building_ids=facility_building_ids(),
     )
     # ADR-0025: after the buildings, since facilities take their
     # building's damage state.
     infrastructure, bands = summarize_infrastructure(
-        rupture, radius_km, level_params.sigma_multiplier, summary.shipped
+        rupture, radius_km, level_params.sigma_multiplier, summary.tracked
     )
     t_compute = time.monotonic()
     municipality_stats = summary.areas.municipality_stats()

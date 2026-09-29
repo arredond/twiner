@@ -45,6 +45,7 @@ from scipy.spatial import (
     cKDTree,  # pyrefly: ignore -- no stub for this compiled extension re-export
 )
 
+from .damage import DAMAGE_STATES
 from .engine import site_box
 from .ground_motion import DEFAULT_VS30, GriddedIntensity, compute_intensity
 from .rupture import Rupture
@@ -98,7 +99,9 @@ def mmi_from_pgv(pgv_cm_s: np.ndarray) -> np.ndarray:
     return np.clip(mmi, 1.0, 10.0)
 
 
-@dataclass(frozen=True)
+# eq=False: hashed by identity (the arrays aren't hashable), which is what
+# `_facility_building_ids`' cache wants -- one loaded table, one entry.
+@dataclass(frozen=True, eq=False)
 class Assets:
     """infrastructure_sites.parquet, as columns."""
 
@@ -156,19 +159,37 @@ def _grid_vs30(lons: np.ndarray, lats: np.ndarray) -> np.ndarray:
     return np.where(distances <= _VS30_MAX_DISTANCE_DEG, values[indices], DEFAULT_VS30)
 
 
+def facility_building_ids() -> pa.Array | None:
+    """The Catastro buildings facilities sit on, for the engine to track
+    (`summarize_scenario(track_building_ids=...)`), so each facility gets
+    its building's full damage distribution. None with no asset data."""
+    assets = load_assets()
+    if assets is None:
+        return None
+    return _facility_building_ids(assets)
+
+
+@lru_cache(maxsize=1)
+def _facility_building_ids(assets: Assets) -> pa.Array:
+    return assets.table.column("building_id").drop_null().unique()
+
+
+_PROB_COLUMNS = [f"prob_{state.lower()}" for state in DAMAGE_STATES]
+
+
 def evaluate_assets(
     rupture: Rupture,
     max_distance_km: float,
     sigma_multiplier: float,
-    shipped: pa.Table,
+    tracked: pa.Table | None,
 ) -> list[dict] | None:
     """Affected assets for this scenario, one dict per asset, most intense
     first. None when no infrastructure data is deployed.
 
-    `shipped`: the scenario's listed buildings (`ScenarioSummary.shipped`:
-    building_id, damage_state_code, ...). A facility's building absent from
-    it was evaluated and came out confidently undamaged (state 0) -- the
-    same reading the building tiles use.
+    `tracked`: the facilities' buildings as this scenario evaluated them
+    (`ScenarioSummary.tracked`: building_id, damage_state_code, prob_*).
+    A facility whose building isn't in it wasn't evaluated (outside the
+    site box) and gets no damage, the same as a non-building asset.
     """
     assets = load_assets()
     if assets is None:
@@ -193,39 +214,52 @@ def evaluate_assets(
     mmi = mmi_from_pgv(pgv)
 
     rows = assets.table.take(pa.array(in_box))
-    damage = _building_damage(rows.column("building_id"), shipped)
+    position = _tracked_position(rows.column("building_id"), tracked)
+    codes = (
+        tracked.column("damage_state_code").to_numpy()
+        if tracked is not None and tracked.num_rows
+        else np.zeros(0, np.int64)
+    )
+    damage = np.where(position >= 0, codes[np.maximum(position, 0)] if len(codes) else 0, 0)
     keep = (mmi >= AFFECTED_INTENSITY) | (damage > 0)
     rows = rows.filter(pa.array(keep))
-    mmi = mmi[keep]
-    damage = damage[keep]
-    has_building = rows.column("building_id").is_valid().to_numpy(zero_copy_only=False)
+    mmi, position = mmi[keep], position[keep]
+    probs = (
+        np.column_stack([tracked.column(c).to_numpy() for c in _PROB_COLUMNS])
+        if tracked is not None and tracked.num_rows
+        else np.zeros((0, len(_PROB_COLUMNS)))
+    )
 
     out = []
-    for i, row in enumerate(
-        rows.select(["asset_id", "category", "subtype", "name", "municipality_code"]).to_pylist()
-    ):
+    columns = ["asset_id", "category", "subtype", "name", "municipality_code", "lon", "lat"]
+    for i, row in enumerate(rows.select(columns).to_pylist()):
+        row["lon"] = round(row["lon"], 5)
+        row["lat"] = round(row["lat"], 5)
         row["intensity"] = round(float(mmi[i]), 1)
-        # Only facilities on a matched building have a damage state; for
-        # everything else there's no model, and null says so.
-        row["damage_state_code"] = int(damage[i]) if has_building[i] else None
+        # Only facilities whose building this scenario evaluated have a
+        # damage state; for everything else there's no model, and null
+        # says so. The distribution is the building's own (the same rows
+        # the building tiles show), not just its most likely state.
+        if position[i] >= 0:
+            row["damage_state_code"] = int(codes[position[i]])
+            row["damage_probs"] = [round(float(p), 3) for p in probs[position[i]]]
+        else:
+            row["damage_state_code"] = None
+            row["damage_probs"] = None
         out.append(row)
     out.sort(key=lambda r: (-r["intensity"], r["asset_id"]))
     return out
 
 
-def _building_damage(building_ids: pa.ChunkedArray, shipped: pa.Table) -> np.ndarray:
-    """Each asset's building's damage_state_code, 0 when the building isn't
-    listed (or the asset has no building)."""
-    if shipped.num_rows == 0:
-        return np.zeros(len(building_ids), dtype=np.int8)
+def _tracked_position(building_ids: pa.ChunkedArray, tracked: pa.Table | None) -> np.ndarray:
+    """Each asset's building's row in `tracked`, -1 when it has none."""
+    if tracked is None or tracked.num_rows == 0:
+        return np.full(len(building_ids), -1, dtype=np.int64)
     # pyarrow ships no stub for its generated compute functions.
     idx = pc.index_in(  # pyrefly: ignore
-        building_ids, value_set=shipped.column("building_id")
+        building_ids, value_set=tracked.column("building_id")
     )
-    codes = shipped.column("damage_state_code").to_numpy()
-    found = idx.is_valid().to_numpy(zero_copy_only=False)
-    positions = pc.fill_null(idx, 0).to_numpy(zero_copy_only=False)
-    return np.where(found, codes[positions], 0).astype(np.int8)
+    return pc.fill_null(idx, -1).to_numpy(zero_copy_only=False).astype(np.int64)
 
 
 def summarize_assets(rows: list[dict]) -> dict[str, int]:
@@ -293,12 +327,12 @@ def _filled_polygons(filled) -> list[shapely.Polygon]:
 
 
 def summarize_infrastructure(
-    rupture: Rupture, max_distance_km: float, sigma_multiplier: float, shipped: pa.Table
+    rupture: Rupture, max_distance_km: float, sigma_multiplier: float, tracked: pa.Table | None
 ) -> tuple[list[dict] | None, dict]:
     """Both of a scenario's ADR-0025 outputs, as local.py and handler.py
     store them: affected asset rows (None with no infrastructure data
     deployed) and the intensity bands GeoJSON."""
     return (
-        evaluate_assets(rupture, max_distance_km, sigma_multiplier, shipped),
+        evaluate_assets(rupture, max_distance_km, sigma_multiplier, tracked),
         intensity_bands(rupture, max_distance_km, sigma_multiplier),
     )

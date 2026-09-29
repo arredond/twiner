@@ -107,7 +107,21 @@ def shipped_buildings_table(
 ) -> pa.Table:
     """The thin per-building rows (`_THIN_COLUMNS`) for the buildings
     `shipped_mask` keeps, from one batch of array-shaped results."""
-    keep = shipped_mask(damage_state_code, probs)
+    return thin_buildings_table(
+        building_ids, damage_state_code, probs, shipped_mask(damage_state_code, probs)
+    )
+
+
+def thin_buildings_table(
+    building_ids: pa.Array,
+    damage_state_code: np.ndarray,
+    probs: np.ndarray,
+    keep: np.ndarray,
+) -> pa.Table:
+    """`_THIN_COLUMNS` rows for the buildings `keep` selects, whatever the
+    reason: the tile joins' listed buildings (`shipped_buildings_table`),
+    or the critical-infrastructure facilities' buildings (engine's
+    `track_building_ids`, ADR-0025), which need every evaluated one."""
     # Rounded to keep the extra bytes from a full-precision float64
     # round-trip down -- this subset is already small, but no reason to pay
     # for digits no one reads.

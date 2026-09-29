@@ -176,7 +176,7 @@ docs/validation-lorca-2011.md). The estimate for Lorca town is 5.7 at
 "high" and 6.6 at "low"/"very low" (+1σ), with the town's Vs30 of 383 m/s.
 IGN's observed maximum intensity was VII (EMS-98). The gap is the GMPE's,
 not the conversion's: its median PGA there (0.18 g) is about half the
-0.37 g recorded, the same near-field shortfall the validation doc
+~0.36 g recorded, the same near-field shortfall the validation doc
 documents for buildings. PGA-based conversion would read about one unit
 higher here, but we don't retune the method to one event.
 

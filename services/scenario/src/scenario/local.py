@@ -25,7 +25,7 @@ from .engine import summarize_scenario
 from .faults import faults_payload, get_fault, round_near_point, rupture_anchor
 from .ground_motion import estimate_significant_distance_km
 from .impact import mean_severity
-from .infrastructure import summarize_assets, summarize_infrastructure
+from .infrastructure import facility_building_ids, summarize_assets, summarize_infrastructure
 from .probability_level import ProbabilityLevel, resolve_probability_level
 from .response import evaluated_region, stored_results_columns
 from .results_store import (
@@ -179,6 +179,9 @@ def _run_and_serialize(rupture: Rupture, probability_level: str, scenario_id: st
             max_distance_km=radius_km,
             sigma_multiplier=level_params.sigma_multiplier,
             damage_percentile=level_params.damage_percentile,
+            # Critical-infrastructure facilities' buildings (ADR-0025): kept
+            # in full, so each facility reports its building's distribution.
+            track_building_ids=facility_building_ids(),
         )
         n_evaluated = summary.n_evaluated
         n_damaged = summary.n_damaged
@@ -199,7 +202,7 @@ def _run_and_serialize(rupture: Rupture, probability_level: str, scenario_id: st
         # Critical infrastructure + intensity bands (ADR-0025): after the
         # buildings, since facilities take their building's damage state.
         infrastructure, bands = summarize_infrastructure(
-            rupture, radius_km, level_params.sigma_multiplier, summary.shipped
+            rupture, radius_km, level_params.sigma_multiplier, summary.tracked
         )
         write_artifact(scenario_id, INTENSITY_FILE, bands)
         if infrastructure is not None:

@@ -659,7 +659,13 @@ def test_scenario_stores_affected_infrastructure(client):
     # the bridge has no damage model.
     b1 = next(b for b in _joined_buildings(body) if b["building_id"] == "b1")
     assert by_id[1]["damage_state_code"] == b1["damage_state_code"]
+    # ...and its full distribution, the same one the building tiles carry.
+    assert by_id[1]["damage_probs"] == pytest.approx(
+        [b1[f"prob_{s}"] for s in ("none", "slight", "moderate", "extensive", "complete")],
+        abs=1e-3,
+    )
     assert by_id[2]["damage_state_code"] is None
+    assert by_id[2]["damage_probs"] is None
     assert all(r["intensity"] >= 6.0 for r in rows)
     one = client.get(
         f"/results/{body['scenario_id']}/infrastructure", params={"municipality_code": "02003"}

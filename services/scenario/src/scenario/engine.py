@@ -30,6 +30,7 @@ import duckdb
 import numpy as np
 import pandas as pd
 import pyarrow as pa
+import pyarrow.compute as pc
 
 from .damage import DAMAGE_STATES, DamageArrays, evaluate_damage_arrays
 from .db import ensure_httpfs, get_connection
@@ -41,7 +42,7 @@ from .ground_motion import (
     estimate_significant_distance_km,
 )
 from .impact import ImpactCounter
-from .response import shipped_buildings_table
+from .response import shipped_buildings_table, thin_buildings_table
 from .rupture import Rupture
 
 _KM_PER_DEGREE_LAT = 111.0
@@ -334,6 +335,12 @@ class ScenarioSummary:
     n_evaluated: int
     areas: ImpactCounter
     shipped: pa.Table
+    # Thin rows (same columns as `shipped`) for every evaluated building in
+    # `track_building_ids`, damaged or not -- the critical-infrastructure
+    # facilities' buildings (ADR-0025), which report their building's full
+    # damage distribution even when it's a confident "None" that `shipped`
+    # leaves out. None when nothing was tracked.
+    tracked: pa.Table | None = None
     # From the call until the first batch of sites was evaluated: query
     # setup plus the first S3 reads, in the deployed stack -- logged by
     # handler.py to tell setup cost apart from per-building compute.
@@ -353,6 +360,7 @@ def summarize_scenario(
     sigma_multiplier: float = 0.0,
     damage_percentile: float | None = None,
     batch_rows: int = SITE_BATCH_ROWS,
+    track_building_ids: pa.Array | None = None,
 ) -> ScenarioSummary:
     """`run_scenario`'s chain (same arguments, same per-building results),
     reduced batch by batch to a `ScenarioSummary` as the buildings stream
@@ -368,6 +376,7 @@ def summarize_scenario(
     n_evaluated = 0
     areas = ImpactCounter()
     shipped = []
+    tracked = []
     for batch, damage in _evaluate_batches(
         rupture,
         buildings_path,
@@ -393,6 +402,20 @@ def summarize_scenario(
                 batch.column("building_id"), damage.damage_state_code, damage.probs
             )
         )
+        if track_building_ids is not None:
+            keep = (
+                pc.is_in(  # pyrefly: ignore -- pyarrow ships no stub for compute functions
+                    batch.column("building_id"), value_set=track_building_ids
+                )
+                .to_numpy(zero_copy_only=False)
+                .astype(bool)
+            )
+            if keep.any():
+                tracked.append(
+                    thin_buildings_table(
+                        batch.column("building_id"), damage.damage_state_code, damage.probs, keep
+                    )
+                )
     shipped_table = (
         pa.concat_tables(shipped)
         if shipped
@@ -400,7 +423,25 @@ def summarize_scenario(
             pa.array([], pa.string()), np.zeros(0, np.int8), np.zeros((len(DAMAGE_STATES), 0))
         )
     )
-    return ScenarioSummary(n_evaluated, areas, shipped_table, seconds_to_first_batch)
+    tracked_table = None
+    if track_building_ids is not None:
+        tracked_table = (
+            pa.concat_tables(tracked)
+            if tracked
+            else thin_buildings_table(
+                pa.array([], pa.string()),
+                np.zeros(0, np.int8),
+                np.zeros((len(DAMAGE_STATES), 0)),
+                np.zeros(0, bool),
+            )
+        )
+    return ScenarioSummary(
+        n_evaluated,
+        areas,
+        shipped_table,
+        tracked=tracked_table,
+        seconds_to_first_batch=seconds_to_first_batch,
+    )
 
 
 def _evaluate_batches(
