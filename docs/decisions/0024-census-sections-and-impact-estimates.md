@@ -94,9 +94,10 @@ placeholders elsewhere.
   lists affected municipalities by damage class, then by % of buildings
   affected, with a search box. Closing it clears the scenario (result
   layers back to their pre-scenario state, viewport unchanged).
-- There's no left sidebar: scenarios start from map popups (a fault's in
-  Automatic mode, with a name + Mmax hover tooltip; a clicked point's in
-  Manual mode). A small overlay holds the mode toggle and run status.
+- There's no left sidebar. In Automatic mode, hovering a fault shows its
+  name + Mmax and clicking it runs it. In Manual mode, clicking the map
+  opens a rupture popup. A small overlay holds the mode toggle, the
+  probability level and run status; the legend opens on every run.
 - Clicking one fetches its sections, frames the municipality below
   building zoom, and lists its sections with the same figures.
 - Clicking a section in the sidebar outlines it and centers it at z11.5,

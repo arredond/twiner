@@ -83,9 +83,10 @@ npm install --prefix apps/web
 ./bin/twiner start   # see `twiner status`/`twiner attach`/`twiner stop`/`twiner restart`
 ```
 
-Open http://localhost:5173. In Automatic mode, click a fault (dashed purple
-line) to open its "run scenario" popup; in Manual mode, click anywhere on
-the map to configure an earthquake there. The map colors buildings by
+Open http://localhost:5173 and pick a mode and probability level in the
+top-left panel. In Automatic mode, click a fault (dashed purple line) to
+run its maximum-magnitude earthquake; in Manual mode, click anywhere on the
+map to configure an earthquake there. The map colors buildings by
 resulting damage state, and the right-hand scenario panel lists affected
 municipalities (population, cost, debris -- rough estimates, see
 docs/impact-estimates.md) and drills into their census sections. Closing

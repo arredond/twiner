@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { DamageMap } from "./components/DamageMap";
 import { ImpactSidebar } from "./components/ImpactSidebar";
-import { FaultRunForm, ManualRunForm, type ManualParams } from "./components/RunScenarioPopup";
-import { PROBABILITY_LEVEL_SHORT_LABELS } from "./probabilityLevels";
+import { ManualRunForm, type ManualParams } from "./components/RunScenarioPopup";
+import { PROBABILITY_LEVEL_LABELS, PROBABILITY_LEVEL_SHORT_LABELS } from "./probabilityLevels";
 import { DamageLegend } from "./components/DamageLegend";
 import {
   getSectionSeverity,
@@ -18,9 +18,9 @@ import {
   type SectionStats,
 } from "./scenarioApi";
 
-// twiner shell: a full-screen map where scenarios start (a fault's popup in
-// Automatic mode, a clicked point's popup in Manual mode -- MERISUR's two
-// entry modes, docs/merisur.md §4.1/§5), and a right-hand scenario panel
+// twiner shell: a full-screen map where scenarios start (clicking a fault
+// in Automatic mode, a clicked point's popup in Manual mode -- MERISUR's
+// two entry modes, docs/merisur.md §4.1/§5), and a right-hand scenario panel
 // with the result's impact (ADR-0024). Closing the panel clears the
 // scenario.
 export default function App() {
@@ -107,8 +107,8 @@ export default function App() {
   // Automatic: hover/click faults. Manual: click anywhere for a rupture
   // popup. Only this toggle changes the mode -- a map click never does.
   const [mode, setMode] = useState<"automatic" | "manual">("automatic");
-  // MERISUR's probability-level selector (docs/merisur.md §4.7): shared by
-  // both popups and remembered between them.
+  // MERISUR's probability-level selector (docs/merisur.md §4.7), in the
+  // mode panel: applies to both modes.
   const [probabilityLevel, setProbabilityLevel] = useState<ProbabilityLevel>("high");
   const [manualParams, setManualParams] = useState<ManualParams>({
     lat: 40.4168,
@@ -121,13 +121,11 @@ export default function App() {
     ztorKm: 5,
   });
 
-  // The open "run scenario" popup, if any. `key` makes each open a new
-  // popup (see DamageMap's runPopup prop).
-  const [pending, setPending] = useState<
-    | { key: number; kind: "fault"; faultId: string; lat: number; lon: number }
-    | { key: number; kind: "manual"; lat: number; lon: number }
-    | null
-  >(null);
+  // Manual mode's open "run scenario" popup, if any. `key` makes each
+  // open a new popup (see DamageMap's runPopup prop).
+  const [pending, setPending] = useState<{ key: number; lat: number; lon: number } | null>(null);
+  // The legend opens on every run (and can be collapsed again).
+  const [legendOpen, setLegendOpen] = useState(false);
   const nextPopupKey = useRef(0);
 
   // Fetched once: every fault, no location args.
@@ -140,6 +138,7 @@ export default function App() {
 
   async function runScenario(run: () => Promise<ScenarioResult>) {
     setPending(null);
+    setLegendOpen(true);
     setIsRunning(true);
     setError(null);
     try {
@@ -172,13 +171,20 @@ export default function App() {
 
   // The clicked point is only used as the rupture's reference point for a
   // fault without full rupture geometry (see runFaultScenario).
-  function runFault(fault: Fault, near: { lat: number; lon: number }) {
+  function runFault(fault: Pick<Fault, "fault_id" | "has_rupture_geometry">, near: { lat: number; lon: number }) {
     setSelectedFaultId(fault.fault_id);
     return runScenario(() => runFaultScenario(fault, probabilityLevel, near));
   }
 
+  // Automatic mode: clicking a fault runs it at the selected probability
+  // level straight away (hovering shows its name and Mmax, DamageMap).
   function handleFaultClick(faultId: string, lat: number, lon: number) {
-    setPending({ key: nextPopupKey.current++, kind: "fault", faultId, lat, lon });
+    if (isRunning) return;
+    const fault = faults?.find((f) => f.fault_id === faultId) ?? {
+      fault_id: faultId,
+      has_rupture_geometry: false,
+    };
+    void runFault(fault, { lat, lon });
   }
 
   // Manual mode only (see `mode`). Rounded here too (not just in
@@ -186,7 +192,7 @@ export default function App() {
   function handleMapClick(lat: number, lon: number) {
     if (mode !== "manual") return;
     setManualParams((p) => ({ ...p, lat: roundCoord(lat), lon: roundCoord(lon) }));
-    setPending({ key: nextPopupKey.current++, kind: "manual", lat, lon });
+    setPending({ key: nextPopupKey.current++, lat, lon });
   }
 
   function changeMode(next: "automatic" | "manual") {
@@ -203,35 +209,19 @@ export default function App() {
     setError(null);
   }
 
-  const pendingFault = pending?.kind === "fault" ? faults?.find((f) => f.fault_id === pending.faultId) : undefined;
   const runPopup =
     pending === null
       ? null
       : {
-          key: pending.key,
-          lat: pending.lat,
-          lon: pending.lon,
-          content:
-            pending.kind === "manual" ? (
-              <ManualRunForm
-                params={manualParams}
-                onChange={setManualParams}
-                probabilityLevel={probabilityLevel}
-                onProbabilityLevelChange={setProbabilityLevel}
-                onRun={() => void runManual()}
-                isRunning={isRunning}
-              />
-            ) : pendingFault ? (
-              <FaultRunForm
-                fault={pendingFault}
-                probabilityLevel={probabilityLevel}
-                onProbabilityLevelChange={setProbabilityLevel}
-                onRun={() => void runFault(pendingFault, { lat: pending.lat, lon: pending.lon })}
-                isRunning={isRunning}
-              />
-            ) : (
-              <p style={{ fontSize: "0.85rem" }}>Unknown fault {pending.faultId}.</p>
-            ),
+          ...pending,
+          content: (
+            <ManualRunForm
+              params={manualParams}
+              onChange={setManualParams}
+              onRun={() => void runManual()}
+              isRunning={isRunning}
+            />
+          ),
         };
 
   return (
@@ -280,6 +270,20 @@ export default function App() {
               </button>
             ))}
           </div>
+          <label style={{ marginTop: "0.5rem", fontSize: "0.8rem" }}>
+            Probability level
+            <select
+              value={probabilityLevel}
+              onChange={(e) => setProbabilityLevel(e.target.value as ProbabilityLevel)}
+              style={{ fontSize: "0.8rem" }}
+            >
+              {(Object.keys(PROBABILITY_LEVEL_LABELS) as ProbabilityLevel[]).map((level) => (
+                <option key={level} value={level}>
+                  {PROBABILITY_LEVEL_LABELS[level]}
+                </option>
+              ))}
+            </select>
+          </label>
           <p style={{ fontSize: "0.75rem", color: "#666", margin: "0.4rem 0 0" }}>
             {mode === "automatic"
               ? "Click a fault (dashed purple line) to run its maximum-magnitude earthquake."
@@ -292,12 +296,15 @@ export default function App() {
           )}
         </div>
 
-        <details style={{ ...overlayPanel, bottom: "1.75rem", left: "0.75rem", fontSize: "0.8rem" }}>
+        <details
+          open={legendOpen}
+          onToggle={(e) => setLegendOpen(e.currentTarget.open)}
+          style={{ ...overlayPanel, bottom: "1.75rem", left: "0.75rem", fontSize: "0.8rem" }}
+        >
           <summary style={{ cursor: "pointer", fontWeight: 600 }}>Legend</summary>
           <div style={{ marginTop: "0.5rem" }}>
             <DamageLegend
-              municipalStatsStatus={isRunning ? "loading" : result ? "ready" : "idle"}
-              buildingsStatus={isRunning ? "loading" : result ? "ready" : "idle"}
+              damageStatus={isRunning ? "loading" : result ? "ready" : "idle"}
               debrisStatus={isRunning ? "loading" : result ? "ready" : "idle"}
             />
           </div>

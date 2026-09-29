@@ -1,10 +1,7 @@
-import type { Fault, ProbabilityLevel } from "../scenarioApi";
-import { PROBABILITY_LEVEL_LABELS } from "../probabilityLevels";
-
-// Content of the map's "run scenario" popup (DamageMap renders it via a
-// portal): MERISUR's two rupture-entry modes (docs/merisur.md §4.1/§5).
-// Automatic: a clicked QAFI fault's maximum-magnitude earthquake.
-// Manual: rupture parameters for a clicked point.
+// Content of Manual mode's "run scenario" popup (DamageMap renders it via
+// a portal at the clicked point). The probability level is chosen in the
+// map's mode panel (App.tsx), shared with Automatic mode, where clicking a
+// fault runs it straight away.
 
 // Manual mode's progressive complexity (ADR-0008): magnitude is the only
 // required input; style-of-faulting and full geometry are optional tiers
@@ -31,81 +28,14 @@ const formStyle: React.CSSProperties = {
   paddingRight: "0.25rem",
 };
 
-function ProbabilityLevelSelect({
-  value,
-  onChange,
-}: {
-  value: ProbabilityLevel;
-  onChange: (level: ProbabilityLevel) => void;
-}) {
-  return (
-    <label>
-      Probability level
-      <select value={value} onChange={(e) => onChange(e.target.value as ProbabilityLevel)}>
-        {(Object.keys(PROBABILITY_LEVEL_LABELS) as ProbabilityLevel[]).map((level) => (
-          <option key={level} value={level}>
-            {PROBABILITY_LEVEL_LABELS[level]}
-          </option>
-        ))}
-      </select>
-    </label>
-  );
-}
-
-export function FaultRunForm({
-  fault,
-  probabilityLevel,
-  onProbabilityLevelChange,
-  onRun,
-  isRunning,
-}: {
-  fault: Fault;
-  probabilityLevel: ProbabilityLevel;
-  onProbabilityLevelChange: (level: ProbabilityLevel) => void;
-  onRun: () => void;
-  isRunning: boolean;
-}) {
-  return (
-    <form
-      onSubmit={(e) => {
-        e.preventDefault();
-        onRun();
-      }}
-      style={formStyle}
-    >
-      <div>
-        <h3 style={{ fontSize: "0.95rem", margin: "0 0 0.15rem" }}>{fault.name}</h3>
-        <div>
-          Mmax <strong>{fault.mmax.toFixed(1)}</strong>
-          <span style={{ color: "#666" }}> · {fault.length_km.toFixed(0)} km</span>
-        </div>
-        {fault.mmax_source === "estimated_wells_coppersmith_1994" && (
-          <p style={{ fontSize: "0.75rem", color: "#666", margin: "0.25rem 0 0" }}>
-            Mmax estimated from fault length (Wells &amp; Coppersmith 1994) -- QAFI has no published value
-            for this fault.
-          </p>
-        )}
-      </div>
-      <ProbabilityLevelSelect value={probabilityLevel} onChange={onProbabilityLevelChange} />
-      <button type="submit" disabled={isRunning}>
-        {isRunning ? "Running scenario…" : "Run scenario"}
-      </button>
-    </form>
-  );
-}
-
 export function ManualRunForm({
   params,
   onChange,
-  probabilityLevel,
-  onProbabilityLevelChange,
   onRun,
   isRunning,
 }: {
   params: ManualParams;
   onChange: (update: (params: ManualParams) => ManualParams) => void;
-  probabilityLevel: ProbabilityLevel;
-  onProbabilityLevelChange: (level: ProbabilityLevel) => void;
   onRun: () => void;
   isRunning: boolean;
 }) {
@@ -169,14 +99,11 @@ export function ManualRunForm({
         </select>
       </label>
 
-      <ProbabilityLevelSelect value={probabilityLevel} onChange={onProbabilityLevelChange} />
-
       <details open={params.advancedEnabled} onToggle={(e) => set("advancedEnabled", e.currentTarget.open)}>
         <summary style={{ cursor: "pointer" }}>Advanced: fault geometry (strike/dip/depth)</summary>
         <p style={{ fontSize: "0.75rem", color: "#666" }}>
           Computes a real finite rupture plane (length/width derived from magnitude) instead of treating the
-          earthquake as a single point -- more accurate near the rupture, but requires an orientation we won't
-          guess on your behalf.
+          earthquake as a single point.
         </p>
         <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
           <label>

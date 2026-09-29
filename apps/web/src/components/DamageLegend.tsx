@@ -52,24 +52,16 @@ function LayerSection({
 }
 
 export interface DamageLegendProps {
-  municipalStatsStatus?: LayerStatus;
-  buildingsStatus?: LayerStatus;
+  // Buildings and the municipality/section choropleths share one scale
+  // (DamageMap.tsx colors areas by mean damage state), hence one section.
+  damageStatus?: LayerStatus;
   debrisStatus?: LayerStatus;
 }
 
-export function DamageLegend({
-  municipalStatsStatus = "idle",
-  buildingsStatus = "idle",
-  debrisStatus = "idle",
-}: DamageLegendProps) {
+export function DamageLegend({ damageStatus = "idle", debrisStatus = "idle" }: DamageLegendProps) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
-      <LayerSection title="Municipal stats" status={municipalStatsStatus}>
-        {/* The low-zoom choropleth's own color scale lives in DamageMap.tsx
-            (IGN/CNIG municipality boundaries) -- this row is just the
-            section's loading affordance, no separate swatch needed. */}
-      </LayerSection>
-      <LayerSection title="Buildings" status={buildingsStatus}>
+      <LayerSection title="Damage" status={damageStatus}>
         <div style={{ display: "flex", flexDirection: "column", gap: "0.25rem" }}>
           {DAMAGE_STATES.map((state) => (
             <LegendRow key={state} color={DAMAGE_COLORS[state]} label={state} />
