@@ -129,6 +129,7 @@ const SECTIONS_LAYER_ID = "sections-fill";
 const SECTIONS_FOCUS_LAYER_ID = "sections-focus-fill";
 const SECTIONS_OUTLINE_LAYER_ID = "sections-selected-outline";
 const MUNICIPALITY_FOCUS_OUTLINE_LAYER_ID = "municipalities-focus-outline";
+const MUNICIPALITY_SELECTED_OUTLINE_LAYER_ID = "municipalities-selected-outline";
 const SECTIONS_MINZOOM = 9;
 // Where a section clicked in the sidebar is centered: as close as the map
 // gets while still showing sections rather than individual buildings.
@@ -743,8 +744,30 @@ export function DamageMap({
     if (!map) return;
     selectedAssetIdRef.current = selectAsset(map, selectedAssetIdRef.current, id);
   };
+  // A selected municipality or census section, drawn by filtering the two
+  // pink outline layers to its code (a map click, or for sections the
+  // sidebar's pick too). Also part of the single selection.
+  const selectedAreaRef = useRef<{ kind: "municipality" | "section"; code: string } | null>(null);
+  const selectArea = (area: { kind: "municipality" | "section"; code: string } | null) => {
+    const map = mapRef.current;
+    if (!map) return;
+    selectedAreaRef.current = area;
+    map.setFilter(MUNICIPALITY_SELECTED_OUTLINE_LAYER_ID, [
+      "==",
+      ["get", "ine_code"],
+      area?.kind === "municipality" ? area.code : "__none__",
+    ]);
+    map.setFilter(SECTIONS_OUTLINE_LAYER_ID, [
+      "==",
+      ["get", "code"],
+      area?.kind === "section" ? area.code : "__none__",
+    ]);
+  };
+  // The section the sidebar last selected, so deselecting it there only
+  // clears the outline if a map click hasn't moved the selection since.
+  const sidebarSectionCodeRef = useRef<string | null>(null);
   // Clears whatever is selected (set once the map has loaded), for the
-  // sidebar asset pick below.
+  // sidebar picks below.
   const clearSelectionRef = useRef<() => void>(() => {});
   // Click/hover/move handlers are bound once (map.on is idempotent-unfriendly
   // to re-bind per render) but need the latest callback -- a ref sidesteps
@@ -922,6 +945,16 @@ export function DamageMap({
         filter: ["==", ["get", "ine_code"], "__none__"],
         paint: { "line-color": palette.focusOutline, "line-width": 2 },
       });
+      // Click-to-highlight for a municipality (selectArea): above the
+      // drill-down focus outline, at every zoom. Starts matching nothing.
+      map.addLayer({
+        id: MUNICIPALITY_SELECTED_OUTLINE_LAYER_ID,
+        type: "line",
+        source: MUNICIPALITIES_SOURCE_ID,
+        "source-layer": "municipalities",
+        filter: ["==", ["get", "ine_code"], "__none__"],
+        paint: { "line-color": SELECTED_OUTLINE_COLOR, "line-width": 2.5 },
+      });
 
       addBuildingsSourceAndLayers(map, null);
       buildingsSourceScenarioIdRef.current = null;
@@ -1024,6 +1057,7 @@ export function DamageMap({
         clearBuildingSelection();
         clearDebrisSelection();
         selectInfraAsset(null);
+        selectArea(null);
       };
       clearSelectionRef.current = clearSelection;
 
@@ -1118,6 +1152,8 @@ export function DamageMap({
         const tileProps = (feature.properties ?? {}) as Record<string, unknown>;
         const ineCode = tileProps.ine_code as string | undefined;
         if (!ineCode) return;
+        clearSelection();
+        selectArea({ kind: "municipality", code: ineCode });
 
         const stats =
           municipalityStatsRef.current?.find((m) => m.municipality_code === ineCode) ?? null;
@@ -1134,6 +1170,8 @@ export function DamageMap({
         const tileProps = (e.features?.[0]?.properties ?? {}) as Record<string, unknown>;
         const code = tileProps.code as string | undefined;
         if (!code) return;
+        clearSelection();
+        selectArea({ kind: "section", code });
         const i18n = i18nRef.current;
         const title = i18n.t("popup.sectionTitle", {
           municipality: String(tileProps.municipality_name ?? code.slice(0, 5)),
@@ -1382,6 +1420,9 @@ export function DamageMap({
     // feature that still exists, so forget it rather than leaving a
     // dangling ref that clearBuildingSelection would act on uselessly.
     selectedRef.current = null;
+    // A selected municipality/section belongs to the old result's
+    // choropleth, gone now too.
+    selectArea(null);
 
     applyDamageLayers(map);
   }, [scenarioId]);
@@ -1509,11 +1550,17 @@ export function DamageMap({
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !mapLoadedRef.current) return;
-    map.setFilter(SECTIONS_OUTLINE_LAYER_ID, [
-      "==",
-      ["get", "code"],
-      selectedSection?.section_code ?? "__none__",
-    ]);
+    const code = selectedSection?.section_code ?? null;
+    if (code) {
+      clearSelectionRef.current();
+      selectArea({ kind: "section", code });
+    } else if (
+      selectedAreaRef.current?.kind === "section" &&
+      selectedAreaRef.current.code === sidebarSectionCodeRef.current
+    ) {
+      selectArea(null);
+    }
+    sidebarSectionCodeRef.current = code;
     if (selectedSection?.bbox) {
       const [west, south, east, north] = selectedSection.bbox;
       map.easeTo({
