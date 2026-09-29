@@ -146,15 +146,11 @@ placeholders elsewhere.
 - The estimates are placeholders (docs/impact-estimates.md). Changing a
   parameter changes results, so bump `API_VERSION`.
 
-### Deploying (not done yet)
+### Deploying
 
-The deployed stack still reads `exposure/buildings-cloud.parquet` and has
-no census data, so the new routes 404 there. To deploy:
-1. Upload `data/exposure/buildings-cloud-impact.parquet` (point
-   `TWINER_BUILDINGS_PATH` at it) and `data/census/sections_meta.parquet` +
-   `municipalities_meta.parquet` (set `TWINER_CENSUS_DIR` to their S3
-   prefix).
-2. Upload `sections.pmtiles` next to the other tiles.
-3. Bump `DATA_VERSION`.
-4. Check `AreaMeta.load` reading `s3://` inside the built image before
-   deploying (pyarrow's S3 filesystem, not yet exercised).
+The stack reads `exposure/buildings-cloud-impact.parquet` and
+`TWINER_CENSUS_DIR` (`s3://<data bucket>/census`); docs/deploy-aws-setup.md
+step 8 lists the uploads, including `tiles/sections.pmtiles`.
+`AreaMeta.load` reads through the service's shared DuckDB/httpfs
+connection, the same S3 path every other data read already takes in
+Lambda, rather than pyarrow's own S3 filesystem.

@@ -136,19 +136,27 @@ written) and the Cloudflare frontend env vars.
 ## 8. Upload data
 
 Build the cloud-ready buildings file first (see ADR-0016 for why this is
-separate from the local `parts/*.buildings.parquet` glob):
+separate from the local `parts/*.buildings.parquet` glob). Since ADR-0024
+that's the census-sections pipeline's output, which also writes the
+census tables and section tiles uploaded below:
 
 ```
-uv run --package twiner-exposure python -m exposure.compact_cloud_cli \
-    data/exposure/parts data/exposure/buildings-cloud.parquet
+uv run --package twiner-exposure python -m exposure.census_sections_cli \
+    data/census/raw data/exposure/parts data/census \
+    data/exposure/buildings-cloud-impact.parquet
 ```
 
 Then upload everything the Lambda's env vars point at (see
 `infra/stacks/twiner_stack.py`'s `environment={...}` for the exact keys):
 
 ```
-aws s3 cp data/exposure/buildings-cloud.parquet \
-    s3://<DataBucketName>/exposure/buildings-cloud.parquet --profile twiner-admin
+aws s3 cp data/exposure/buildings-cloud-impact.parquet \
+    s3://<DataBucketName>/exposure/buildings-cloud-impact.parquet --profile twiner-admin
+# Census totals for the impact estimates (TWINER_CENSUS_DIR, ADR-0024)
+aws s3 cp data/census/sections_meta.parquet \
+    s3://<DataBucketName>/census/sections_meta.parquet --profile twiner-admin
+aws s3 cp data/census/municipalities_meta.parquet \
+    s3://<DataBucketName>/census/municipalities_meta.parquet --profile twiner-admin
 aws s3 cp data/exposure/exposure.parquet \
     s3://<DataBucketName>/exposure/exposure.parquet --profile twiner-admin
 aws s3 cp data/fragility/fragility.parquet \
@@ -173,6 +181,8 @@ aws s3 cp data/exposure/debris.pmtiles \
     s3://<DataBucketName>/tiles/debris.pmtiles --profile twiner-admin
 aws s3 cp data/exposure/municipalities.pmtiles \
     s3://<DataBucketName>/tiles/municipalities.pmtiles --profile twiner-admin
+aws s3 cp data/census/sections.pmtiles \
+    s3://<DataBucketName>/tiles/sections.pmtiles --profile twiner-admin
 
 # The fault list the frontend loads on startup (ADR-0022), next to the
 # PMTiles. Re-export and re-upload it whenever qafi_faults.parquet changes;
