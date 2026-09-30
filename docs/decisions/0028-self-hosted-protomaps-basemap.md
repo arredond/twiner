@@ -30,9 +30,9 @@ straight from the data bucket.
   unset, it uses the deployed bucket. A 21GB local copy would buy nothing:
   the basemap doesn't vary with the local dataset, and a copy under
   `public/` would be copied into `dist/` by every local `npm run build`.
-  The bucket's CORS rule only allows `http://localhost:5173`, so a
-  worktree's dev server on another port gets no basemap until that port
-  is added to `FRONTEND_ORIGINS` (infra/stacks/twiner_stack.py).
+  The bucket's CORS rule allows `http://localhost:5173` to `:5192`
+  (`FRONTEND_ORIGINS` in infra/stacks/twiner_stack.py), so worktree dev
+  servers on the next free ports get the basemap too.
 - **Coverage**: the bbox defaults to `-36.650391,18.271086,27.070313,50.233152`.
   That covers Spain and the Canary Islands, plus a good part of Europe and
   North Africa around them. The first extract, of the 20260929 build, is

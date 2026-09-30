@@ -28,10 +28,16 @@ TILES_SERVICE_DIR = REPO_ROOT / "services" / "tiles"
 
 # The Cloudflare Pages frontend origin, allowed to fetch PMTiles/parquet
 # directly out of the data bucket (browser range requests -- see
-# apps/web's pmtiles/DuckDB-over-httpfs usage). localhost:5173 stays
-# allowed too so local dev can point VITE_S3_DATA_BUCKET at the real bucket
-# without a CORS error. Update this if the Cloudflare domain changes.
-FRONTEND_ORIGINS = ["https://twiner.arredon.do", "http://localhost:5173"]
+# apps/web's pmtiles/DuckDB-over-httpfs usage). Local dev servers are
+# allowed too: the basemap is always read from the bucket (ADR-0028), and
+# local dev can point VITE_S3_DATA_BUCKET or `twiner start prod` at the real
+# backend. bin/twiner gives each worktree the next free port from 5173, so
+# a range is allowed, enough for LOCAL_DEV_PORTS dev stacks at once. Update
+# this if the Cloudflare domain changes.
+LOCAL_DEV_PORTS = 20
+FRONTEND_ORIGINS = ["https://twiner.arredon.do"] + [
+    f"http://localhost:{port}" for port in range(5173, 5173 + LOCAL_DEV_PORTS)
+]
 
 # Part of every scenario_id (services/scenario/src/scenario/scenario_id.py),
 # so it's what invalidates the scenario result cache after a data change:

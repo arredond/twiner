@@ -25,7 +25,7 @@ export function staticDataUrl(filename: string): string {
 // The self-hosted basemap (ADR-0028) is read from S3 even in local dev:
 // it's a 21GB extract that nothing local needs a copy of, and it doesn't
 // change with the local dataset. The bucket's CORS rule allows
-// http://localhost:5173 (infra/stacks/twiner_stack.py FRONTEND_ORIGINS).
+// http://localhost:5173-5192 (infra/stacks/twiner_stack.py FRONTEND_ORIGINS).
 export function basemapDataUrl(path: string): string {
   return s3TilesUrl(import.meta.env.VITE_S3_DATA_BUCKET || DEPLOYED_DATA_BUCKET, `basemap/${path}`);
 }
