@@ -13,6 +13,7 @@ resolution-markers = [
 [manifest]
 members = [
     "twiner",
+    "twiner-basemap",
     "twiner-exposure",
     "twiner-faults",
     "twiner-fragility",
@@ -2143,6 +2144,17 @@ dev = [
     { name = "pytest", specifier = ">=8.0" },
     { name = "ruff", specifier = ">=0.6" },
 ]
+
+[[package]]
+name = "twiner-basemap"
+version = "0.1.0"
+source = { editable = "pipelines/basemap" }
+dependencies = [
+    { name = "requests" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "requests", specifier = ">=2.32" }]
 
 [[package]]
 name = "twiner-exposure"

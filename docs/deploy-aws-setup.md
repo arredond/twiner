@@ -192,6 +192,13 @@ aws s3 cp data/exposure/municipalities.pmtiles \
 aws s3 cp data/census/sections.pmtiles \
     s3://<DataBucketName>/tiles/sections.pmtiles --profile twiner-admin
 
+# The self-hosted basemap (ADR-0028): the Protomaps extract plus its
+# fonts/sprites, under tiles/basemap/ (apps/web/src/basemaps.ts). The ETL
+# syncs it itself; rerun it to refresh the OSM data (it skips the ~21GB
+# extract when there's no newer build).
+uv run python -m basemap data/basemap \
+    --upload s3://<DataBucketName>/tiles/basemap --profile twiner-admin
+
 # The fault list the frontend loads on startup (ADR-0022), next to the
 # PMTiles. Re-export and re-upload it whenever qafi_faults.parquet changes;
 # the frontend falls back to GET /faults if it's missing, but won't notice

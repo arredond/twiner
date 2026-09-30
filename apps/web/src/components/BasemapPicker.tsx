@@ -7,20 +7,21 @@ import {
   parseSourceUrl,
   parseWmtsCapabilities,
   resolveBasemap,
-  thumbnailUrl,
+  basemapStyle,
+  builtinThumbnail,
   type Basemap,
   type CustomBasemap,
-  type View,
   type WmtsLayerOption,
 } from "../basemaps";
 import type { I18n, TranslationKey } from "../i18n";
 import { useSettings } from "../settings";
+import { renderThumbnail } from "./basemapThumbnails";
 
 // Bottom-right basemap picker, Google Maps style: a miniature of the
 // current basemap that opens a row of the others (built-in and user-added,
 // basemaps.ts), plus a "+" to add a WMTS or XYZ raster source. The choice
 // lives in Settings (settings.ts), so it's remembered per browser.
-export function BasemapPicker({ view, style }: { view: View; style?: React.CSSProperties }) {
+export function BasemapPicker({ style }: { style?: React.CSSProperties }) {
   const { settings, update, theme, i18n } = useSettings();
   const { t } = i18n;
   const [open, setOpen] = useState(false);
@@ -45,7 +46,7 @@ export function BasemapPicker({ view, style }: { view: View; style?: React.CSSPr
     };
   }, [open, adding]);
 
-  // Picking the theme's own Carto style goes back to following the theme
+  // Picking the theme's own Protomaps style goes back to following the theme
   // (null), so switching light/dark keeps swapping it as before; any other
   // pick sticks across theme switches.
   const choose = (id: string) => update({ basemap: id === THEME_BASEMAP[theme] ? null : id });
@@ -86,7 +87,6 @@ export function BasemapPicker({ view, style }: { view: View; style?: React.CSSPr
               key={b.id}
               basemap={b}
               label={basemapLabel(b, t)}
-              view={view}
               selected={b.id === current.id}
               onSelect={() => choose(b.id)}
               onRemove={"name" in b ? () => remove(b.id) : undefined}
@@ -136,7 +136,7 @@ export function BasemapPicker({ view, style }: { view: View; style?: React.CSSPr
           cursor: "pointer",
         }}
       >
-        <Thumbnail basemap={current} view={view} />
+        <Thumbnail basemap={current} />
         <span
           style={{
             position: "absolute",
@@ -193,15 +193,30 @@ const labelStyle: React.CSSProperties = {
   overflowWrap: "anywhere",
 };
 
-function Thumbnail({ basemap, view }: { basemap: Basemap; view: View }) {
-  const src = thumbnailUrl(basemap, view);
+// A fixed view of the Iberian Peninsula (basemaps.ts THUMBNAIL_VIEW): the
+// built-ins' static images, or rendered once for a user-added source (and a
+// built-in whose image is missing).
+function Thumbnail({ basemap }: { basemap: Basemap }) {
+  const staticSrc = builtinThumbnail(basemap.id);
+  const [rendered, setRendered] = useState<string | null>(null);
   const [failed, setFailed] = useState<string | null>(null);
-  if (failed === src) return null;
+  useEffect(() => {
+    if (staticSrc) return;
+    let cancelled = false;
+    // Labels are unreadable at this size, so the language doesn't matter.
+    renderThumbnail(basemap.id, basemapStyle(basemap, "light", "en")).then((url) => {
+      if (!cancelled) setRendered(url);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [basemap, staticSrc]);
+  const src = staticSrc ?? rendered;
+  if (src === null || failed === src) return null;
   return (
     <img
       src={src}
       alt=""
-      loading="lazy"
       draggable={false}
       onError={() => setFailed(src)}
       style={{ display: "block", width: "100%", height: "100%", objectFit: "cover" }}
@@ -212,7 +227,6 @@ function Thumbnail({ basemap, view }: { basemap: Basemap; view: View }) {
 function Option({
   basemap,
   label,
-  view,
   selected,
   onSelect,
   onRemove,
@@ -220,7 +234,6 @@ function Option({
 }: {
   basemap: Basemap;
   label: string;
-  view: View;
   selected: boolean;
   onSelect: () => void;
   onRemove?: () => void;
@@ -242,7 +255,7 @@ function Option({
             border: selected ? "2px solid var(--link)" : "1px solid var(--border)",
           }}
         >
-          <Thumbnail basemap={basemap} view={view} />
+          <Thumbnail basemap={basemap} />
         </span>
         <span style={{ ...labelStyle, color: selected ? "var(--link)" : "var(--text)" }}>{label}</span>
       </button>

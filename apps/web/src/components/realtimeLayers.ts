@@ -40,9 +40,10 @@ export const REALTIME_CLICKABLE_LAYER_IDS = [DGT_LAYER_ID, DGT_LINE_LAYER_ID, AE
 
 // Station values show as text from here in, where stations stop overlapping.
 const AEMET_LABEL_MINZOOM = 7;
-// One of the basemap's own font stacks (Carto's glyph server only serves
-// those).
-const LABEL_FONT = ["Montserrat Medium", "Open Sans Bold", "Noto Sans Regular"];
+// One of the fonts pipelines/basemap hosts. A single font, not a
+// fallback list: the glyphs are static files per font, and MapLibre asks
+// for a list as one combined stack.
+const LABEL_FONT = ["Noto Sans Medium"];
 
 // Marker outline and label halo: whatever contrasts with the basemap.
 const INK: Record<Theme, { stroke: string; halo: string; text: string }> = {

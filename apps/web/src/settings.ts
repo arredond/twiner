@@ -15,7 +15,7 @@ export interface Settings {
   theme: ThemePreference;
   showZoom: boolean;
   // A BUILTIN_BASEMAPS id or a customBasemaps one; null follows the theme
-  // (Positron / Dark Matter, basemaps.ts THEME_BASEMAP).
+  // (Protomaps white / black, basemaps.ts THEME_BASEMAP).
   basemap: string | null;
   customBasemaps: CustomBasemap[];
 }

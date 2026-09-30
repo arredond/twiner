@@ -4,10 +4,10 @@ import * as maplibregl from "maplibre-gl";
 import type { GeoJSONSource, Map as MapLibreMap, MapLayerMouseEvent, StyleSpecification } from "maplibre-gl";
 import maplibreWorkerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url";
 import type { Feature, FeatureCollection, Geometry, Point } from "geojson";
-import { Protocol } from "pmtiles";
+import { PMTiles, Protocol } from "pmtiles";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { DAMAGE_COLORS, DAMAGE_STATES, MAP_PALETTE, SELECTED_COLOR } from "../damageColors";
-import { rasterStyle, type Basemap, type View } from "../basemaps";
+import { PROTOMAPS_PMTILES_URL, basemapStyle, type Basemap } from "../basemaps";
 import type { I18n } from "../i18n";
 import type { Theme } from "../settings";
 import { staticDataUrl } from "../staticData";
@@ -25,12 +25,6 @@ import {
   type MunicipalityStats,
   type SectionStats,
 } from "../scenarioApi";
-import {
-  applyBasemapLanguage,
-  collectBasemapLabels,
-  localizeLayers,
-  type BasemapLabels,
-} from "./basemapLabels";
 import {
   INFRA_CLICKABLE_LAYER_IDS,
   INFRA_SHAPES_FILL_LAYER_ID,
@@ -241,12 +235,6 @@ const FAULTS_SOURCE_ID = "faults";
 const FAULTS_LAYER_ID = "faults-line";
 const FAULTS_SELECTED_LAYER_ID = "faults-line-selected";
 
-// A basemap (basemaps.ts) as what map.setStyle takes: Carto's vector
-// styles by URL, raster ones as a one-source style.
-function basemapStyle(basemap: Basemap, theme: Theme): string | StyleSpecification {
-  return basemap.kind === "vector" ? basemap.styleUrl : rasterStyle(basemap, theme);
-}
-
 // Basemap switch: the new basemap's own sources/layers, plus every overlay
 // source and layer twiner added to the old one (anything not from the old
 // basemap's sources), on top as before. Glyphs are shared by every
@@ -352,11 +340,8 @@ interface Props {
   // panel), in rem: the map is never resized for it, so the camera moves
   // below keep their targets clear of it instead.
   rightInsetRem: number;
-  // basemaps.ts; the picker's choice, or the theme's Carto style.
+  // basemaps.ts; the picker's choice, or the theme's Protomaps style.
   basemap: Basemap;
-  // Called with the camera after every move (the basemap picker's
-  // thumbnails show the area in view).
-  onViewChange?: (view: View) => void;
   // Resolved UI theme: picks the overlay palette
   // (MAP_PALETTE).
   theme: Theme;
@@ -741,7 +726,6 @@ export function DamageMap({
   warningWindow,
   rightInsetRem,
   basemap,
-  onViewChange,
   theme,
   i18n,
   showZoom,
@@ -862,14 +846,11 @@ export function DamageMap({
   const paletteThemeRef = useRef(theme);
   const basemapRef = useRef(basemap);
   basemapRef.current = basemap;
-  const basemapKey = basemap.kind === "raster" ? `${basemap.id}:${theme}` : basemap.id;
+  // What the basemap style depends on: raster styles take the theme's
+  // background, Protomaps ones the label language.
+  const basemapKey = basemap.kind === "raster" ? `${basemap.id}:${theme}` : `${basemap.id}:${i18n.lang}`;
   const shownBasemapKeyRef = useRef(basemapKey);
   const basemapSourceIdsRef = useRef<Set<string>>(new Set());
-  const onViewChangeRef = useRef(onViewChange);
-  onViewChangeRef.current = onViewChange;
-  // The basemap's English-name label fields, re-localized on a language
-  // switch (basemapLabels.ts).
-  const basemapLabelsRef = useRef<BasemapLabels>(new Map());
   const infrastructureStateIdsRef = useRef<Set<number>>(new Set());
   const aemetMetricRef = useRef(aemetMetricKey);
   aemetMetricRef.current = aemetMetricKey;
@@ -884,10 +865,15 @@ export function DamageMap({
   useEffect(() => {
     const protocol = new Protocol();
     maplibregl.addProtocol("pmtiles", protocol.tile);
+    // The Protomaps extract only covers a bbox (pipelines/basemap), so
+    // the camera is kept inside it: its header's bounds are the bbox. Added
+    // to the protocol so the style's source reuses this header fetch.
+    const basemapArchive = new PMTiles(PROTOMAPS_PMTILES_URL);
+    protocol.add(basemapArchive);
 
     const map = new maplibregl.Map({
       container: containerRef.current!,
-      style: basemapStyle(basemapRef.current, themeRef.current),
+      style: basemapStyle(basemapRef.current, themeRef.current, i18nRef.current.lang),
       center: SPAIN_CENTER,
       zoom: SPAIN_ZOOM,
       // MapLibre v6 defaults to "splitting" (requesting literal deeper-zoom
@@ -918,16 +904,21 @@ export function DamageMap({
       zoomLevelsToOverscale: 22,
     });
     mapRef.current = map;
+    basemapArchive
+      .getHeader()
+      .then((h) => {
+        if (mapRef.current === map) map.setMaxBounds([[h.minLon, h.minLat], [h.maxLon, h.maxLat]]);
+      })
+      .catch(() => {
+        // No extract (a local checkout without pipelines/basemap's output):
+        // the map just isn't bounded.
+      });
 
     map.on("load", () => {
       const palette = MAP_PALETTE[themeRef.current];
 
-      // Basemap labels in the UI language. Captured now, while the style
-      // holds nothing but the basemap.
-      const basemap = map.getStyle();
-      basemapSourceIdsRef.current = new Set(Object.keys(basemap.sources));
-      basemapLabelsRef.current = collectBasemapLabels(basemap.layers, basemapSourceIdsRef.current);
-      applyBasemapLanguage(map, basemapLabelsRef.current, i18nRef.current.lang);
+      // Captured now, while the style holds nothing but the basemap.
+      basemapSourceIdsRef.current = new Set(Object.keys(map.getStyle().sources));
       // Intensity bands (ADR-0025) first, so they sit under every
       // choropleth and building layer: context, not the result itself.
       addIntensityLayers(map);
@@ -1377,12 +1368,6 @@ export function DamageMap({
       const reportZoom = () => setZoom(map.getZoom());
       map.on("zoom", reportZoom);
       reportZoom();
-      const reportView = () => {
-        const { lng, lat } = map.getCenter();
-        onViewChangeRef.current?.({ lng, lat, zoom: map.getZoom() });
-      };
-      map.on("moveend", reportView);
-      reportView();
 
       mapLoadedRef.current = true;
     });
@@ -1834,32 +1819,25 @@ export function DamageMap({
     else map.once("load", apply);
   }, [theme]);
 
-  // Basemap switch (the picker, or the theme while it follows the theme):
-  // swap it in place under the overlays (keepOverlays).
+  // Basemap switch (the picker, the theme while it follows the theme, or
+  // the language for Protomaps' labels): swap it in place under the
+  // overlays (keepOverlays).
   useEffect(() => {
     const map = mapRef.current;
     if (!map || shownBasemapKeyRef.current === basemapKey) return;
     const apply = () => {
       shownBasemapKeyRef.current = basemapKey;
-      map.setStyle(basemapStyle(basemapRef.current, themeRef.current), {
+      map.setStyle(basemapStyle(basemapRef.current, themeRef.current, i18nRef.current.lang), {
         transformStyle: (previous, next) => {
           const merged = keepOverlays(previous, next, basemapSourceIdsRef.current);
           basemapSourceIdsRef.current = new Set(Object.keys(next.sources));
-          // The new basemap's labels, in the current language.
-          basemapLabelsRef.current = collectBasemapLabels(next.layers, basemapSourceIdsRef.current);
-          return { ...merged, layers: localizeLayers(merged.layers, basemapLabelsRef.current, i18nRef.current.lang) };
+          return merged;
         },
       });
     };
     if (mapLoadedRef.current) apply();
     else map.once("load", apply);
   }, [basemapKey]);
-
-  useEffect(() => {
-    const map = mapRef.current;
-    if (!map || !mapLoadedRef.current) return;
-    applyBasemapLanguage(map, basemapLabelsRef.current, i18n.lang);
-  }, [i18n.lang]);
 
   return (
     <div style={{ position: "relative", width: "100%", height: "100%" }}>

@@ -1,6 +1,6 @@
 # pipelines/
 
-Three independent ETL pipelines that turn public data sources into the
+Independent ETL pipelines that turn public data sources into the
 static parquet/PMTiles files `services/scenario` reads at request time. Each
 is its own `uv` workspace package (`twiner-faults`, `twiner-exposure`,
 `twiner-fragility`) but they share one convention: fetch from a real public
@@ -18,6 +18,9 @@ pipelines/fragility    Martins & Silva (2020) -> fragility.parquet
                                                         |
                                                         v
                                           services/scenario reads all five
+
+pipelines/basemap      Protomaps daily build -> protomaps.pmtiles + fonts/sprites
+                                                (the frontend's basemap only)
 ```
 
 ## `faults`: QAFI active faults
@@ -192,6 +195,37 @@ Output is long-format: one row per (taxonomy, height_class, damage_state,
 intensity value), giving cumulative exceedance probability at that
 intensity. Nationwide/universal -- not region-specific, never needs
 re-running for a bigger area.
+
+## `basemap`: self-hosted Protomaps basemap
+
+The default light/dark basemaps (ADR-0028). This step takes the latest
+daily OpenStreetMap build from <https://maps.protomaps.com/builds/> and
+cuts out a bbox with `pmtiles extract`. The extract fetches only the
+bbox's tiles by range request, never the ~140GB planet. It also copies the
+fonts and sprites the `@protomaps/basemaps` styles reference. Needs the
+`pmtiles` CLI (`brew install pmtiles`). The 20260929 build's extract is
+21.2GB and took 24 minutes on 2026-09-30. The server was slow that day:
+the tile fetch ran at 48MB/s, but the archive directories took far longer
+to read. build.protomaps.com is flaky, so the extract reads through a
+retrying, resuming local proxy (`basemap/proxy.py`, see ADR-0028). If the
+newest build is crawling (it may not be in Protomaps' CDN cache yet), a
+`--build` from the day before is usually much faster.
+
+```bash
+uv run python -m basemap data/basemap \
+    --upload s3://<DataBucketName>/tiles/basemap --profile twiner-admin
+```
+
+Options: `--build YYYYMMDD` picks a build other than the latest; `--bbox W,S,E,N`
+sets the area (the default covers Spain, the Canaries and a good part of
+Europe). Don't narrow it casually: the frontend reads the extract's header
+bounds as the map's `maxBounds`. `--maxzoom` defaults to the builds' own 15.
+`--force` redoes everything. Output, mirrored as-is under `tiles/basemap/`
+in S3: `protomaps.pmtiles`, `fonts/`, `sprites/v4/` and a `protomaps.json`
+manifest. A rerun whose build/bbox/maxzoom match the manifest skips the
+extract, so rerunning just to refresh is cheap when there's no new build.
+The frontend reads the basemap from S3 even in local dev (ADR-0028), so
+`data/basemap` is only the staging copy for the upload.
 
 ## Where it all lands
 

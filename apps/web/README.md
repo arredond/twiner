@@ -20,7 +20,7 @@ npm run dev
 Env vars (optional, `.env.local`):
 
 - `VITE_SCENARIO_API_URL` -- scenario function base URL (default `http://localhost:8000`)
-- `VITE_S3_DATA_BUCKET` -- the public data bucket's name (the stack's `DataBucketName` output); buildings/debris/municipalities PMTiles are read from its `tiles/` prefix in eu-south-2. Unset: served locally from `/data/*.pmtiles` (`apps/web/public/data`)
+- `VITE_S3_DATA_BUCKET` -- the public data bucket's name (the stack's `DataBucketName` output); buildings/debris/municipalities PMTiles are read from its `tiles/` prefix in eu-south-2. Unset: served locally from `/data/*.pmtiles` (`apps/web/public/data`). The Protomaps basemap (ADR-0028) is always read from S3, from this bucket or the deployed one when it's unset
 
 ## Known gotcha
 

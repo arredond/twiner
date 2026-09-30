@@ -1,6 +1,6 @@
 # ADR-0027: Basemap picker (Carto, IGN/IDEE WMTS, user-added sources)
 
-Status: accepted
+Status: accepted (the Carto basemaps are superseded by ADR-0028, self-hosted Protomaps)
 
 ## Context
 

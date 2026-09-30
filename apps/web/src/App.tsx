@@ -21,7 +21,7 @@ import {
 import { Segmented } from "./components/Segmented";
 import { SettingsMenu } from "./components/SettingsMenu";
 import { BasemapPicker } from "./components/BasemapPicker";
-import { resolveBasemap, type View } from "./basemaps";
+import { resolveBasemap } from "./basemaps";
 import type { I18n } from "./i18n";
 import { useSettings } from "./settings";
 import { INFRA_CATEGORY_KEYS, type InfraCategory } from "./infrastructure";
@@ -52,7 +52,6 @@ export default function App() {
   const { settings, theme, i18n } = useSettings();
   const basemap = resolveBasemap(settings.basemap, settings.customBasemaps, theme);
   // The map's camera, for the basemap picker's thumbnails.
-  const [view, setView] = useState<View>({ lng: -3.7, lat: 40, zoom: 5.3 });
   const { t } = i18n;
   const [result, setResult] = useState<ScenarioResult | null>(null);
   const [isRunning, setIsRunning] = useState(false);
@@ -375,7 +374,6 @@ export default function App() {
           warningWindow={warningWindowRange}
           rightInsetRem={result ? SIDEBAR_WIDTH_REM : 0}
           basemap={basemap}
-          onViewChange={setView}
           theme={theme}
           i18n={i18n}
           showZoom={settings.showZoom}
@@ -383,7 +381,7 @@ export default function App() {
 
         <SettingsMenu style={{ top: "0.75rem", right: `${(result ? SIDEBAR_WIDTH_REM : 0) + 0.75}rem` }} />
         {/* Clear of MapLibre's attribution ("i") control in the corner. */}
-        <BasemapPicker view={view} style={{ bottom: "3rem", right: `${(result ? SIDEBAR_WIDTH_REM : 0) + 0.75}rem` }} />
+        <BasemapPicker style={{ bottom: "3rem", right: `${(result ? SIDEBAR_WIDTH_REM : 0) + 0.75}rem` }} />
 
         <div style={{ ...overlayPanel, top: "0.75rem", left: "0.75rem", maxWidth: "17rem" }}>
           {result ? (

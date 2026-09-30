@@ -63,3 +63,10 @@ Fetched live by the scenario API (`/realtime/...`), not by a pipeline -- see [AD
 | Source | Coverage | Resource | Pipeline module |
 |---|---|---|---|
 | Martins & Silva (2020), *Global Fragility and Vulnerability Functions* | 3 curated taxonomy classes (CR_LDUAL-DUL, MR_LWAL-DUL height classes 1–12 storeys; MUR-STRUB_LWAL-DNO vernacular rubble-stone masonry, height classes 1–5 only — that's all the source repo publishes for it) | GitHub repo, raw CSVs: [`global_fragility_vulnerability/fragility_curves/fragility_other_IMs`](https://raw.githubusercontent.com/lmartins88/global_fragility_vulnerability/master/fragility_curves/fragility_other_IMs) | `pipelines/fragility/src/fragility/source.py` |
+
+## Basemap
+
+| Source | Coverage | Resource | Pipeline module |
+|---|---|---|---|
+| Protomaps daily OpenStreetMap build (ODbL, © OpenStreetMap contributors) | A bbox extract, default `-36.650391,18.271086,27.070313,50.233152` (Spain, the Canaries and a good part of Europe), z0-15 | Build list: [`builds.json`](https://build-metadata.protomaps.dev/builds.json), archives at `https://build.protomaps.com/<YYYYMMDD>.pmtiles` ([builds page](https://maps.protomaps.com/builds/)); read by `pmtiles extract` over range requests. See [ADR-0028](docs/decisions/0028-self-hosted-protomaps-basemap.md). | `pipelines/basemap/src/basemap/source.py` |
+| ↳ Fonts and sprites | Noto Sans glyph PBFs (OFL), Protomaps sprite sheets | [`protomaps/basemaps-assets`](https://github.com/protomaps/basemaps-assets) `fonts/` and `sprites/v4/`, pinned to the commit recorded in `protomaps.json` | `pipelines/basemap/src/basemap/source.py` |

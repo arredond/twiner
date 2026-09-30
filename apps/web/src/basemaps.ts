@@ -1,10 +1,13 @@
-import type { StyleSpecification } from "maplibre-gl";
-import type { TranslationKey } from "./i18n";
+import type { LayerSpecification, StyleSpecification } from "maplibre-gl";
+import { layers, namedFlavor } from "@protomaps/basemaps";
+import type { Language, TranslationKey } from "./i18n";
 import type { Theme } from "./settings";
+import { basemapDataUrl } from "./staticData";
 
 // Basemaps for the bottom-right picker (components/BasemapPicker.tsx):
-// Carto's two vector styles, a handful of IGN/IDEE WMTS raster services,
-// and raster tile sources the user pastes in themselves (WMTS or XYZ).
+// two self-hosted Protomaps vector styles (ADR-0028), a handful of IGN/IDEE
+// WMTS raster services, and raster tile sources the user pastes in
+// themselves (WMTS or XYZ).
 //
 // Every WMTS basemap is drawn as a plain XYZ raster source: MapLibre only
 // speaks Web Mercator, so we use each service's GoogleMapsCompatible tile
@@ -23,12 +26,13 @@ export interface RasterBasemap {
   attribution?: string;
 }
 
-interface VectorBasemap {
+// A Protomaps flavour (@protomaps/basemaps) over our own extract,
+// pipelines/basemap. Its picker thumbnail is rendered offscreen
+// (components/basemapThumbnails.ts), since there are no raster tiles.
+export interface VectorBasemap {
   kind: "vector";
   id: string;
-  styleUrl: string;
-  // A raster rendition of the same style, for the picker's thumbnail.
-  thumbnailTiles: string;
+  flavor: "white" | "black";
 }
 
 // A user-added raster source (the picker's "+"), kept in Settings.
@@ -76,18 +80,8 @@ function ignWmts<Id extends string>(
 
 // Layer/style/format per service come from each one's GetCapabilities.
 export const BUILTIN_BASEMAPS = [
-  {
-    kind: "vector",
-    id: "positron",
-    styleUrl: "https://basemaps.cartocdn.com/gl/positron-gl-style/style.json",
-    thumbnailTiles: "https://basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png",
-  },
-  {
-    kind: "vector",
-    id: "dark-matter",
-    styleUrl: "https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json",
-    thumbnailTiles: "https://basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png",
-  },
+  { kind: "vector", id: "protomaps-white", flavor: "white" },
+  { kind: "vector", id: "protomaps-black", flavor: "black" },
   ignWmts("pnoa-ma", "https://www.ign.es/wmts/pnoa-ma", "OI.OrthoimageCoverage", "default", "image/jpeg"),
   ignWmts("ign-base", "https://www.ign.es/wmts/ign-base", "IGNBaseTodo", "default", "image/jpeg"),
   ignWmts("ign-lidar", "https://wmts-mapa-lidar.idee.es/lidar", "EL.GridCoverageDSM", "default", "image/png"),
@@ -106,9 +100,9 @@ export const BUILTIN_BASEMAPS = [
 
 export type BuiltinBasemapId = (typeof BUILTIN_BASEMAPS)[number]["id"];
 
-// The theme's own Carto style: what the map shows until the user picks
+// The theme's own Protomaps style: what the map shows until the user picks
 // something else (Settings.basemap === null).
-export const THEME_BASEMAP: Record<Theme, BuiltinBasemapId> = { light: "positron", dark: "dark-matter" };
+export const THEME_BASEMAP: Record<Theme, BuiltinBasemapId> = { light: "protomaps-white", dark: "protomaps-black" };
 
 export function isBuiltinBasemapId(id: unknown): id is BuiltinBasemapId {
   return BUILTIN_BASEMAPS.some((b) => b.id === id);
@@ -125,9 +119,41 @@ export function resolveBasemap(id: string | null, custom: CustomBasemap[], theme
   return BUILTIN_BASEMAPS.find((b) => b.id === id) ?? custom.find((b) => b.id === id) ?? themeDefault;
 }
 
-// Shared with Carto's styles so a switch doesn't reload the glyphs the
-// overlays' own labels use (AEMET station values).
-const GLYPHS = "https://tiles.basemaps.cartocdn.com/fonts/{fontstack}/{range}.pbf";
+// pipelines/basemap's output in S3: the extract, and the fonts and sprites
+// the Protomaps styles reference.
+const BASEMAP_DIR = basemapDataUrl("");
+export const PROTOMAPS_PMTILES_URL = `${BASEMAP_DIR}protomaps.pmtiles`;
+const PROTOMAPS_SOURCE_ID = "protomaps";
+const PROTOMAPS_ATTRIBUTION =
+  '<a href="https://protomaps.com" target="_blank" rel="noopener">Protomaps</a> © <a href="https://openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>';
+
+// Every basemap style uses these glyphs, so a switch doesn't reload the
+// ones the overlays' own labels use (AEMET station values).
+const GLYPHS = `${BASEMAP_DIR}fonts/{fontstack}/{range}.pbf`;
+
+// Both flavours share one source id, so switching between them (or the
+// language) is a layer diff and the tiles stay loaded.
+export function vectorStyle(basemap: VectorBasemap, lang: Language): StyleSpecification {
+  return {
+    version: 8,
+    glyphs: GLYPHS,
+    sprite: `${BASEMAP_DIR}sprites/v4/${basemap.flavor}`,
+    sources: {
+      [PROTOMAPS_SOURCE_ID]: {
+        type: "vector",
+        url: `pmtiles://${PROTOMAPS_PMTILES_URL}`,
+        attribution: PROTOMAPS_ATTRIBUTION,
+      },
+    },
+    // Labels in the UI language, falling back to the local name.
+    layers: layers(PROTOMAPS_SOURCE_ID, namedFlavor(basemap.flavor), { lang }) as LayerSpecification[],
+  };
+}
+
+// A basemap as what map.setStyle takes.
+export function basemapStyle(basemap: Basemap, theme: Theme, lang: Language): StyleSpecification {
+  return basemap.kind === "vector" ? vectorStyle(basemap, lang) : rasterStyle(basemap, theme);
+}
 
 export function rasterSourceId(basemap: RasterBasemap): string {
   return `basemap-${basemap.id}`;
@@ -161,25 +187,21 @@ export function rasterStyle(basemap: RasterBasemap, theme: Theme): StyleSpecific
 
 // --- Thumbnails ------------------------------------------------------------
 
-export interface View {
-  lng: number;
-  lat: number;
-  zoom: number;
-}
+// Every picker thumbnail shows this same fixed view (the Iberian Peninsula,
+// with some sea and France around it), so the picker doesn't change as the
+// map moves. The built-ins' are static images, from
+// scripts/basemap_thumbnails.py (keep its CENTER/SPAN_DEG in sync). User-added
+// sources are rendered at runtime (components/basemapThumbnails.ts).
+export const THUMBNAIL_VIEW = { lng: -3.6, lat: 40.0, spanDeg: 18 };
 
-// One tile of `basemap` around the view's centre, a couple of levels out so
-// the miniature shows the surroundings rather than a blur of the middle.
-export function thumbnailUrl(basemap: Basemap, view: View): string {
-  const template = basemap.kind === "vector" ? basemap.thumbnailTiles : basemap.tiles[0];
-  const minzoom = basemap.kind === "vector" ? 0 : basemap.minzoom;
-  const maxzoom = basemap.kind === "vector" ? 18 : basemap.maxzoom;
-  const z = Math.max(minzoom, Math.min(maxzoom, Math.floor(view.zoom) - 1));
-  const n = 2 ** z;
-  const x = Math.min(n - 1, Math.max(0, Math.floor(((view.lng + 180) / 360) * n)));
-  const latRad = (Math.max(-85, Math.min(85, view.lat)) * Math.PI) / 180;
-  const yXyz = Math.min(n - 1, Math.max(0, Math.floor(((1 - Math.asinh(Math.tan(latRad)) / Math.PI) / 2) * n)));
-  const y = basemap.kind === "raster" && basemap.scheme === "tms" ? n - 1 - yXyz : yXyz;
-  return template.replace("{z}", String(z)).replace("{x}", String(x)).replace("{y}", String(y));
+const BUILTIN_THUMBNAILS = import.meta.glob<string>("./assets/basemap-thumbnails/*.png", {
+  eager: true,
+  query: "?url",
+  import: "default",
+});
+
+export function builtinThumbnail(id: string): string | undefined {
+  return BUILTIN_THUMBNAILS[`./assets/basemap-thumbnails/${id}.png`];
 }
 
 // --- User-added sources ----------------------------------------------------
