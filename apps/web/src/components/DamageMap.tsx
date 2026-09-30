@@ -7,6 +7,7 @@ import type { Feature, FeatureCollection, Geometry, Point } from "geojson";
 import { Protocol } from "pmtiles";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { DAMAGE_COLORS, DAMAGE_STATES, MAP_PALETTE, SELECTED_COLOR } from "../damageColors";
+import { rasterStyle, type Basemap, type View } from "../basemaps";
 import type { I18n } from "../i18n";
 import type { Theme } from "../settings";
 import { staticDataUrl } from "../staticData";
@@ -240,30 +241,29 @@ const FAULTS_SOURCE_ID = "faults";
 const FAULTS_LAYER_ID = "faults-line";
 const FAULTS_SELECTED_LAYER_ID = "faults-line-selected";
 
-// Free, no-API-key basemap styles, one per UI theme (Carto Positron and
-// Dark Matter). Swap for twiner-branded styles later.
-const BASEMAP_STYLES: Record<Theme, string> = {
-  light: "https://basemaps.cartocdn.com/gl/positron-gl-style/style.json",
-  dark: "https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json",
-};
+// A basemap (basemaps.ts) as what map.setStyle takes: Carto's vector
+// styles by URL, raster ones as a one-source style.
+function basemapStyle(basemap: Basemap, theme: Theme): string | StyleSpecification {
+  return basemap.kind === "vector" ? basemap.styleUrl : rasterStyle(basemap, theme);
+}
 
-// Theme switch: the new basemap's own sources/layers, plus every overlay
-// source and layer twiner added to the old one (anything not from a
-// basemap source), on top as before. Both Carto styles share the same
-// vector source and glyphs, so MapLibre applies this as a diff -- the
-// overlay sources are never reloaded and keep their feature-state
-// (choropleths, infrastructure intensity, selection), filters and paint.
-function keepOverlays(previous: StyleSpecification | undefined, next: StyleSpecification): StyleSpecification {
+// Basemap switch: the new basemap's own sources/layers, plus every overlay
+// source and layer twiner added to the old one (anything not from the old
+// basemap's sources), on top as before. Glyphs are shared by every
+// basemap, so MapLibre applies this as a diff -- the overlay sources are
+// never reloaded and keep their feature-state (choropleths,
+// infrastructure intensity, selection), filters and paint.
+function keepOverlays(
+  previous: StyleSpecification | undefined,
+  next: StyleSpecification,
+  previousBasemapSourceIds: Set<string>
+): StyleSpecification {
   if (!previous) return next;
-  const basemapSourceIds = new Set(Object.keys(next.sources));
-  const previousBasemapSourceIds = new Set(
-    Object.keys(previous.sources).filter((id) => basemapSourceIds.has(id))
-  );
   const overlaySources = Object.fromEntries(
     Object.entries(previous.sources).filter(([id]) => !previousBasemapSourceIds.has(id))
   );
   const overlayLayers = previous.layers.filter(
-    (layer) => "source" in layer && typeof layer.source === "string" && !basemapSourceIds.has(layer.source)
+    (layer) => "source" in layer && typeof layer.source === "string" && !previousBasemapSourceIds.has(layer.source)
   );
   return {
     ...next,
@@ -352,7 +352,12 @@ interface Props {
   // panel), in rem: the map is never resized for it, so the camera moves
   // below keep their targets clear of it instead.
   rightInsetRem: number;
-  // Resolved UI theme: picks the basemap and the overlay palette
+  // basemaps.ts; the picker's choice, or the theme's Carto style.
+  basemap: Basemap;
+  // Called with the camera after every move (the basemap picker's
+  // thumbnails show the area in view).
+  onViewChange?: (view: View) => void;
+  // Resolved UI theme: picks the overlay palette
   // (MAP_PALETTE).
   theme: Theme;
   // Popup text and numbers, in the current language.
@@ -735,6 +740,8 @@ export function DamageMap({
   aemetWarnings,
   warningWindow,
   rightInsetRem,
+  basemap,
+  onViewChange,
   theme,
   i18n,
   showZoom,
@@ -849,8 +856,17 @@ export function DamageMap({
   i18nRef.current = i18n;
   const themeRef = useRef(theme);
   themeRef.current = theme;
-  // The theme the basemap currently shows (the theme effect skips a no-op).
-  const basemapThemeRef = useRef(theme);
+  // The theme the overlay palette currently uses (the theme effect skips a
+  // no-op), and the basemap the map currently shows (basemapKey) with its
+  // source ids -- how the next switch tells overlays from basemap.
+  const paletteThemeRef = useRef(theme);
+  const basemapRef = useRef(basemap);
+  basemapRef.current = basemap;
+  const basemapKey = basemap.kind === "raster" ? `${basemap.id}:${theme}` : basemap.id;
+  const shownBasemapKeyRef = useRef(basemapKey);
+  const basemapSourceIdsRef = useRef<Set<string>>(new Set());
+  const onViewChangeRef = useRef(onViewChange);
+  onViewChangeRef.current = onViewChange;
   // The basemap's English-name label fields, re-localized on a language
   // switch (basemapLabels.ts).
   const basemapLabelsRef = useRef<BasemapLabels>(new Map());
@@ -871,7 +887,7 @@ export function DamageMap({
 
     const map = new maplibregl.Map({
       container: containerRef.current!,
-      style: BASEMAP_STYLES[themeRef.current],
+      style: basemapStyle(basemapRef.current, themeRef.current),
       center: SPAIN_CENTER,
       zoom: SPAIN_ZOOM,
       // MapLibre v6 defaults to "splitting" (requesting literal deeper-zoom
@@ -909,7 +925,8 @@ export function DamageMap({
       // Basemap labels in the UI language. Captured now, while the style
       // holds nothing but the basemap.
       const basemap = map.getStyle();
-      basemapLabelsRef.current = collectBasemapLabels(basemap.layers, new Set(Object.keys(basemap.sources)));
+      basemapSourceIdsRef.current = new Set(Object.keys(basemap.sources));
+      basemapLabelsRef.current = collectBasemapLabels(basemap.layers, basemapSourceIdsRef.current);
       applyBasemapLanguage(map, basemapLabelsRef.current, i18nRef.current.lang);
       // Intensity bands (ADR-0025) first, so they sit under every
       // choropleth and building layer: context, not the result itself.
@@ -1360,6 +1377,12 @@ export function DamageMap({
       const reportZoom = () => setZoom(map.getZoom());
       map.on("zoom", reportZoom);
       reportZoom();
+      const reportView = () => {
+        const { lng, lat } = map.getCenter();
+        onViewChangeRef.current?.({ lng, lat, zoom: map.getZoom() });
+      };
+      map.on("moveend", reportView);
+      reportView();
 
       mapLoadedRef.current = true;
     });
@@ -1792,13 +1815,13 @@ export function DamageMap({
     else map.once("load", apply);
   }, [aemetWarnings, warningWindow]);
 
-  // Theme switch: swap the basemap in place (keepOverlays) and recolour
-  // the overlays whose colours depend on it (MAP_PALETTE).
+  // Theme switch: recolour the overlays whose colours depend on it
+  // (MAP_PALETTE). The basemap itself is the effect after this one.
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || basemapThemeRef.current === theme) return;
+    if (!map || paletteThemeRef.current === theme) return;
     const apply = () => {
-      basemapThemeRef.current = theme;
+      paletteThemeRef.current = theme;
       const palette = MAP_PALETTE[theme];
       map.setPaintProperty(FAULTS_LAYER_ID, "line-color", palette.fault);
       map.setPaintProperty(FAULTS_SELECTED_LAYER_ID, "line-color", palette.fault);
@@ -1806,18 +1829,31 @@ export function DamageMap({
       if (map.getLayer(DEBRIS_LAYER_ID)) map.setPaintProperty(DEBRIS_LAYER_ID, "fill-color", palette.debris);
       setInfrastructurePaint(map, infrastructureResultsRef.current !== null, theme);
       setRealtimePaint(map, theme);
-      map.setStyle(BASEMAP_STYLES[theme], {
+    };
+    if (mapLoadedRef.current) apply();
+    else map.once("load", apply);
+  }, [theme]);
+
+  // Basemap switch (the picker, or the theme while it follows the theme):
+  // swap it in place under the overlays (keepOverlays).
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || shownBasemapKeyRef.current === basemapKey) return;
+    const apply = () => {
+      shownBasemapKeyRef.current = basemapKey;
+      map.setStyle(basemapStyle(basemapRef.current, themeRef.current), {
         transformStyle: (previous, next) => {
+          const merged = keepOverlays(previous, next, basemapSourceIdsRef.current);
+          basemapSourceIdsRef.current = new Set(Object.keys(next.sources));
           // The new basemap's labels, in the current language.
-          basemapLabelsRef.current = collectBasemapLabels(next.layers, new Set(Object.keys(next.sources)));
-          const merged = keepOverlays(previous, next);
+          basemapLabelsRef.current = collectBasemapLabels(next.layers, basemapSourceIdsRef.current);
           return { ...merged, layers: localizeLayers(merged.layers, basemapLabelsRef.current, i18nRef.current.lang) };
         },
       });
     };
     if (mapLoadedRef.current) apply();
     else map.once("load", apply);
-  }, [theme]);
+  }, [basemapKey]);
 
   useEffect(() => {
     const map = mapRef.current;
