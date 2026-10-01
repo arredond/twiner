@@ -1,6 +1,7 @@
 # ADR-0029: Flood scenarios from MITECO's flood zones
 
-Status: accepted (local; not deployed yet)
+Status: accepted. Deploying needs the flood data uploaded to S3 by hand
+(docs/deploy-aws-setup.md).
 
 ## Context
 
@@ -149,9 +150,15 @@ new run. Flood mode has:
 - area-picker hover by feature-state, not `setFilter`: re-filtering the
   ~8k-municipality layer on every mouse move made the outline lag behind
   the cursor;
+- one colour per layer kind: blue flood zones, orange buildings in them, a
+  purple ramp for the affected areas (the seismic damage colours and fault
+  purple stay distinct). The cards' QUAKE / FLOOD names are coloured too;
+- critical infrastructure switched on with every run (either hazard) and
+  off on clear;
 - `FloodSidebar` shows the totals, a "not mapped" note (Canarias at
   T10/T50), the coverage caveat (only studied rivers are mapped), and the
-  municipality → section drill-down. Choropleths colour by % of buildings in
+  municipality → section drill-down, sorted like the seismic one by % of
+  buildings affected, then count. Choropleths colour by % of buildings in
   the zone.
 
 ## Memory and speed (lessons from the first runs)

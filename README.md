@@ -1,7 +1,8 @@
 # twiner
 
-A digital twin for multi-hazard risk assessment in Spain, starting with
-seismic risk. Milestone 1 built a modern clone of UPM's
+A digital twin for multi-hazard risk assessment in Spain: earthquakes
+(twinQUAKE) and fluvial floods (twinFLOOD, from MITECO's flood zones --
+[ADR-0029](docs/decisions/0029-flood-scenarios.md)). Milestone 1 built a modern clone of UPM's
 [MERISUR](docs/merisur.md) web simulator, prototyped against Lorca;
 milestone 2 expanded exposure coverage region by region -- Murcia +
 Andalucía first, then nationwide via Catastro's INSPIRE feed, then the
@@ -84,26 +85,48 @@ uv run python -m exposure.infrastructure_cli data/infrastructure/raw data/exposu
 # Only used with TWINER_TRAFFIC_LINES=1.
 uv run python -m exposure.roads_cli data/roads/raw data/roads
 
+# 1f. Floods (ADR-0029). Province/CCAA outlines + area search index first
+# (from 1b's municipalities), then MITECO's flood zones: the six zips are a
+# MANUAL download into data/flood/raw/ (they sit behind a captcha; the CLI
+# lists any missing one with its URL -- see pipelines/README.md). Needs 1c
+# and 1d's outputs. ~45 minutes nationally, resumable.
+uv run python -m exposure.admin_areas data/exposure/municipalities.parquet data/exposure
+uv run python -m flood data/flood/raw data/exposure/parts \
+    data/exposure/buildings-cloud-impact.parquet data/census/sections.parquet \
+    data/infrastructure/infrastructure.parquet data/flood
+
 # 2. Copy whichever buildings.pmtiles/debris.pmtiles/municipalities.pmtiles
 # you built into the frontend's static assets
 cp data/exposure/buildings.pmtiles apps/web/public/data/buildings.pmtiles
 cp data/exposure/municipalities.pmtiles apps/web/public/data/municipalities.pmtiles
 cp data/census/sections.pmtiles apps/web/public/data/sections.pmtiles
 cp data/infrastructure/infrastructure.pmtiles apps/web/public/data/infrastructure.pmtiles
+cp data/flood/flood_zones.pmtiles data/flood/flood_buildings.pmtiles apps/web/public/data/
+cp data/exposure/admin_areas.pmtiles data/exposure/admin_index.json apps/web/public/data/
 
 # 3. Start both the scenario API and the frontend together
 npm install --prefix apps/web
 ./bin/twiner start   # see `twiner status`/`twiner attach`/`twiner stop`/`twiner restart`
 ```
 
-Open http://localhost:5173 and pick a mode and probability level in the
-top-left panel. In Automatic mode, click a fault (dashed purple line) to
-run its maximum-magnitude earthquake; in Manual mode, click anywhere on the
-map to configure an earthquake there. The map colors buildings by
-resulting damage state, and the right-hand scenario panel lists affected
-municipalities (population, cost, debris -- rough estimates, see
-docs/impact-estimates.md) and drills into their census sections. Closing
-the panel clears the scenario.
+Open http://localhost:5173. The top-left corner has one card per hazard;
+clicking a card's name opens it (and closes the other).
+
+- **twinQUAKE** (open at start): pick a mode and probability level. In
+  Automatic mode, click a fault (dashed purple line) to run its
+  maximum-magnitude earthquake; in Manual mode, click anywhere on the map
+  to configure an earthquake there. The map colors buildings by resulting
+  damage state.
+- **twinFLOOD**: pick a return period (T10/T50/T100/T500) and an area --
+  draw a circle (click the centre, then the edge), click a CCAA / province
+  / municipality, or search for one. The map shows the flood zones, the
+  buildings in them, and the affected municipalities / census sections.
+
+Either way, the right-hand scenario panel lists affected municipalities
+(population, cost, debris for earthquakes; buildings, residents and
+flooded area for floods -- rough estimates, see docs/impact-estimates.md)
+and drills into their census sections. Closing the panel, or clicking the
+card's name again, clears the scenario.
 `bin/twiner` defaults to whichever dataset `TWINER_BUILDINGS_PATH`/
 `TWINER_EXPOSURE_PATH` point at (see the script's own comments) -- set
 those env vars before `twiner start` to point at a different one, e.g. a

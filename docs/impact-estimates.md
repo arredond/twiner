@@ -195,3 +195,25 @@ calibration step.
 - **No uncertainty band.** Every figure uses the damage state reported for
   the chosen probability level, not the full distribution of damage-state
   probabilities.
+
+## Flood scenarios (ADR-0029)
+
+A flood scenario has no damage states: a building is either in the flood
+zone at the chosen return period or not (its footprint intersects the zone,
+pipelines/flood). So none of the damage-based figures above apply: no cost,
+debris, trucks, shoring or displaced residents. They'd need water depth and
+depth-damage curves, which these maps don't have. Per census section
+(`services/scenario/src/scenario/flood.py`), rolled up to municipalities:
+
+| Figure | How |
+|---|---|
+| Buildings in flood zone | Count of the section's buildings in the zone; % of all its buildings (INE/Catastro section totals). |
+| Dwellings in flood zone | Sum of `num_dwellings` over those buildings. |
+| Residents in flood zone | Same spread as above: section population × dwellings in the zone / all section dwellings (by buildings when a section records no dwellings), capped at the population. |
+| Vulnerable residents | Residents in the zone × the section's under-15 + 65-plus share. |
+| Flooded area | Zone area inside the section (and, for a circle, inside the circle), km², EPSG:3035. |
+
+"Not mapped" is not "not flooded": MITECO only maps studied river stretches
+(roughly a third of main rivers), and Canarias has no T=10/T=50 map. The
+sidebar says both.
+
