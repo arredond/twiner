@@ -184,3 +184,15 @@ setup + `cdk deploy` + data upload, and
 - **Linting/formatting**: [`ruff`](https://docs.astral.sh/ruff/) (`uv run ruff check .`, `uv run ruff format .`).
 - **Type checking**: [`pyrefly`](https://pyrefly.org/) (`uv run pyrefly check`).
 - **Pre-commit hooks** run both automatically: `uv run pre-commit install` once per clone, then every commit runs `ruff check --fix`, `ruff format`, and `pyrefly check`. Run manually over everything with `uv run pre-commit run --all-files`.
+
+## License
+
+- **Code**: [GNU AGPL v3.0 or later](LICENSE). The scenario service
+  builds on OpenQuake's `hazardlib`, itself AGPL v3. The web app links to
+  this repository from its settings menu, which is the source offer the
+  AGPL requires for network use.
+- **Documentation** (`apps/docs/`): [CC BY 4.0](apps/docs/LICENSE).
+- **Data**: every input dataset keeps its publisher's licence
+  ([`DATA-SOURCES.md`](DATA-SOURCES.md)). Data derived from QAFI is
+  CC BY-SA 4.0, and the OpenStreetMap basemap is ODbL. The Martins & Silva
+  fragility functions have no formal licence (free use with citation).

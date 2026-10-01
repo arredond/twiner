@@ -2,6 +2,7 @@
 name = "twiner-infra"
 version = "0.1.0"
 description = "twiner AWS CDK app (S3 data/results buckets, scenario Lambda) -- see docs/decisions/0001-compute-and-iac.md"
+license = "AGPL-3.0-or-later"
 requires-python = ">=3.12"
 dependencies = [
     "aws-cdk-aws-lambda-python-alpha==2.269.0a0",

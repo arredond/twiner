@@ -24,6 +24,7 @@ export default defineConfig({
 			title: 'TWIN-ER',
 			description: 'A multi-hazard risk simulator for Spain, built on open data.',
 			favicon: '/favicon.svg',
+			social: [{ icon: 'github', label: 'GitHub', href: 'https://github.com/arredond/twiner' }],
 			defaultLocale: 'root',
 			locales: {
 				root: { label: 'English', lang: 'en' },
@@ -79,6 +80,7 @@ export default defineConfig({
 					items: [
 						{ slug: 'impact-estimates' },
 						{ slug: 'data-sources' },
+						{ slug: 'license' },
 					],
 				},
 				...openAPISidebarGroups,

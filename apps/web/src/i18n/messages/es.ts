@@ -84,6 +84,8 @@ export const es: Messages = {
   "settings.themeDark": "Oscuro",
   "settings.themeAuto": "Auto",
   "settings.themeAutoHint": "Sigue la configuración del sistema",
+  "settings.docs": "Documentación",
+  "settings.source": "Código fuente (AGPL-3.0)",
   "settings.zoomIndicator": "Indicador de zoom",
 
   "basemap.open": "Mapa base",

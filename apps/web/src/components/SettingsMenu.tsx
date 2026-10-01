@@ -108,13 +108,37 @@ export function SettingsMenu({ style }: { style?: React.CSSProperties }) {
               onChange={(showZoom) => update({ showZoom })}
             />
           </div>
+          {/* The AGPL (LICENSE) asks a network-served program to offer its
+              source to its users: this is that offer. */}
+          <div style={footer}>
+            <a
+              href={settings.language === "es" ? "/docs/es/" : "/docs/"}
+              target="_blank"
+              rel="noopener"
+            >
+              {t("settings.docs")}
+            </a>
+            <span aria-hidden>·</span>
+            <a href={SOURCE_URL} target="_blank" rel="noopener">
+              {t("settings.source")}
+            </a>
+          </div>
         </div>
       )}
     </div>
   );
 }
 
+const SOURCE_URL = "https://github.com/arredond/twiner";
+
 const field: React.CSSProperties = { display: "flex", flexDirection: "column", gap: "0.3rem" };
+const footer: React.CSSProperties = {
+  display: "flex",
+  gap: "0.4rem",
+  paddingTop: "0.5rem",
+  borderTop: "1px solid var(--border)",
+  color: "var(--text-muted)",
+};
 const fieldLabel: React.CSSProperties = { fontWeight: 600 };
 
 function GearIcon() {

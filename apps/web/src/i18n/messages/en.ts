@@ -92,6 +92,8 @@ export const en = {
   "settings.themeAuto": "Auto",
   "settings.themeAutoHint": "Follows your system setting",
   "settings.zoomIndicator": "Zoom indicator",
+  "settings.docs": "Documentation",
+  "settings.source": "Source code (AGPL-3.0)",
 
   "basemap.open": "Basemap",
   "basemap.label": "Basemap",
