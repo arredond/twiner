@@ -194,5 +194,5 @@ setup + `cdk deploy` + data upload, and
 - **Documentation** (`apps/docs/`): [CC BY 4.0](apps/docs/LICENSE).
 - **Data**: every input dataset keeps its publisher's licence
   ([`DATA-SOURCES.md`](DATA-SOURCES.md)). Data derived from QAFI is
-  CC BY-SA 4.0, and the OpenStreetMap basemap is ODbL. The Martins & Silva
-  fragility functions have no formal licence (free use with citation).
+  CC BY-SA 4.0, as are the Martins & Silva fragility functions; the
+  OpenStreetMap basemap is ODbL.

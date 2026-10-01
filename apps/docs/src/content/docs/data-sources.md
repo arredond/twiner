@@ -40,7 +40,7 @@ so they come from four separate services.
 |---|---|---|---|---|
 | QAFI v4: Quaternary Active Faults Database of Iberia | Instituto Geológico y Minero de España (IGME-CSIC) | 201 active faults in Spain | CC BY-SA 4.0 | [Fault traces](https://info.igme.es/qafi/docs/QAFI_Traces.rar) |
 | ESRM20 site model ($V_{S30}$, 30 arc-seconds) | EFEHR / ETH Zürich, European Seismic Risk Model 2020 | Spain, except the Canary Islands | CC BY 4.0 | [Repository](https://gitlab.seismo.ethz.ch/efehr/esrm20) |
-| Global fragility functions (Martins & Silva 2021) | GEM Foundation authors | 3 building classes, 1–12 storeys | Free use with citation | [Repository](https://github.com/lmartins88/global_fragility_vulnerability) |
+| Global fragility functions (Martins & Silva 2021) | GEM Foundation authors | 3 building classes, 1–12 storeys | CC BY-SA 4.0 | [Repository](https://github.com/lmartins88/global_fragility_vulnerability) |
 
 The ground-motion model, Akkar et al. (2014), comes from the OpenQuake
 `hazardlib` library (GEM Foundation, AGPL-3.0).

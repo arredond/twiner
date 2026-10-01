@@ -231,8 +231,7 @@ The scenario service reads `$TWINER_FLOOD_DIR` (default `data/flood`).
 
 Downloads a curated subset of the [global fragility/vulnerability function
 repository](https://github.com/lmartins88/global_fragility_vulnerability)
-(no licence file; its README allows free download and requires citing
-Martins & Silva) -- the three GEM-taxonomy classes our exposure taxonomy
+(CC BY-SA 4.0, per `fragility_curves/licence.txt`; cite Martins & Silva) -- the three GEM-taxonomy classes our exposure taxonomy
 heuristic can produce (`CR_LDUAL-DUL` H1-H12; `MUR_LWAL-DNO` and
 `MUR-STRUB_LWAL-DNO` H1-H5, all upstream publishes for them). See
 [ADR-0032](../docs/decisions/0032-taxonomy-v2-unreinforced-masonry.md). See [`merisur.md`](../docs/merisur.md) §4.5/§4.9 and

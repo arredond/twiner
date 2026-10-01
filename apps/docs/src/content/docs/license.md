@@ -42,11 +42,10 @@ Results are derived from the third-party datasets listed in
 [Data sources](/docs/data-sources/), and remain subject to their licences
 and attribution requirements. In particular:
 
-- the QAFI fault database is licensed CC BY-SA 4.0, so data derived from it
-  must be shared under the same terms;
-- the OpenStreetMap basemap is licensed ODbL;
-- the Martins & Silva (2021) fragility functions are published for free use
-  with citation, without a formal licence.
+- the QAFI fault database and the Martins & Silva (2021) fragility
+  functions are licensed CC BY-SA 4.0, so data derived from them must be
+  shared under the same terms;
+- the OpenStreetMap basemap is licensed ODbL.
 
 ## Citing TWIN-ER
 

@@ -42,11 +42,10 @@ Los resultados se derivan de los conjuntos de datos de terceros que
 recogen las [Fuentes de datos](/docs/es/data-sources/), y siguen sujetos a
 sus licencias y requisitos de atribución. En particular:
 
-- la base de datos de fallas QAFI tiene licencia CC BY-SA 4.0, así que los
-  datos derivados de ella deben compartirse en los mismos términos;
-- el mapa base de OpenStreetMap tiene licencia ODbL;
-- las funciones de fragilidad de Martins y Silva (2021) se publican para
-  uso libre citando la fuente, sin licencia formal.
+- la base de datos de fallas QAFI y las funciones de fragilidad de Martins y
+  Silva (2021) tienen licencia CC BY-SA 4.0, así que los datos derivados de
+  ellas deben compartirse en los mismos términos;
+- el mapa base de OpenStreetMap tiene licencia ODbL.
 
 ## Cómo citar TWIN-ER
 

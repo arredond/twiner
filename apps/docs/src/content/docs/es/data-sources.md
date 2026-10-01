@@ -42,7 +42,7 @@ servicios distintos.
 |---|---|---|---|---|
 | QAFI v4: base de datos de fallas activas del Cuaternario de Iberia | Instituto Geológico y Minero de España (IGME-CSIC) | 201 fallas activas en España | CC BY-SA 4.0 | [Trazas de fallas](https://info.igme.es/qafi/docs/QAFI_Traces.rar) |
 | Modelo de suelo del ESRM20 ($V_{S30}$, 30 segundos de arco) | EFEHR / ETH Zúrich, Modelo Europeo de Riesgo Sísmico 2020 | España, salvo Canarias | CC BY 4.0 | [Repositorio](https://gitlab.seismo.ethz.ch/efehr/esrm20) |
-| Funciones de fragilidad globales (Martins y Silva 2021) | Autores de la Fundación GEM | 3 clases de edificio, de 1 a 12 plantas | Uso libre citando la fuente | [Repositorio](https://github.com/lmartins88/global_fragility_vulnerability) |
+| Funciones de fragilidad globales (Martins y Silva 2021) | Autores de la Fundación GEM | 3 clases de edificio, de 1 a 12 plantas | CC BY-SA 4.0 | [Repositorio](https://github.com/lmartins88/global_fragility_vulnerability) |
 
 El modelo de movimiento del suelo, Akkar et al. (2014), procede de la
 biblioteca `hazardlib` de OpenQuake (Fundación GEM, AGPL-3.0).
