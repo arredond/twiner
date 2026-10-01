@@ -261,6 +261,18 @@ export default function App() {
     };
   }, [floodMunicipalityCode, loadFloodSectionStats]);
 
+  // Critical infrastructure switches on with every run (every category, off
+  // again on clear), but only once the run's own asset rows have loaded:
+  // before that every asset in Spain draws as a full marker, which is
+  // overwhelming until the affected/greyed-out styling applies.
+  const showInfraOnLoadRef = useRef(false);
+  const scenarioInfrastructure = hazard === "flood" ? floodInfrastructure : infrastructure;
+  useEffect(() => {
+    if (!scenarioInfrastructure || !showInfraOnLoadRef.current) return;
+    showInfraOnLoadRef.current = false;
+    setInfraCategories(INFRA_CATEGORY_KEYS);
+  }, [scenarioInfrastructure]);
+
   const floodMunicipality = useMemo(
     () => floodResult?.municipality_stats.find((m) => m.municipality_code === floodMunicipalityCode) ?? null,
     [floodResult, floodMunicipalityCode]
@@ -387,13 +399,12 @@ export default function App() {
     setLegendOpen(true);
     // The result itself: back on after a "New run" switched it off.
     setShowDamage(true);
-    // Critical infrastructure too, every category (off again on clear).
-    setInfraCategories(INFRA_CATEGORY_KEYS);
     setIsRunning(true);
     setError(null);
     try {
       setResult(await run());
       setCardOpen(false);
+      showInfraOnLoadRef.current = true;
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -404,13 +415,12 @@ export default function App() {
   async function runFlood(region: FloodRegion) {
     setLegendOpen(true);
     setFloodLayers({ zones: true, buildings: true, areas: true });
-    // Critical infrastructure too, every category (off again on clear).
-    setInfraCategories(INFRA_CATEGORY_KEYS);
     setIsRunning(true);
     setError(null);
     try {
       setFloodResult(await runFloodScenario(returnPeriod, region));
       setCardOpen(false);
+      showInfraOnLoadRef.current = true;
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -428,6 +438,7 @@ export default function App() {
 
   function clearFlood() {
     setFloodResult(null);
+    showInfraOnLoadRef.current = false;
     setInfraCategories([]);
     setError(null);
     setLegendOpen(false);
@@ -526,6 +537,7 @@ export default function App() {
     setLegendOpen(false);
     setShowDamage(false);
     setShowIntensity(false);
+    showInfraOnLoadRef.current = false;
     setInfraCategories([]);
     setShowFaults(true);
   }
