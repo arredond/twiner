@@ -134,7 +134,7 @@ equal:
 | HAZUS type | Our typology | Weight | Slight | Moderate | Extensive |
 |---|---|---|---|---|---|
 | C3 (concrete frame, unreinforced masonry infill) | `CR_LDUAL-DUL` | 1.17 t/m² | 0.9% | 7.9% | 36.8% |
-| URML/URMM (unreinforced masonry) | `MR_LWAL-DUL`, `MUR-STRUB_LWAL-DNO` | 0.88 t/m² | 2.2% | 12.4% | 39.1% |
+| URML/URMM (unreinforced masonry) | `MUR_LWAL-DNO`, `MUR-STRUB_LWAL-DNO` | 0.88 t/m² | 2.2% | 12.4% | 39.1% |
 
 The table above uses 1.1 t/m² and rounded fractions between the two, one
 value for all buildings. A per-typology split is a cheap follow-up
@@ -175,16 +175,17 @@ Replace these values with figures from Spanish emergency-response practice
 ## Reference run
 
 Both runs are manual scenarios at Lorca's 2011 epicentre (37.699, -1.673),
-computed locally on the national dataset on 2026-09-29.
+computed locally on the national dataset on 2026-10-01, after ADR-0032's
+taxonomy corrections (the 2026-09-29 figures used the stale classes).
 
-- **Mw 5.2, "very_low":** Lorca has 13,340 of 27,884 buildings affected
-  (47.8%). That's 72,194 of 98,613 residents (73.2%), including 22,426
-  vulnerable residents, and 0 displaced (no building reaches Extensive).
-  Material cost €214.6M, debris 236,027 t, 11,802 truck rotations, 31,389
-  props.
-- **Mw 6.5, "low":** Lorca has 17,555 buildings affected. That's 84,135
-  residents, with 8,791 displaced. Material cost €1,092M, debris
-  1,201,254 t.
+- **Mw 5.2, "very_low":** Lorca has 14,461 of 27,884 buildings affected
+  (51.9%). That's 73,931 of 98,613 residents (75.0%), including 23,054
+  vulnerable residents, and 2,863 displaced (1,077 buildings reach
+  Extensive). Material cost €399.2M, debris 421,220 t, 21,061 truck
+  rotations, 123,873 props.
+- **Mw 6.5, "low":** Lorca has 19,589 buildings affected (70.3%). That's
+  86,722 residents, with 19,007 displaced (6,340 buildings at Complete).
+  Material cost €2,215M, debris 2,436,568 t.
 
 These figures haven't been compared with Lorca 2011's recorded losses,
 displacement or debris-removal volumes. That comparison (records

@@ -362,10 +362,10 @@ class IntensityBands(_Model):
 
 class Building(_Model):
     building_id: str = Field(examples=["000100100XG17C"])
-    taxonomy_class: Literal["CR_LDUAL-DUL", "MR_LWAL-DUL", "MUR-STRUB_LWAL-DNO"]
+    taxonomy_class: Literal["CR_LDUAL-DUL", "MUR_LWAL-DNO", "MUR-STRUB_LWAL-DNO"]
     height_class: int = Field(description="Storeys, 1 to 12.")
     taxonomy_source: str = Field(
-        description="How the class was assigned (`heuristic_v1`: from construction year and floors)."
+        description="How the class was assigned (`heuristic_v2`: from construction year and floors)."
     )
 
 

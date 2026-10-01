@@ -74,7 +74,7 @@ Fetched live by the scenario API (`/realtime/...`), not by a pipeline -- see [AD
 
 | Source | Coverage | Resource | Pipeline module |
 |---|---|---|---|
-| Martins & Silva (2020), *Global Fragility and Vulnerability Functions* | 3 curated taxonomy classes (CR_LDUAL-DUL, MR_LWAL-DUL height classes 1–12 storeys; MUR-STRUB_LWAL-DNO vernacular rubble-stone masonry, height classes 1–5 only — that's all the source repo publishes for it) | GitHub repo, raw CSVs: [`global_fragility_vulnerability/fragility_curves/fragility_other_IMs`](https://raw.githubusercontent.com/lmartins88/global_fragility_vulnerability/master/fragility_curves/fragility_other_IMs) | `pipelines/fragility/src/fragility/source.py` |
+| Martins & Silva (2020), *Global Fragility and Vulnerability Functions* | 3 curated taxonomy classes: CR_LDUAL-DUL (reinforced concrete, height classes 1–12 storeys); MUR_LWAL-DNO (generic unreinforced masonry) and MUR-STRUB_LWAL-DNO (vernacular rubble-stone masonry), height classes 1–5 only — that's all the source repo publishes for them. No licence file; the repo's README allows free download and requires citing the paper (check with GEM before commercial use) | GitHub repo, raw CSVs: [`global_fragility_vulnerability/fragility_curves/fragility_other_IMs`](https://raw.githubusercontent.com/lmartins88/global_fragility_vulnerability/master/fragility_curves/fragility_other_IMs) | `pipelines/fragility/src/fragility/source.py` |
 
 ## Basemap
 

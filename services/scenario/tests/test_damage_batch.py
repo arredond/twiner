@@ -38,7 +38,7 @@ def _same_values_for_every_im_type(fragility_table: FragilityTable, im_values: n
 def test_batch_matches_scalar_path_exactly(fragility_table: FragilityTable):
     rng = np.random.default_rng(0)
     n = 200
-    taxonomy_classes = rng.choice(["CR_LDUAL-DUL", "MR_LWAL-DUL"], size=n)
+    taxonomy_classes = rng.choice(["CR_LDUAL-DUL", "MUR_LWAL-DNO", "MUR-STRUB_LWAL-DNO"], size=n)
     height_classes = rng.integers(1, 8, size=n)
     im_values = rng.uniform(0.01, 1.0, size=n)
 
@@ -62,7 +62,7 @@ def test_batch_matches_scalar_path_exactly(fragility_table: FragilityTable):
 def test_batch_matches_scalar_path_with_percentile(fragility_table: FragilityTable):
     rng = np.random.default_rng(2)
     n = 200
-    taxonomy_classes = rng.choice(["CR_LDUAL-DUL", "MR_LWAL-DUL"], size=n)
+    taxonomy_classes = rng.choice(["CR_LDUAL-DUL", "MUR_LWAL-DNO", "MUR-STRUB_LWAL-DNO"], size=n)
     height_classes = rng.integers(1, 8, size=n)
     im_values = rng.uniform(0.01, 1.0, size=n)
 
@@ -88,7 +88,7 @@ def test_batch_matches_scalar_path_with_percentile(fragility_table: FragilityTab
 def test_batch_probabilities_sum_to_one(fragility_table: FragilityTable):
     rng = np.random.default_rng(1)
     n = 100
-    taxonomy_classes = rng.choice(["CR_LDUAL-DUL", "MR_LWAL-DUL"], size=n)
+    taxonomy_classes = rng.choice(["CR_LDUAL-DUL", "MUR_LWAL-DNO", "MUR-STRUB_LWAL-DNO"], size=n)
     height_classes = rng.integers(1, 8, size=n)
     im_values = rng.uniform(0.01, 1.0, size=n)
 
@@ -105,14 +105,14 @@ def test_batch_probabilities_sum_to_one(fragility_table: FragilityTable):
 
 def test_batch_dispatches_each_building_to_its_own_curves_im_type(fragility_table: FragilityTable):
     # The actual bug this fixes (docs/validation-lorca-2011.md §10.2): a
-    # height-1 MR_LWAL-DUL building is PGA-indexed, a height-3 one is
+    # height-1 MUR-STRUB_LWAL-DNO building is PGA-indexed, a height-3 one is
     # SA(0.3s)-indexed -- feed deliberately different values under each key
     # and confirm each building reads back *its own curve's* value, not
     # whichever array happened to be passed first/only.
-    taxonomy_classes = np.array(["MR_LWAL-DUL", "MR_LWAL-DUL"])
+    taxonomy_classes = np.array(["MUR-STRUB_LWAL-DNO", "MUR-STRUB_LWAL-DNO"])
     height_classes = np.array([1, 3])  # PGA-indexed, SA(0.3s)-indexed respectively
-    pga_curve_im_type = fragility_table.get("MR_LWAL-DUL", 1).im_type
-    sa03_curve_im_type = fragility_table.get("MR_LWAL-DUL", 3).im_type
+    pga_curve_im_type = fragility_table.get("MUR-STRUB_LWAL-DNO", 1).im_type
+    sa03_curve_im_type = fragility_table.get("MUR-STRUB_LWAL-DNO", 3).im_type
     assert pga_curve_im_type != sa03_curve_im_type  # otherwise this test proves nothing
 
     im_values_by_type = {

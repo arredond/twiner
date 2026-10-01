@@ -1,6 +1,9 @@
 # ADR-0012: Per-building IM-type dispatch, and a vernacular-masonry taxonomy class
 
-Status: accepted, implemented end-to-end (pipelines + scenario service)
+Status: accepted, implemented end-to-end (pipelines + scenario service).
+Amended by [ADR-0032](0032-taxonomy-v2-unreinforced-masonry.md): the
+1940 rule only reached parts crawled after this ADR until 2026-10-01, and
+the "generic masonry" class `MR_LWAL-DUL` is GEM's *reinforced* masonry.
 
 ## Context
 

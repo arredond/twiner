@@ -3,7 +3,7 @@
 **This is the least-validated part of the MVP.** No field survey backs it
 (per the project's no-fieldwork constraint) -- it's a documented, versioned
 guess, not an observation, and every building carries that provenance
-(`taxonomy_source = "heuristic_v1"`) rather than silently looking as
+(`taxonomy_source`, TAXONOMY_SOURCE below) rather than silently looking as
 authoritative as a surveyed value would.
 
 The heuristic: Spain's shift from unreinforced/confined masonry to
@@ -25,9 +25,9 @@ results materially in turn.
 
 Output classes match exactly what pipelines/fragility vendors from Martins
 & Silva (2020): `CR_LDUAL-DUL` (reinforced concrete, dual lateral system,
-low ductility) for newer construction; `MR_LWAL-DUL` (masonry, load-bearing
-wall, low ductility) for masonry-era construction with no further
-information; `MUR-STRUB_LWAL-DNO` (unreinforced rubble-stone masonry, no
+low ductility) for newer construction; `MUR_LWAL-DNO` (unreinforced
+masonry, load-bearing wall, non-ductile, unit material unspecified) for
+masonry-era construction with no further information; `MUR-STRUB_LWAL-DNO` (unreinforced rubble-stone masonry, no
 ductility) for construction old enough to plausibly predate even confined/
 reinforced masonry practice. "Low ductility"/"no ductility" are
 conservative defaults throughout, since Catastro gives us no seismic design
@@ -41,8 +41,8 @@ import math
 CONCRETE_ERA_THRESHOLD_YEAR = 1970
 
 # Below this year, default to the more vulnerable vernacular-masonry class
-# (MUR-STRUB_LWAL-DNO) rather than the generic one (MR_LWAL-DUL) --
-# docs/validation-lorca-2011.md §10.1 found MR_LWAL-DUL alone understated
+# (MUR-STRUB_LWAL-DNO) rather than the generic one (MUR_LWAL-DNO) --
+# docs/validation-lorca-2011.md §10.1 found a generic masonry class alone understated
 # damage for Lorca's old town, most of which predates this era. A judgment
 # call, not derived from a documented code-generation date the way
 # CONCRETE_ERA_THRESHOLD_YEAR loosely tracks modern seismic codes -- see
@@ -52,13 +52,21 @@ VERNACULAR_MASONRY_THRESHOLD_YEAR = 1940
 
 # Matches the height classes actually vendored in pipelines/fragility
 # (Martins & Silva publish H1..H12 at 1-storey granularity for CR_LDUAL-DUL/
-# MR_LWAL-DUL; MUR-STRUB_LWAL-DNO only goes to H5 upstream -- any building
+# MUR_LWAL-DNO and MUR-STRUB_LWAL-DNO only go to H5 upstream -- any building
 # taller than that falls back to H5, same "nearest available height"
 # handling every taxonomy class already gets, services/scenario's
 # fragility_lookup.py).
 _MAX_HEIGHT_CLASS = 12
 
-TAXONOMY_SOURCE = "heuristic_v1"
+# Bump whenever `assign_taxonomy`'s rules change, so already-crawled parts
+# carrying an older rule set are detectable (retaxonomy_cli re-derives them).
+# v1: concrete >= 1970, masonry otherwise. v2 (ADR-0032): + vernacular
+# rubble-stone masonry before 1940 or with an unknown year (ADR-0012), and
+# 1940-1969 masonry is GEM's *unreinforced* MUR_LWAL-DNO, not MR_LWAL-DUL
+# (`MR` is GEM's *reinforced* masonry, which v1 used by mistake). ADR-0012
+# shipped without bumping this, so parts crawled before it kept v1's
+# classes under the v1 label: most of Spain until 2026-10-01.
+TAXONOMY_SOURCE = "heuristic_v2"
 
 
 def assign_taxonomy(construction_year: float | None, floors: float | None) -> tuple[str, int]:
@@ -90,7 +98,7 @@ def assign_taxonomy(construction_year: float | None, floors: float | None) -> tu
         and not _is_nan(construction_year)
         and construction_year >= VERNACULAR_MASONRY_THRESHOLD_YEAR
     ):
-        material = "MR_LWAL-DUL"
+        material = "MUR_LWAL-DNO"
     else:
         material = "MUR-STRUB_LWAL-DNO"
 

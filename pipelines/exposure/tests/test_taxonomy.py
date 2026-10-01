@@ -9,9 +9,9 @@ def test_modern_low_rise_is_concrete():
     assert height == 3
 
 
-def test_masonry_era_building_is_generic_masonry():
+def test_masonry_era_building_is_generic_unreinforced_masonry():
     cls, height = assign_taxonomy(1955, 2)
-    assert cls == "MR_LWAL-DUL"
+    assert cls == "MUR_LWAL-DNO"
     assert height == 2
 
 
@@ -28,7 +28,7 @@ def test_concrete_threshold_year_counts_as_concrete():
 
 def test_vernacular_masonry_threshold_year_counts_as_generic_masonry():
     cls, _ = assign_taxonomy(1940, 1)
-    assert cls == "MR_LWAL-DUL"
+    assert cls == "MUR_LWAL-DNO"
 
 
 def test_unknown_year_defaults_to_vernacular_masonry():

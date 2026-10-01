@@ -122,8 +122,8 @@ damage, so TWIN-ER computes all of the ones it needs:
 
 | Intensity measure | Used for |
 |---|---|
-| Peak ground acceleration (PGA) | 1-storey buildings |
-| Spectral acceleration SA(0.3 s) | 2–3-storey buildings (2–4 for concrete) |
+| Peak ground acceleration (PGA) | 1-storey concrete and rubble-stone buildings |
+| Spectral acceleration SA(0.3 s) | 1–3-storey masonry (2–3 for rubble stone), 2–4-storey concrete |
 | SA(0.6 s) | 4–5-storey masonry, 5–7-storey concrete |
 | SA(1.0 s) | 8–12-storey concrete |
 | Peak ground velocity (PGV) | Macroseismic intensity (step 7) |
@@ -222,7 +222,7 @@ building taxonomy [10]:
 | Construction year | Class | Description |
 |---|---|---|
 | 1970 or later | `CR_LDUAL-DUL` | Reinforced concrete, dual frame–wall system, low ductility |
-| 1940–1969 | `MR_LWAL-DUL` | Masonry, load-bearing walls, low ductility |
+| 1940–1969 | `MUR_LWAL-DNO` | Unreinforced masonry, load-bearing walls, non-ductile |
 | Before 1940, or unknown | `MUR-STRUB_LWAL-DNO` | Unreinforced rubble-stone masonry, load-bearing walls, non-ductile |
 
 - **1970** roughly marks the generalisation of reinforced-concrete frames
@@ -235,7 +235,7 @@ The **height class** is the number of floors, from 1 to 12. The masonry
 classes only have fragility functions up to 5 storeys, so taller masonry
 buildings use the 5-storey function.
 
-The assignment is versioned (`heuristic_v1`) and stated with every
+The assignment is versioned (`heuristic_v2`) and stated with every
 building, because it is an informed guess, not an observation. Catastro
 doesn't record structural system, ductility or retrofitting. MERISUR, by
 contrast, classified Lorca's buildings from field surveys and remote
@@ -351,17 +351,29 @@ Re-running it in manual mode on the national data shows:
   few percent of it.
 - **Intensity.** The estimate for the town is VI at median and between VI
   and VII at +1σ. IGN observed VII.
-- **Damage.** It is under-predicted. At "high" probability almost all of
-  Lorca's buildings come out undamaged. At "low" and "very low", thousands
-  show Slight damage, and at "very low" some also show Moderate damage. In
-  2011, a few thousand buildings had moderate or worse damage.
+- **Damage.** In 2011, 2,346 of the inspected buildings had moderate or
+  worse damage (EMS-98 grade 3 or more). Of Lorca's 27,884 buildings,
+  TWIN-ER gives:
 
-The most likely cause of the remaining gap is the fragility model. Martins &
-Silva's functions are analytical and global. Curves calibrated empirically
-on Mediterranean masonry damage, such as Risk-UE's, predict more damage at
-the same shaking. Site amplification is less likely to be the cause:
-ESRM20's $V_{S30}$ in Lorca matches local surveys. Calibrating against
-Lorca's observed damage is the next step.
+  | Level | Slight | Moderate | Extensive | Complete |
+  |---|---|---|---|---|
+  | High | 565 | 0 | 0 | 0 |
+  | Low | 10,554 | 0 | 0 | 0 |
+  | Very low | 8,641 | 4,745 | 1,075 | 0 |
+
+  So "low" probability under-predicts moderate damage and "very low"
+  over-predicts it (about 5,800 buildings at Moderate or worse). The two
+  levels bracket what was observed.
+
+The comparison is indicative, not a calibration. The inspections targeted
+buildings reported as damaged rather than the whole stock, and EMS-98
+damage grades don't map exactly onto the fragility model's damage states.
+Site amplification is unlikely to be a major source of error: ESRM20's
+$V_{S30}$ in Lorca matches local surveys. The fragility model is the larger
+uncertainty. Martins & Silva's functions are analytical and global, and
+curves calibrated empirically on Mediterranean masonry damage, such as
+Risk-UE's, differ from them. Calibrating against Lorca's building-by-building
+damage records is the next step.
 
 ## Limitations
 

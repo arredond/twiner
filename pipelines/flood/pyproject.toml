@@ -2,6 +2,7 @@
 name = "twiner-flood"
 version = "0.1.0"
 description = "twiner pipeline: MITECO SNCZI flood zones -> flood_zones.pmtiles + per-building flood exposure"
+license = "AGPL-3.0-or-later"
 requires-python = ">=3.12"
 dependencies = [
     "geopandas>=1.0",

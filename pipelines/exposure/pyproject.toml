@@ -2,6 +2,7 @@
 name = "twiner-exposure"
 version = "0.1.0"
 description = "twiner pipeline: Catastro buildings -> exposure.parquet + PMTiles"
+license = "AGPL-3.0-or-later"
 requires-python = ">=3.12"
 dependencies = [
     "requests>=2.32",

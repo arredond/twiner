@@ -131,8 +131,8 @@ mejor predice su daño, así que TWIN-ER calcula todas las que necesita:
 
 | Medida de intensidad | Se usa para |
 |---|---|
-| Aceleración máxima del suelo (PGA) | Edificios de 1 planta |
-| Aceleración espectral SA(0,3 s) | Edificios de 2–3 plantas (2–4 en hormigón) |
+| Aceleración máxima del suelo (PGA) | Edificios de 1 planta de hormigón y de mampuesto |
+| Aceleración espectral SA(0,3 s) | Mampostería de 1–3 plantas (2–3 en mampuesto), hormigón de 2–4 |
 | SA(0,6 s) | Mampostería de 4–5 plantas, hormigón de 5–7 |
 | SA(1,0 s) | Hormigón de 8–12 plantas |
 | Velocidad máxima del suelo (PGV) | Intensidad macrosísmica (paso 7) |
@@ -236,7 +236,7 @@ las clases siguen la taxonomía de edificios de GEM [10]:
 | Año de construcción | Clase | Descripción |
 |---|---|---|
 | 1970 o posterior | `CR_LDUAL-DUL` | Hormigón armado, sistema dual pórtico-muro, ductilidad baja |
-| 1940–1969 | `MR_LWAL-DUL` | Mampostería, muros de carga, ductilidad baja |
+| 1940–1969 | `MUR_LWAL-DNO` | Mampostería sin armar, muros de carga, no dúctil |
 | Antes de 1940, o desconocido | `MUR-STRUB_LWAL-DNO` | Mampostería de piedra sin armar (mampuesto), muros de carga, no dúctil |
 
 - **1970** marca aproximadamente la generalización de las estructuras de
@@ -250,7 +250,7 @@ La **clase de altura** es el número de plantas, de 1 a 12. Las clases de
 mampostería solo tienen funciones de fragilidad hasta 5 plantas, así que
 los edificios de mampostería más altos usan la de 5.
 
-La asignación está versionada (`heuristic_v1`) y se indica en cada
+La asignación está versionada (`heuristic_v2`) y se indica en cada
 edificio, porque es una estimación informada, no una observación. El
 Catastro no registra el sistema estructural, la ductilidad ni los
 refuerzos. MERISUR, en cambio, clasificó los edificios de Lorca mediante
@@ -373,18 +373,30 @@ Al reproducirlo en modo manual con los datos nacionales:
   "muy baja") queda a pocos puntos porcentuales.
 - **Intensidad.** La estimación para la ciudad es VI con la mediana y entre
   VI y VII con +1σ. El IGN observó VII.
-- **Daño.** Se subestima. Con probabilidad "alta", casi todos los edificios
-  de Lorca salen sin daño. Con "baja" y "muy baja", miles muestran daño
-  Leve, y con "muy baja" algunos también Moderado. En 2011, unos pocos
-  miles de edificios tuvieron daño moderado o superior.
+- **Daño.** En 2011, 2.346 de los edificios inspeccionados tuvieron daño
+  moderado o superior (grado 3 o más de la EMS-98). De los 27.884 edificios
+  de Lorca, TWIN-ER da:
 
-La causa más probable de la diferencia restante es el modelo de
-fragilidad. Las funciones de Martins y Silva son analíticas y globales.
-Las curvas calibradas empíricamente con daños en mampostería mediterránea,
-como las de Risk-UE, predicen más daño con el mismo movimiento. Es menos
-probable que la causa sea la amplificación local: la $V_{S30}$ del ESRM20
-en Lorca coincide con los estudios locales. El siguiente paso es calibrar
-con los daños observados en Lorca.
+  | Nivel | Leve | Moderado | Extenso | Completo |
+  |---|---|---|---|---|
+  | Alta | 565 | 0 | 0 | 0 |
+  | Baja | 10.554 | 0 | 0 | 0 |
+  | Muy baja | 8.641 | 4.745 | 1.075 | 0 |
+
+  Así, la probabilidad "baja" subestima el daño moderado y la "muy baja" lo
+  sobrestima (unos 5.800 edificios con daño Moderado o superior). Los dos
+  niveles acotan lo observado.
+
+La comparación es orientativa, no una calibración. Las inspecciones se
+centraron en los edificios notificados como dañados, no en todo el parque,
+y los grados de daño de la EMS-98 no se corresponden exactamente con los
+grados del modelo de fragilidad. Es poco probable que la amplificación
+local sea una fuente de error importante: la $V_{S30}$ del ESRM20 en Lorca
+coincide con los estudios locales. La mayor incertidumbre está en el
+modelo de fragilidad. Las funciones de Martins y Silva son analíticas y
+globales, y difieren de las curvas calibradas empíricamente con daños en
+mampostería mediterránea, como las de Risk-UE. El siguiente paso es
+calibrar con los registros de daño de Lorca, edificio a edificio.
 
 ## Limitaciones
 

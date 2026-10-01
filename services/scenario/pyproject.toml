@@ -2,6 +2,7 @@
 name = "twiner-scenario"
 version = "0.1.0"
 description = "twiner scenario function: rupture -> GMPE -> damage, runnable as a Lambda or locally"
+license = "AGPL-3.0-or-later"
 requires-python = ">=3.12"
 dependencies = [
     "duckdb>=1.5", # to_arrow_reader (engine._site_batches)

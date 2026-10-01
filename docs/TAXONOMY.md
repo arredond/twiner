@@ -15,15 +15,27 @@ Catastro attributes — `construction_year` and `floors` — to a
 `(taxonomy_class, height_class)` pair, with **no field survey involved**:
 per the project's no-fieldwork constraint, this is a documented, versioned
 *guess*, not an observation. Every building carries that provenance
-(`taxonomy_source = "heuristic_v1"`) rather than silently looking as
+(`taxonomy_source = "heuristic_v2"`) rather than silently looking as
 authoritative as a surveyed value would.
+
+> **2026-10-01 corrections ([ADR-0032](./decisions/0032-taxonomy-v2-unreinforced-masonry.md)).**
+> (1) The 1940–1969 class used to be `MR_LWAL-DUL`, described here as
+> "generic unreinforced masonry". In the GEM taxonomy `MR` is
+> **reinforced** masonry (`MUR` is unreinforced), so the curves didn't
+> match the intent. That is why §10.1 of the Lorca validation found it the
+> least vulnerable masonry class. It is now `MUR_LWAL-DNO`. (2) ADR-0012's
+> 1940 rule never reached the parts crawled before it (resumable crawl, and
+> the `heuristic_v1` label wasn't bumped), i.e. most of Spain. Both are
+> fixed in `heuristic_v2`, applied to every part by
+> `exposure.retaxonomy_cli`. Sections below that compare against
+> `MR_LWAL-DUL` describe the situation before this fix.
 
 **Material class**, by construction year:
 
 | `construction_year` | `taxonomy_class` | Meaning |
 |---|---|---|
 | ≥ 1970 | `CR_LDUAL-DUL` | Reinforced concrete, dual lateral system, low ductility |
-| 1940–1969 | `MR_LWAL-DUL` | Generic unreinforced masonry, load-bearing wall, low ductility |
+| 1940–1969 | `MUR_LWAL-DNO` | Generic unreinforced masonry (unit material unspecified), load-bearing wall, non-ductile |
 | < 1940, or unknown | `MUR-STRUB_LWAL-DNO` | Unreinforced rubble-stone masonry, no ductility |
 
 - **1970** loosely tracks Spain's shift toward modern seismic-resistant
@@ -43,11 +55,11 @@ authoritative as a surveyed value would.
   the mildest available class.
 
 **Height class**: `floors` rounded to the nearest integer, clamped to
-`[1, 12]`; unknown/zero/negative `floors` defaults to 1. `CR_LDUAL-DUL` and
-`MR_LWAL-DUL` are conceptually 1–12 stories; `MUR-STRUB_LWAL-DNO` only goes
-up to 5 in the vendored data (rubble-stone construction taller than ~5
-stories isn't a real category upstream) — a building assigned that class
-past height 5 falls back to the nearest height actually vendored (5), the
+`[1, 12]`; unknown/zero/negative `floors` defaults to 1. `CR_LDUAL-DUL` is
+vendored for 1–12 stories; both masonry classes (`MUR_LWAL-DNO`,
+`MUR-STRUB_LWAL-DNO`) only go up to 5 upstream (unreinforced masonry
+taller than ~5 stories isn't a real category) — a building assigned one of
+them past height 5 falls back to the nearest height actually vendored (5), the
 same "nearest available height" handling every class already gets
 (`services/scenario/src/scenario/fragility_lookup.py`).
 
@@ -132,8 +144,10 @@ Roughly in order of expected impact per unit of effort:
 2. **Vendor more of Martins & Silva's masonry sub-classes.** The same
    repository `pipelines/fragility` already draws from publishes at least
    `MUR-ADO_LWAL-DNO` (adobe), `MUR-STDRE_LWAL-DNO` (dressed stone, no
-   ductility), `MUR-CB99_LWAL-DNO` / `MUR-CL99_LWAL-DNO` (confined block/
-   confined masonry, pre-1999 Spanish code) alongside the
+   ductility), `MUR-CB99_LWAL-DNO` / `MUR-CL99_LWAL-DNO` (unreinforced
+   concrete-block / fired-clay-unit masonry; in GEM's taxonomy `99` means
+   "unit type unknown", not a code year — an earlier version of this note
+   misread it as "pre-1999 Spanish code") alongside the
    `MUR-STRUB_LWAL-DNO` this ADR added — comparable vulnerability, in some
    cases 3–4x `MR_LWAL-DUL`'s `P(≥Slight)` at the same shaking
    (`validation-lorca-2011.md` §10.1's table). The blocker isn't

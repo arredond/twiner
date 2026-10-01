@@ -629,3 +629,52 @@ together, since both use `mmi_from_pgv` in
 (`AFFECTED_INTENSITY`), so the counts of affected infrastructure change
 with it. Building damage doesn't depend on any of this, and neither does
 facility damage (the building's own result).
+
+## 13. Re-run after ADR-0032's taxonomy corrections (2026-10-01)
+
+Two problems in the exposure data were found and fixed on 2026-10-01
+([ADR-0032](decisions/0032-taxonomy-v2-unreinforced-masonry.md)):
+
+- §10.6's numbers were computed with ADR-0012's taxonomy, but the national
+  `exposure.parquet` built later reused parts crawled *before* ADR-0012. So
+  the deployed data had no rubble-stone masonry in Lorca at all: 0, against
+  §10.6's 5,870.
+- The 1940–1969 "generic masonry" class `MR_LWAL-DUL` is GEM's
+  *reinforced* masonry. That is why §10.1 found it the least vulnerable
+  masonry class. It is now `MUR_LWAL-DNO` (generic unreinforced).
+
+Lorca's 27,884 buildings now split into 15,634 concrete, 6,380 generic
+unreinforced masonry and 5,870 rubble-stone masonry. All runs below are
+local, on the national dataset.
+
+**Manual Mw 5.2, (37.699, -1.672), rake 44 (§2's scenario):**
+
+| Level | None | Slight | Moderate | Extensive | Complete | Buildings evaluated |
+|---|---|---|---|---|---|---|
+| High | 27,319 | 565 | 0 | 0 | 0 | 86,705 |
+| Low | 17,330 | 10,554 | 0 | 0 | 0 | 347,298 |
+| Very low | 13,423 | 8,641 | 4,745 | 1,075 | 0 | 347,298 |
+
+Before the fix, the same runs gave 0 damaged at "high", 8,884 Slight at
+"low", and 10,996 Slight + 2,344 Moderate at "very low".
+
+**Automatic, fault ES626 "Alhama de Murcia (1/4)", Mw 6.7, Lorca only:**
+
+| Level | None | Slight | Moderate | Extensive | Complete |
+|---|---|---|---|---|---|
+| High | 14,131 | 13,753 | 0 | 0 | 0 |
+| Low | 7,756 | 15,846 | 154 | 0 | 4,128 |
+| Very low | 3,848 | 6,380 | 5,119 | 3,686 | 8,851 |
+
+**Reading.** In 2011, 2,346 inspected buildings were EMS-98 grade 3 or
+worse. "Low" (0 Moderate+) and "very low" (5,820 Moderate+) now bracket
+that, where before both fell short. §1's caveat still applies: the
+inspection targeted reported-damaged buildings, so these aren't
+like-for-like counts.
+
+Against MERISUR's live tool on ES626 at "high" (§11: mostly Moderate, some
+Extensive and Complete), twiner still gives only None/Slight. The modal
+state jumps straight from Slight to Complete for many rubble-stone
+buildings at "low". That is the modal-state selection reading a wide
+distribution, not a bug: Extensive is rarely the single most likely state
+for those curves.

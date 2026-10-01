@@ -143,10 +143,15 @@ def test_municipality_stats_stay_consistent_with_shipped_buildings_at_national_s
     ]
     assert affected_codes, "expected at least one municipality with real damage for this fault"
 
+    # One grouped pass, not one full-table scan per municipality: with the
+    # unreinforced-masonry classes (ADR-0032) this fault affects enough
+    # municipalities that the per-municipality loop took over 10 minutes.
+    affected = result[result["damage_state"] != "None"]
+    per_muni = (
+        affected.assign(shipped=affected["building_id"].isin(shipped_ids))
+        .groupby("municipality_code")["shipped"]
+        .agg(["size", "sum"])
+    )
     for code in affected_codes:
-        muni_rows = result[result["municipality_code"] == code]
-        n_affected = (muni_rows["damage_state"] != "None").sum()
-        n_affected_and_shipped = (
-            (muni_rows["damage_state"] != "None") & muni_rows["building_id"].isin(shipped_ids)
-        ).sum()
+        n_affected, n_affected_and_shipped = per_muni.loc[code, "size"], per_muni.loc[code, "sum"]
         assert n_affected_and_shipped == n_affected, f"mismatch for municipality {code}"

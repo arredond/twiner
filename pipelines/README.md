@@ -231,9 +231,11 @@ The scenario service reads `$TWINER_FLOOD_DIR` (default `data/flood`).
 
 Downloads a curated subset of the [global fragility/vulnerability function
 repository](https://github.com/lmartins88/global_fragility_vulnerability)
-(CC BY-SA 4.0) -- the two GEM-taxonomy classes our exposure taxonomy
-heuristic can produce (`CR_LDUAL-DUL`, `MR_LWAL-DUL`), across height
-classes H1-H12. See [`merisur.md`](../docs/merisur.md) §4.5/§4.9 and
+(no licence file; its README allows free download and requires citing
+Martins & Silva) -- the three GEM-taxonomy classes our exposure taxonomy
+heuristic can produce (`CR_LDUAL-DUL` H1-H12; `MUR_LWAL-DNO` and
+`MUR-STRUB_LWAL-DNO` H1-H5, all upstream publishes for them). See
+[ADR-0032](../docs/decisions/0032-taxonomy-v2-unreinforced-masonry.md). See [`merisur.md`](../docs/merisur.md) §4.5/§4.9 and
 [`milestone-1-plan.md`](../docs/milestone-1-plan.md) §2 for why generic
 global fragility functions stand in for MERISUR's own Lorca-specific
 capacity curves (not public), and
