@@ -3,7 +3,7 @@
   "info": {
     "title": "TWIN-ER API",
     "description": "The HTTP API behind the TWIN-ER web app: run earthquake and flood scenarios,\nthen read their results by area, as map tiles, or as GeoJSON.\n\n## How it fits together\n\n1. **Run a scenario.** `GET /scenarios/fault` (a fault's maximum-magnitude\n   earthquake), `POST /scenarios/manual` (an earthquake you define) or\n   `POST /scenarios/flood`. The response has a `scenario_id` and one row of\n   figures per affected municipality.\n2. **Read the details** with that id: per-census-section figures, affected\n   critical infrastructure, intensity bands (`/results/{scenario_id}/...`),\n   and building/debris vector tiles (`/tiles/{scenario_id}/...`).\n\nScenario ids are content-addressed: the same inputs on the same data and\ncode version give the same id, so results can be cached and shared.\n\n## Deployments\n\n- **Local** (`bin/twiner start`): every route below, on one server.\n- **Cloud** (AWS Lambda function URLs): the scenario function serves every\n  route except `/tiles/...`, which a separate tiles function serves, and the\n  two local-only routes `/results/{scenario_id}/status` and\n  `/results/{scenario_id}/municipality_stats`.\n\nThere is no authentication, versioning guarantee or rate limit yet: this\nreference describes the API the web app uses, not a stable public contract.\n\n## Errors\n\nThe local server answers errors as `{\"detail\": \"...\"}`; the Lambda as\n`{\"error\": \"...\"}`.\n\nSee the [twinQUAKE](/docs/hazards/earthquake/) and\n[twinFLOOD](/docs/hazards/flood/) pages for what the numbers mean.\n",
-    "version": "6"
+    "version": "7"
   },
   "servers": [
     {
@@ -136,6 +136,28 @@
         }
       }
     },
+    "/methods": {
+      "get": {
+        "tags": [
+          "Earthquake"
+        ],
+        "summary": "List the damage models and vulnerability databases",
+        "description": "Every damage model and vulnerability database a scenario can use, what each needs and provides, and the valid combinations (`damage_model` + `vulnerability_db` on the scenario routes).",
+        "operationId": "list_methods",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MethodsResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/faults": {
       "get": {
         "tags": [
@@ -233,6 +255,28 @@
                 }
               ]
             }
+          },
+          {
+            "name": "damage_model",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "How damage is calculated: `fragility` (fragility functions on an intensity measure) or `capacity_spectrum` (RISK-UE Level II). See GET /methods.",
+              "default": "fragility"
+            },
+            "description": "How damage is calculated: `fragility` (fragility functions on an intensity measure) or `capacity_spectrum` (RISK-UE Level II). See GET /methods."
+          },
+          {
+            "name": "vulnerability_db",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "Where each building class's vulnerability data comes from: `gem` (Martins & Silva 2021) or `risk_ue` (RISK-UE 2003, capacity curves only). See GET /methods.",
+              "default": "gem"
+            },
+            "description": "Where each building class's vulnerability data comes from: `gem` (Martins & Silva 2021) or `risk_ue` (RISK-UE 2003, capacity curves only). See GET /methods."
           }
         ],
         "responses": {
@@ -1131,6 +1175,76 @@
         "title": "DamageCounts",
         "description": "Buildings per damage state (the state reported at the chosen probability level)."
       },
+      "DamageMethodParams": {
+        "properties": {
+          "damage_model": {
+            "type": "string",
+            "examples": [
+              "fragility",
+              "capacity_spectrum"
+            ]
+          },
+          "vulnerability_db": {
+            "type": "string",
+            "examples": [
+              "gem",
+              "risk_ue"
+            ]
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "damage_model",
+          "vulnerability_db"
+        ],
+        "title": "DamageMethodParams",
+        "description": "The damage model and vulnerability database a scenario ran with."
+      },
+      "DamageModelInfo": {
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "needs": {
+            "type": "string",
+            "description": "The kind of vulnerability data it needs."
+          },
+          "hazard_inputs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "exposure_inputs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "output": {
+            "type": "string"
+          },
+          "reference": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "needs",
+          "hazard_inputs",
+          "exposure_inputs",
+          "output",
+          "reference"
+        ],
+        "title": "DamageModelInfo"
+      },
       "EarthquakeScenarioResponse": {
         "properties": {
           "scenario_id": {
@@ -1139,6 +1253,9 @@
           },
           "rupture": {
             "$ref": "#/components/schemas/Rupture"
+          },
+          "damage_method": {
+            "$ref": "#/components/schemas/DamageMethodParams"
           },
           "evaluated_region": {
             "$ref": "#/components/schemas/EvaluatedRegion"
@@ -1188,6 +1305,7 @@
         "required": [
           "scenario_id",
           "rupture",
+          "damage_method",
           "evaluated_region",
           "n_evaluated",
           "n_damaged",
@@ -2045,6 +2163,16 @@
             ],
             "description": "`high`: median ground motion, most likely damage state. `low`: median + 1σ ground motion. `very_low`: median + 1σ and the 85th-percentile damage state.",
             "default": "high"
+          },
+          "damage_model": {
+            "type": "string",
+            "description": "How damage is calculated: `fragility` (fragility functions on an intensity measure) or `capacity_spectrum` (RISK-UE Level II). See GET /methods.",
+            "default": "fragility"
+          },
+          "vulnerability_db": {
+            "type": "string",
+            "description": "Where each building class's vulnerability data comes from: `gem` (Martins & Silva 2021) or `risk_ue` (RISK-UE 2003, capacity curves only). See GET /methods.",
+            "default": "gem"
           }
         },
         "type": "object",
@@ -2063,6 +2191,41 @@
             "rake": 44
           }
         ]
+      },
+      "MethodsResponse": {
+        "properties": {
+          "default": {
+            "$ref": "#/components/schemas/DamageMethodParams"
+          },
+          "damage_models": {
+            "items": {
+              "$ref": "#/components/schemas/DamageModelInfo"
+            },
+            "type": "array"
+          },
+          "vulnerability_databases": {
+            "items": {
+              "$ref": "#/components/schemas/VulnerabilityDatabaseInfo"
+            },
+            "type": "array"
+          },
+          "compatible": {
+            "items": {
+              "$ref": "#/components/schemas/DamageMethodParams"
+            },
+            "type": "array",
+            "description": "The valid combinations: a database must provide the data the model needs."
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "default",
+          "damage_models",
+          "vulnerability_databases",
+          "compatible"
+        ],
+        "title": "MethodsResponse"
       },
       "Rupture": {
         "properties": {
@@ -2599,6 +2762,54 @@
           "type"
         ],
         "title": "ValidationError"
+      },
+      "VulnerabilityDatabaseInfo": {
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "provides": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "description": "The kinds of vulnerability data it provides."
+          },
+          "classes": {
+            "type": "string",
+            "description": "How a building gets one of the database's classes."
+          },
+          "derivation": {
+            "type": "string",
+            "description": "How the database's vulnerability data was derived."
+          },
+          "damage_criteria": {
+            "type": "string",
+            "description": "With the capacity-spectrum model: how damage-state thresholds are set on each capacity curve."
+          },
+          "source": {
+            "type": "string"
+          },
+          "licence": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "provides",
+          "classes",
+          "derivation",
+          "damage_criteria",
+          "source",
+          "licence"
+        ],
+        "title": "VulnerabilityDatabaseInfo"
       },
       "Warmup": {
         "properties": {

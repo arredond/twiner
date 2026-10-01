@@ -79,6 +79,7 @@ export default defineConfig({
 					label: 'Reference',
 					translations: { es: 'Referencia' },
 					items: [
+						{ slug: 'damage-models' },
 						{ slug: 'impact-estimates' },
 						{ slug: 'data-sources' },
 						{ slug: 'license' },

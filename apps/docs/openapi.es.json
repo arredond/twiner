@@ -3,7 +3,7 @@
   "info": {
     "title": "TWIN-ER API",
     "description": "La API HTTP de la aplicación web de TWIN-ER: simula escenarios sísmicos y\nde inundación y consulta sus resultados por zona, como teselas de mapa o en\nGeoJSON.\n\n## Cómo encaja todo\n\n1. **Simula un escenario.** `GET /scenarios/fault` (el terremoto de magnitud\n   máxima de una falla), `POST /scenarios/manual` (un terremoto definido por\n   ti) o `POST /scenarios/flood`. La respuesta incluye un `scenario_id` y una\n   fila de cifras por municipio afectado.\n2. **Consulta los detalles** con ese identificador: cifras por sección\n   censal, infraestructuras críticas afectadas, bandas de intensidad\n   (`/results/{scenario_id}/...`) y teselas vectoriales de edificios y\n   escombros (`/tiles/{scenario_id}/...`).\n\nLos identificadores de escenario se derivan de su contenido: las mismas\nentradas, con la misma versión de datos y de código, dan el mismo\nidentificador, así que los resultados pueden cachearse y compartirse.\n\n## Despliegues\n\n- **Local** (`bin/twiner start`): todas las rutas, en un solo servidor.\n- **Nube** (URL de funciones AWS Lambda): la función de escenarios sirve\n  todas las rutas salvo `/tiles/...`, que sirve una función de teselas\n  aparte, y las dos rutas solo locales `/results/{scenario_id}/status` y\n  `/results/{scenario_id}/municipality_stats`.\n\nTodavía no hay autenticación, garantía de versiones ni límite de\npeticiones: esta referencia describe la API que usa la aplicación web, no un\ncontrato público estable.\n\n## Errores\n\nEl servidor local responde a los errores con `{\"detail\": \"...\"}`; la\nLambda, con `{\"error\": \"...\"}`.\n\nConsulta las páginas de [twinQUAKE](/docs/es/hazards/earthquake/) y\n[twinFLOOD](/docs/es/hazards/flood/) para saber qué significan las cifras.\n",
-    "version": "6"
+    "version": "7"
   },
   "servers": [
     {
@@ -136,6 +136,28 @@
         }
       }
     },
+    "/methods": {
+      "get": {
+        "tags": [
+          "Earthquake"
+        ],
+        "summary": "Listar los modelos de daño y las bases de datos de vulnerabilidad",
+        "description": "Todos los modelos de daño y bases de datos de vulnerabilidad que puede usar un escenario, qué necesita y aporta cada uno, y las combinaciones válidas (`damage_model` + `vulnerability_db` en las rutas de escenarios).",
+        "operationId": "list_methods",
+        "responses": {
+          "200": {
+            "description": "Respuesta correcta",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MethodsResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/faults": {
       "get": {
         "tags": [
@@ -233,6 +255,28 @@
                 }
               ]
             }
+          },
+          {
+            "name": "damage_model",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "Cómo se calcula el daño: `fragility` (funciones de fragilidad sobre una medida de intensidad) o `capacity_spectrum` (nivel II de RISK-UE). Ver GET /methods.",
+              "default": "fragility"
+            },
+            "description": "Cómo se calcula el daño: `fragility` (funciones de fragilidad sobre una medida de intensidad) o `capacity_spectrum` (nivel II de RISK-UE). Ver GET /methods."
+          },
+          {
+            "name": "vulnerability_db",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "De dónde proceden los datos de vulnerabilidad de cada clase de edificio: `gem` (Martins y Silva 2021) o `risk_ue` (RISK-UE 2003, solo curvas de capacidad). Ver GET /methods.",
+              "default": "gem"
+            },
+            "description": "De dónde proceden los datos de vulnerabilidad de cada clase de edificio: `gem` (Martins y Silva 2021) o `risk_ue` (RISK-UE 2003, solo curvas de capacidad). Ver GET /methods."
           }
         ],
         "responses": {
@@ -1131,6 +1175,76 @@
         "title": "DamageCounts",
         "description": "Edificios por grado de daño (el grado presentado con el nivel de probabilidad elegido)."
       },
+      "DamageMethodParams": {
+        "properties": {
+          "damage_model": {
+            "type": "string",
+            "examples": [
+              "fragility",
+              "capacity_spectrum"
+            ]
+          },
+          "vulnerability_db": {
+            "type": "string",
+            "examples": [
+              "gem",
+              "risk_ue"
+            ]
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "damage_model",
+          "vulnerability_db"
+        ],
+        "title": "DamageMethodParams",
+        "description": "El modelo de daño y la base de datos de vulnerabilidad con los que se simuló un escenario."
+      },
+      "DamageModelInfo": {
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "needs": {
+            "type": "string",
+            "description": "El tipo de datos de vulnerabilidad que necesita."
+          },
+          "hazard_inputs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "exposure_inputs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "output": {
+            "type": "string"
+          },
+          "reference": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "needs",
+          "hazard_inputs",
+          "exposure_inputs",
+          "output",
+          "reference"
+        ],
+        "title": "DamageModelInfo"
+      },
       "EarthquakeScenarioResponse": {
         "properties": {
           "scenario_id": {
@@ -1139,6 +1253,9 @@
           },
           "rupture": {
             "$ref": "#/components/schemas/Rupture"
+          },
+          "damage_method": {
+            "$ref": "#/components/schemas/DamageMethodParams"
           },
           "evaluated_region": {
             "$ref": "#/components/schemas/EvaluatedRegion"
@@ -1188,6 +1305,7 @@
         "required": [
           "scenario_id",
           "rupture",
+          "damage_method",
           "evaluated_region",
           "n_evaluated",
           "n_damaged",
@@ -2045,6 +2163,16 @@
             ],
             "description": "`high` (alta): movimiento mediano, grado de daño más probable. `low` (baja): movimiento mediano + 1σ. `very_low` (muy baja): mediana + 1σ y el grado de daño del percentil 85.",
             "default": "high"
+          },
+          "damage_model": {
+            "type": "string",
+            "description": "Cómo se calcula el daño: `fragility` (funciones de fragilidad sobre una medida de intensidad) o `capacity_spectrum` (nivel II de RISK-UE). Ver GET /methods.",
+            "default": "fragility"
+          },
+          "vulnerability_db": {
+            "type": "string",
+            "description": "De dónde proceden los datos de vulnerabilidad de cada clase de edificio: `gem` (Martins y Silva 2021) o `risk_ue` (RISK-UE 2003, solo curvas de capacidad). Ver GET /methods.",
+            "default": "gem"
           }
         },
         "type": "object",
@@ -2063,6 +2191,41 @@
             "rake": 44
           }
         ]
+      },
+      "MethodsResponse": {
+        "properties": {
+          "default": {
+            "$ref": "#/components/schemas/DamageMethodParams"
+          },
+          "damage_models": {
+            "items": {
+              "$ref": "#/components/schemas/DamageModelInfo"
+            },
+            "type": "array"
+          },
+          "vulnerability_databases": {
+            "items": {
+              "$ref": "#/components/schemas/VulnerabilityDatabaseInfo"
+            },
+            "type": "array"
+          },
+          "compatible": {
+            "items": {
+              "$ref": "#/components/schemas/DamageMethodParams"
+            },
+            "type": "array",
+            "description": "Las combinaciones válidas: la base de datos debe aportar los datos que necesita el modelo."
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "default",
+          "damage_models",
+          "vulnerability_databases",
+          "compatible"
+        ],
+        "title": "MethodsResponse"
       },
       "Rupture": {
         "properties": {
@@ -2599,6 +2762,54 @@
           "type"
         ],
         "title": "ValidationError"
+      },
+      "VulnerabilityDatabaseInfo": {
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "provides": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "description": "Los tipos de datos de vulnerabilidad que aporta."
+          },
+          "classes": {
+            "type": "string",
+            "description": "Cómo se asigna a un edificio una de las clases de la base de datos."
+          },
+          "derivation": {
+            "type": "string",
+            "description": "Cómo se obtuvieron los datos de vulnerabilidad de la base de datos."
+          },
+          "damage_criteria": {
+            "type": "string",
+            "description": "Con el modelo de espectro de capacidad: cómo se fijan los umbrales de los grados de daño sobre cada curva de capacidad."
+          },
+          "source": {
+            "type": "string"
+          },
+          "licence": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "provides",
+          "classes",
+          "derivation",
+          "damage_criteria",
+          "source",
+          "licence"
+        ],
+        "title": "VulnerabilityDatabaseInfo"
       },
       "Warmup": {
         "properties": {

@@ -286,6 +286,10 @@ $$
 
 with $P(DS \ge \text{None}) = 1$ and $P(DS \ge ds_5) = 0$.
 
+This is the default **damage model**. TWIN-ER can also compute damage with
+the capacity-spectrum method (RISK-UE Level II), with either GEM's or
+RISK-UE's building data: see [Damage models](/docs/damage-models/).
+
 Each building is evaluated against the intensity measure its own curve is
 defined for (see the table in step 2). Its reported state follows the
 probability level: the most likely state, or the 85th percentile. The full

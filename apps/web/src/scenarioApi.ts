@@ -24,6 +24,17 @@ export const TILES_API_URL = import.meta.env.VITE_TILES_API_URL ?? API_URL;
 // motion, 85th-percentile damage state).
 export type ProbabilityLevel = "high" | "low" | "very_low";
 
+// ADR-0033: how damage is calculated (damage model) and where each building
+// class's vulnerability data comes from (database) -- the valid
+// combinations, as `GET /methods` lists them. "fragility:gem" is the default.
+export const DAMAGE_METHODS = ["fragility:gem", "capacity_spectrum:gem", "capacity_spectrum:risk_ue"] as const;
+export type DamageMethod = (typeof DAMAGE_METHODS)[number];
+
+export function damageMethodParams(method: DamageMethod): { damage_model: string; vulnerability_db: string } {
+  const [damage_model, vulnerability_db] = method.split(":");
+  return { damage_model, vulnerability_db };
+}
+
 export interface ManualRuptureRequest {
   lat: number;
   lon: number;
@@ -35,6 +46,8 @@ export interface ManualRuptureRequest {
   dip?: number;
   ztor_km?: number;
   probability_level?: ProbabilityLevel;
+  damage_model?: string;
+  vulnerability_db?: string;
 }
 
 export interface Fault {
@@ -148,6 +161,8 @@ export interface ScenarioResult {
     finite_rupture: boolean;
     probability_level: ProbabilityLevel;
   };
+  // Which damage model and vulnerability database ran (ADR-0033).
+  damage_method?: { damage_model: string; vulnerability_db: string };
   evaluated_region: EvaluatedRegion;
   // True when the backend served a stored result for this exact request
   // (content-addressed scenario_id, services/scenario/scenario_id.py)
@@ -254,11 +269,15 @@ export function runManualScenario(req: ManualRuptureRequest): Promise<ScenarioRe
 export function runFaultScenario(
   fault: Pick<Fault, "fault_id" | "has_rupture_geometry">,
   probabilityLevel: ProbabilityLevel = "high",
-  near?: { lat: number; lon: number }
+  near?: { lat: number; lon: number },
+  method: DamageMethod = "fragility:gem"
 ): Promise<ScenarioResult> {
   return getScenario("/scenarios/fault", {
     fault_id: fault.fault_id,
     probability_level: probabilityLevel,
+    // Only non-default methods go in the URL, so default requests (and any
+    // HTTP cache in front of them) are unchanged.
+    ...(method === "fragility:gem" ? {} : damageMethodParams(method)),
     ...(!fault.has_rupture_geometry && near ? { near_lat: roundCoord(near.lat), near_lon: roundCoord(near.lon) } : {}),
   });
 }

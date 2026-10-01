@@ -36,6 +36,7 @@ import time
 from . import numba_cache
 from .building_lookup import get_building
 from .faults import faults_payload, get_fault, round_near_point, rupture_anchor
+from .methods import DEFAULT_METHOD, DamageMethod, methods_payload, resolve_damage_method
 from .probability_level import resolve_probability_level
 from .realtime import RealtimeUnavailable, aemet_observations, aemet_warnings, dgt_incidents
 from .response import evaluated_region, stored_results_columns
@@ -70,6 +71,9 @@ def handler(event: dict, context) -> dict:
 
         if method == "GET" and path == "/faults":
             return _list_faults()
+
+        if method == "GET" and path == "/methods":
+            return _response(200, methods_payload())
 
         if method == "GET" and path == "/warmup":
             return _response(200, warm_up(BUILDINGS_PATH, EXPOSURE_PATH))
@@ -186,6 +190,7 @@ def _fault_scenario(query: dict) -> dict:
     fault_id = query["fault_id"]  # missing -> KeyError -> 400, via handler()
     probability_level = query.get("probability_level", "high")
     resolve_probability_level(probability_level)  # ValueError -> 400, before anything else
+    damage_method = resolve_damage_method(query.get("damage_model"), query.get("vulnerability_db"))
     near_lat, near_lon = round_near_point(
         _optional_float(query.get("near_lat")), _optional_float(query.get("near_lon"))
     )
@@ -200,6 +205,7 @@ def _fault_scenario(query: dict) -> dict:
         probability_level,
         near_lat if near_used else None,
         near_lon if near_used else None,
+        method=_method_id_params(damage_method),
     )
     if (cached := _cached_response(scenario_id)) is not None:
         return cached
@@ -219,20 +225,42 @@ def _fault_scenario(query: dict) -> dict:
         max_depth_km=fault["max_depth_km"],
     )
     return _run_and_respond(
-        rupture, probability_level, scenario_id, time.monotonic() - t_rupture, hazardlib_seconds
+        rupture,
+        probability_level,
+        scenario_id,
+        time.monotonic() - t_rupture,
+        hazardlib_seconds,
+        damage_method,
     )
+
+
+def _method_id_params(damage_method: DamageMethod) -> dict | None:
+    """Mirrors local.py's: scenario ids hash the method only when it isn't
+    the default."""
+    return None if damage_method.is_default else damage_method.params()
 
 
 def _manual_scenario(body: dict) -> dict:
     probability_level = body.get("probability_level", "high")
     resolve_probability_level(probability_level)
+    damage_method = resolve_damage_method(body.get("damage_model"), body.get("vulnerability_db"))
     lat, lon, mag = float(body["lat"]), float(body["lon"]), float(body["mag"])
     rake = float(body.get("rake", 0.0))
     strike = _optional_float(body.get("strike"))
     dip = _optional_float(body.get("dip"))
     ztor_km = _optional_float(body.get("ztor_km"))
 
-    scenario_id = manual_scenario_id(lat, lon, mag, rake, strike, dip, ztor_km, probability_level)
+    scenario_id = manual_scenario_id(
+        lat,
+        lon,
+        mag,
+        rake,
+        strike,
+        dip,
+        ztor_km,
+        probability_level,
+        method=_method_id_params(damage_method),
+    )
     if (cached := _cached_response(scenario_id)) is not None:
         return cached
 
@@ -242,7 +270,12 @@ def _manual_scenario(body: dict) -> dict:
         lat=lat, lon=lon, mag=mag, rake=rake, strike=strike, dip=dip, ztor_km=ztor_km
     )
     return _run_and_respond(
-        rupture, probability_level, scenario_id, time.monotonic() - t_rupture, hazardlib_seconds
+        rupture,
+        probability_level,
+        scenario_id,
+        time.monotonic() - t_rupture,
+        hazardlib_seconds,
+        damage_method,
     )
 
 
@@ -341,6 +374,7 @@ def _run_and_respond(
     scenario_id: str,
     rupture_seconds: float = 0.0,
     hazardlib_seconds: float = 0.0,
+    damage_method: DamageMethod = DEFAULT_METHOD,
 ) -> dict:
     # Imported here, not at module level: engine.py -> ground_motion.py
     # imports openquake.hazardlib directly, which drags in numpy/scipy/
@@ -378,6 +412,7 @@ def _run_and_respond(
         # Critical-infrastructure facilities' buildings (ADR-0025): kept in
         # full, so each facility reports its building's distribution.
         track_building_ids=facility_building_ids(),
+        method=damage_method,
     )
     # ADR-0025: after the buildings, since facilities take their
     # building's damage state.
@@ -403,6 +438,7 @@ def _run_and_respond(
             "finite_rupture": rupture.surface is not None,
             "probability_level": probability_level,
         },
+        "damage_method": damage_method.params(),
         "evaluated_region": evaluated_region(rupture, radius_km),
         "n_evaluated": summary.n_evaluated,
         "n_damaged": summary.n_damaged,

@@ -93,7 +93,7 @@ def data_dir(tmp_path: Path) -> Path:
     exposure = pd.DataFrame(
         {
             "building_id": ["b1", "b2", "b3-far"],
-            "taxonomy_class": ["MR_LWAL-DUL", "CR_LDUAL-DUL", "MR_LWAL-DUL"],
+            "taxonomy_class": ["MUR_LWAL-DNO", "CR_LDUAL-DUL", "MUR_LWAL-DNO"],
             "height_class": [2, 3, 2],
             "taxonomy_source": ["heuristic_v1"] * 3,
         }
@@ -103,7 +103,7 @@ def data_dir(tmp_path: Path) -> Path:
     # damage states (not all-None) so the response-filtering behavior is
     # actually exercised.
     fragility_rows = []
-    for taxonomy in ["MR_LWAL-DUL", "CR_LDUAL-DUL"]:
+    for taxonomy in ["MUR_LWAL-DNO", "CR_LDUAL-DUL"]:
         for height in [2, 3]:
             for im_value, slight, moderate, extensive, complete in [
                 (0.01, 0.001, 0.0001, 0.00001, 0.000001),
@@ -572,7 +572,7 @@ def test_building_info_returns_exposure_attributes(client):
     assert resp.status_code == 200
     body = resp.json()
     assert body["building_id"] == "b1"
-    assert body["taxonomy_class"] == "MR_LWAL-DUL"
+    assert body["taxonomy_class"] == "MUR_LWAL-DNO"
     assert body["height_class"] == 2
 
 
@@ -819,3 +819,59 @@ def test_flood_responses_match_the_documented_shapes(client, flood_data):
     assert rows
     for row in rows:
         api_models.FloodSectionStats.model_validate(row)
+
+
+# --- damage models and vulnerability databases (ADR-0033) -----------------
+
+
+@pytest.mark.parametrize("db", ["gem", "risk_ue"])
+def test_manual_scenario_runs_the_capacity_spectrum_model(client, db):
+    from scenario import api_models
+
+    default = client.post(
+        "/scenarios/manual", json={"lat": NEAR_LAT, "lon": NEAR_LON, "mag": 6.5, "rake": 20.0}
+    ).json()
+    body = client.post(
+        "/scenarios/manual",
+        json={
+            "lat": NEAR_LAT,
+            "lon": NEAR_LON,
+            "mag": 6.5,
+            "rake": 20.0,
+            "damage_model": "capacity_spectrum",
+            "vulnerability_db": db,
+        },
+    ).json()
+    api_models.EarthquakeScenarioResponse.model_validate(body)
+    assert body["damage_method"] == {"damage_model": "capacity_spectrum", "vulnerability_db": db}
+    assert default["damage_method"] == {"damage_model": "fragility", "vulnerability_db": "gem"}
+    assert body["scenario_id"] != default["scenario_id"]
+    assert body["n_evaluated"] == default["n_evaluated"]
+
+
+def test_fault_scenario_accepts_a_damage_method(client):
+    resp = client.get(
+        "/scenarios/fault",
+        params={
+            "fault_id": "TEST001",
+            "damage_model": "capacity_spectrum",
+            "vulnerability_db": "gem",
+        },
+    )
+    assert resp.status_code == 200
+    assert resp.json()["damage_method"]["damage_model"] == "capacity_spectrum"
+
+
+def test_incompatible_damage_method_is_a_400(client):
+    resp = client.post(
+        "/scenarios/manual",
+        json={"lat": NEAR_LAT, "lon": NEAR_LON, "mag": 6.5, "vulnerability_db": "risk_ue"},
+    )
+    assert resp.status_code == 400
+    assert "fragility functions" in resp.json()["detail"]
+
+
+def test_methods_route_matches_the_documented_shape(client):
+    from scenario import api_models
+
+    api_models.MethodsResponse.model_validate(client.get("/methods").json())

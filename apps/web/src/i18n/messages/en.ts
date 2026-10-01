@@ -77,6 +77,11 @@ export const en = {
   "probability.short.high": "High probability",
   "probability.short.low": "Low probability",
   "probability.short.very_low": "Very low probability",
+  "method.label": "Damage model",
+  "method.hint": "How damage is calculated, and whose vulnerability data it uses. See the documentation for each.",
+  "method.fragility:gem": "Fragility curves (GEM)",
+  "method.capacity_spectrum:gem": "Capacity spectrum (GEM curves)",
+  "method.capacity_spectrum:risk_ue": "Capacity spectrum (RISK-UE)",
 
   "scenario.titleFault": "{name} - Mmax. {mag} - {probability}",
   "scenario.titleManual": "Manual - Mag. {mag} - {probability}",

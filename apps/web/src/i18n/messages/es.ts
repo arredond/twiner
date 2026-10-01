@@ -70,6 +70,11 @@ export const es: Messages = {
   "probability.short.high": "Alta probabilidad",
   "probability.short.low": "Baja probabilidad",
   "probability.short.very_low": "Muy baja probabilidad",
+  "method.label": "Modelo de daño",
+  "method.hint": "Cómo se calcula el daño y de quién son los datos de vulnerabilidad. Consulta la documentación de cada uno.",
+  "method.fragility:gem": "Curvas de fragilidad (GEM)",
+  "method.capacity_spectrum:gem": "Espectro de capacidad (curvas GEM)",
+  "method.capacity_spectrum:risk_ue": "Espectro de capacidad (RISK-UE)",
 
   "scenario.titleFault": "{name} - Mmax. {mag} - {probability}",
   "scenario.titleManual": "Manual - Mag. {mag} - {probability}",

@@ -208,12 +208,53 @@ class InfrastructureSummary(_Model):
     dam: int | None = None
 
 
+class DamageMethodParams(_Model):
+    """The damage model and vulnerability database a scenario ran with."""
+
+    damage_model: str = Field(examples=["fragility", "capacity_spectrum"])
+    vulnerability_db: str = Field(examples=["gem", "risk_ue"])
+
+
+class DamageModelInfo(_Model):
+    id: str
+    name: str
+    needs: str = Field(description="The kind of vulnerability data it needs.")
+    hazard_inputs: list[str]
+    exposure_inputs: list[str]
+    output: str
+    reference: str
+
+
+class VulnerabilityDatabaseInfo(_Model):
+    id: str
+    name: str
+    provides: list[str] = Field(description="The kinds of vulnerability data it provides.")
+    classes: str = Field(description="How a building gets one of the database's classes.")
+    derivation: str = Field(description="How the database's vulnerability data was derived.")
+    damage_criteria: str = Field(
+        description="With the capacity-spectrum model: how damage-state thresholds are set on "
+        "each capacity curve."
+    )
+    source: str
+    licence: str
+
+
+class MethodsResponse(_Model):
+    default: DamageMethodParams
+    damage_models: list[DamageModelInfo]
+    vulnerability_databases: list[VulnerabilityDatabaseInfo]
+    compatible: list[DamageMethodParams] = Field(
+        description="The valid combinations: a database must provide the data the model needs."
+    )
+
+
 class EarthquakeScenarioResponse(_Model):
     scenario_id: str = Field(
         description="Content-addressed id: the same inputs always give the same id. Use it "
         "with the /results/{scenario_id}/... and /tiles/{scenario_id}/... routes."
     )
     rupture: Rupture
+    damage_method: DamageMethodParams
     evaluated_region: EvaluatedRegion
     n_evaluated: int
     n_damaged: int

@@ -243,6 +243,10 @@ that substitution costs in accuracy.
 
 ```bash
 uv run python -m fragility data/fragility/fragility.parquet
+# Capacity curves for the capacity-spectrum damage model (ADR-0033):
+# small, so bundled with the scenario service rather than written to data/.
+uv run python -m fragility.capacity \
+    services/scenario/src/scenario/vulnerability_data/martins_silva_2021_capacity.csv
 ```
 
 Output is long-format: one row per (taxonomy, height_class, damage_state,

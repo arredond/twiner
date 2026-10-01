@@ -29,7 +29,7 @@ import os
 # Bump on any change that could alter a scenario's result or response
 # shape (see module docstring). A plain counter, not a git sha: a sha
 # would bust the cache on every unrelated commit (docs, frontend, infra).
-API_VERSION = "6"
+API_VERSION = "7"
 # History: 2 -- response drops `buildings`, adds `n_damaged` (ADR-0019).
 #          3 -- streamed evaluation on one fixed ground-motion grid per
 #               scenario (ADR-0020); cell values shift slightly.
@@ -40,6 +40,8 @@ API_VERSION = "6"
 #               (ADR-0024).
 #          6 -- response gains `infrastructure_summary`; per-scenario
 #               infrastructure.json.gz + intensity.geojson.gz (ADR-0025).
+#          7 -- response gains `damage_method`; selectable damage model and
+#               vulnerability database (ADR-0033).
 
 _TRUTHY = {"1", "true", "yes", "on"}
 
@@ -72,14 +74,19 @@ def fault_scenario_id(
     probability_level: str,
     near_lat: float | None = None,
     near_lon: float | None = None,
+    method: dict | None = None,
 ) -> str:
     """Pass near_lat/near_lon only when the rupture actually used them
     (faults.py's `rupture_anchor` says so) -- including an ignored point
-    would split one result across as many ids as there are map views."""
+    would split one result across as many ids as there are map views.
+    Likewise `method` (methods.DamageMethod.params()) only when it isn't
+    the default, so default-method ids didn't change when it was added."""
     params: dict = {"mode": "fault", "fault_id": fault_id, "probability_level": probability_level}
     if near_lat is not None and near_lon is not None:
         params["near_lat"] = near_lat
         params["near_lon"] = near_lon
+    if method:
+        params["method"] = method
     return _hash(params)
 
 
@@ -92,9 +99,12 @@ def manual_scenario_id(
     dip: float | None,
     ztor_km: float | None,
     probability_level: str,
+    method: dict | None = None,
 ) -> str:
+    """`method`: as in `fault_scenario_id`, only when not the default."""
     return _hash(
         {
+            **({"method": method} if method else {}),
             "mode": "manual",
             "lat": float(lat),
             "lon": float(lon),

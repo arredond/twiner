@@ -7,6 +7,49 @@ request to scope (a) what implementing it would take and (b) whether
 buildings could carry multiple vulnerability classifications (one per
 methodology) so a scenario can pick which one to run against.
 
+## Update, 2026-10-01: what has changed since this was written
+
+Still not implemented (out of scope of ADR-0033, which added Level II).
+But most of this doc's blockers have moved:
+
+- **§2's missing Vi\* table is now available.** RISK-UE's own WP4 report
+  (Milutinovic & Trendafiloski 2003, *WP4: Vulnerability of current
+  buildings*) is readable at
+  `http://www.civil.ist.utl.pt/~mlopes/conteudos/DamageStates/Risk%20UE%20WP04_Vulnerability.pdf`.
+  Table 2.2 gives Vmin, V−, V\*, V+ and Vmax per RISK-UE type. Examples
+  of V\*: M1.1 0.873, M1.2 0.74, M3.4 0.616, RC1 0.442. Tables 2.4–2.6
+  give the behaviour modifiers ΔVm and the regional factor ΔVf. Chapter
+  2 gives the μD formula and the beta damage distribution (Eqs. 2-1 to
+  2-12; with t = 8 it notes the beta looks very similar to the binomial). The report is © European Commission with a
+  no-reproduction notice: cite and copy only the rows used, as
+  ADR-0033 did for the capacity curves.
+- **§3's blocker (no intensity per site) is solved in principle.**
+  ADR-0025 computes EMS-98 intensity per site (Worden et al. 2012, from
+  PGV) on the scenario grid. But it **under-estimates Lorca 2011**: 5.7 at
+  median and 6.6 at +1σ, against IGN's observed VII. LM1 is very
+  sensitive to I: μD rises 1.5–2.5x per intensity degree in the VI–VIII
+  range, depending on V. Validating the PGV→intensity conversion against IGN's
+  intensity data comes **first**.
+- **A Lorca-specific LM1 application exists**: Feriche, Vidal, Alguacil,
+  Navarro & Aranda (2012), *Vulnerabilidad y daño en el terremoto de
+  Lorca de 2011*, Física de la Tierra 24, 255–287. It assigns
+  vulnerability indices to Lorca's building types (from Catastro year and
+  height plus inspections) and compares expected against observed EMS-98
+  damage. It is the natural calibration reference, and readable at the
+  Instituto Andaluz de Geofísica's site.
+- **§5's architecture now exists** (ADR-0033, `services/scenario/methods.py`).
+  LM1 would be a third damage model, `macroseismic`, which needs a new
+  vulnerability data kind (`vulnerability_index`), plus a database
+  providing it (`risk_ue`, from WP4 Table 2.2, mapped like ADR-0033's
+  capacity curves), and an `EMS-98 intensity` hazard input. §4's
+  five-grade (D0–D5) to five-state mapping is still a decision to make.
+  One option: D1→Slight, D2→Moderate, D3→Extensive, D4+D5→Complete.
+
+Remaining order: (1) validate intensity against IGN data; (2) vendor WP4
+Table 2.2 rows for the three mapped types; (3) decide the grade mapping;
+(4) implement the `macroseismic` model against Feriche et al.'s Lorca
+results.
+
 **Confidence key**, matching `merisur.md`'s convention: 🟢 stated
 explicitly in a primary source · 🟡 inferred with reasonable confidence ·
 🔴 unverified/approximate, needs checking before relied on.

@@ -1,0 +1,51 @@
+"""Damage-model / vulnerability-database registry (methods.py, ADR-0033)."""
+
+from __future__ import annotations
+
+import pytest
+from scenario.methods import (
+    DEFAULT_METHOD,
+    DamageMethod,
+    compatible_methods,
+    methods_payload,
+    resolve_damage_method,
+)
+from scenario.scenario_id import fault_scenario_id, manual_scenario_id
+
+
+def test_defaults_are_todays_method():
+    assert resolve_damage_method() == DEFAULT_METHOD == DamageMethod("fragility", "gem")
+
+
+def test_capacity_spectrum_runs_on_either_database():
+    for db in ("gem", "risk_ue"):
+        assert resolve_damage_method("capacity_spectrum", db).database == db
+
+
+def test_a_database_without_the_data_a_model_needs_is_rejected():
+    with pytest.raises(ValueError, match="no fragility functions"):
+        resolve_damage_method("fragility", "risk_ue")
+
+
+@pytest.mark.parametrize("model,db", [("nope", "gem"), ("fragility", "nope")])
+def test_unknown_names_are_rejected(model, db):
+    with pytest.raises(ValueError, match="unknown"):
+        resolve_damage_method(model, db)
+
+
+def test_compatible_combinations():
+    assert {(m.model, m.database) for m in compatible_methods()} == {
+        ("fragility", "gem"),
+        ("capacity_spectrum", "gem"),
+        ("capacity_spectrum", "risk_ue"),
+    }
+    assert len(methods_payload()["compatible"]) == 3
+
+
+def test_default_method_leaves_scenario_ids_unchanged():
+    # Ids for the default method must not change (cached results stay valid).
+    assert manual_scenario_id(37.7, -1.7, 5.2, 0, None, None, None, "high") == manual_scenario_id(
+        37.7, -1.7, 5.2, 0, None, None, None, "high", method=None
+    )
+    other = DamageMethod("capacity_spectrum", "risk_ue").params()
+    assert fault_scenario_id("ES626", "high") != fault_scenario_id("ES626", "high", method=other)

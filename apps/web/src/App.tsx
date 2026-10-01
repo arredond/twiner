@@ -54,6 +54,9 @@ import {
   listFaults,
   warmUpScenarioApi,
   runFaultScenario,
+  DAMAGE_METHODS,
+  damageMethodParams,
+  type DamageMethod,
   runManualScenario,
   type Fault,
   type InfrastructureResult,
@@ -368,6 +371,7 @@ export default function App() {
   // MERISUR's probability-level selector (docs/merisur.md §4.7), in the
   // mode panel: applies to both modes.
   const [probabilityLevel, setProbabilityLevel] = useState<ProbabilityLevel>("high");
+  const [damageMethod, setDamageMethod] = useState<DamageMethod>("fragility:gem");
   const [manualParams, setManualParams] = useState<ManualParams>({
     lat: 40.4168,
     lon: -3.7038,
@@ -488,6 +492,7 @@ export default function App() {
         // is what tells the backend to stay a point source.
         ...(advancedEnabled ? { strike, dip, ztor_km: ztorKm } : {}),
         probability_level: probabilityLevel,
+        ...(damageMethod === "fragility:gem" ? {} : damageMethodParams(damageMethod)),
       })
     );
   }
@@ -496,7 +501,7 @@ export default function App() {
   // fault without full rupture geometry (see runFaultScenario).
   function runFault(fault: Pick<Fault, "fault_id" | "has_rupture_geometry">, near: { lat: number; lon: number }) {
     setSelectedFaultId(fault.fault_id);
-    return runScenario(() => runFaultScenario(fault, probabilityLevel, near));
+    return runScenario(() => runFaultScenario(fault, probabilityLevel, near, damageMethod));
   }
 
   // Automatic mode: clicking a fault runs it at the selected probability
@@ -713,6 +718,20 @@ export default function App() {
                         {PROBABILITY_LEVELS.map((level) => (
                           <option key={level} value={level}>
                             {t(`probability.${level}`)}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label style={{ marginTop: "0.5rem", fontSize: "0.8rem" }} title={t("method.hint")}>
+                      {t("method.label")}
+                      <select
+                        value={damageMethod}
+                        onChange={(e) => setDamageMethod(e.target.value as DamageMethod)}
+                        style={{ fontSize: "0.8rem" }}
+                      >
+                        {DAMAGE_METHODS.map((method) => (
+                          <option key={method} value={method}>
+                            {t(`method.${method}`)}
                           </option>
                         ))}
                       </select>

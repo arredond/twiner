@@ -232,11 +232,16 @@ def evaluate_damage_arrays(
             group_probs[i] = np.where(is_degenerate, fallback, normal)
         probs[:, idx] = group_probs
 
-        if damage_percentile is None:
-            state_i = np.argmax(group_probs, axis=0)
-        else:
-            reaches_percentile = np.cumsum(group_probs, axis=0) >= damage_percentile
-            state_i = np.argmax(reaches_percentile, axis=0)
-        damage_codes[idx] = state_i
+        damage_codes[idx] = select_damage_states(group_probs, damage_percentile)
 
     return DamageArrays(damage_codes, probs, im_values_used, im_type_codes, im_types)
+
+
+def select_damage_states(probs: np.ndarray, damage_percentile: float | None) -> np.ndarray:
+    """Vectorized `select_damage_state`: `probs` is (len(DAMAGE_STATES), n),
+    rows in DAMAGE_STATES order; returns each column's state index. Shared
+    by every damage model (methods.py), so they pick states identically."""
+    if damage_percentile is None:
+        return np.argmax(probs, axis=0)
+    reaches_percentile = np.cumsum(probs, axis=0) >= damage_percentile
+    return np.argmax(reaches_percentile, axis=0)

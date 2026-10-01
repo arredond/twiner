@@ -32,6 +32,7 @@ import pandas as pd
 import pyarrow as pa
 import pyarrow.compute as pc
 
+from .capacity_spectrum import evaluate_capacity_spectrum, load_capacity_table, required_imts
 from .damage import DAMAGE_STATES, DamageArrays, evaluate_damage_arrays
 from .db import ensure_httpfs, get_connection
 from .fragility_lookup import FragilityTable
@@ -42,6 +43,7 @@ from .ground_motion import (
     estimate_significant_distance_km,
 )
 from .impact import ImpactCounter
+from .methods import DEFAULT_METHOD, DamageMethod
 from .response import shipped_buildings_table, thin_buildings_table
 from .rupture import Rupture
 
@@ -244,6 +246,7 @@ def run_scenario(
     max_distance_km: float | None = None,
     sigma_multiplier: float = 0.0,
     damage_percentile: float | None = None,
+    method: DamageMethod = DEFAULT_METHOD,
 ) -> pd.DataFrame:
     """Run the full scenario chain and return the thin per-building result.
 
@@ -318,6 +321,7 @@ def run_scenario(
             max_distance_km,
             sigma_multiplier,
             damage_percentile,
+            method=method,
         )
     ]
     if not frames:
@@ -361,6 +365,7 @@ def summarize_scenario(
     damage_percentile: float | None = None,
     batch_rows: int = SITE_BATCH_ROWS,
     track_building_ids: pa.Array | None = None,
+    method: DamageMethod = DEFAULT_METHOD,
 ) -> ScenarioSummary:
     """`run_scenario`'s chain (same arguments, same per-building results),
     reduced batch by batch to a `ScenarioSummary` as the buildings stream
@@ -386,6 +391,7 @@ def summarize_scenario(
         sigma_multiplier,
         damage_percentile,
         batch_rows,
+        method=method,
     ):
         if n_evaluated == 0:
             seconds_to_first_batch = time.monotonic() - t0
@@ -453,24 +459,48 @@ def _evaluate_batches(
     sigma_multiplier: float,
     damage_percentile: float | None,
     batch_rows: int = SITE_BATCH_ROWS,
+    method: DamageMethod = DEFAULT_METHOD,
 ) -> Iterator[tuple[pa.RecordBatch, DamageArrays]]:
     """Ground motion + damage for each streamed batch of sites -- the one
-    chain both `run_scenario` and `summarize_scenario` are built on."""
+    chain both `run_scenario` and `summarize_scenario` are built on.
+
+    `method` picks the damage model and vulnerability database (methods.py,
+    ADR-0033); callers validate it with `resolve_damage_method` first."""
     con = get_connection()
     batches, ref_lat = _site_batches(
         con, buildings_path, exposure_path, rupture, max_distance_km, batch_rows
     )
-    fragility_table = FragilityTable.from_parquet(fragility_path)
-    # Only the IM types this fragility set actually vendors (FragilityTable.
-    # used_im_types), not every entry in IM_TYPE_TO_IMT -- avoids paying for
-    # a GMPE evaluation of an IM type nothing here is indexed by. One grid
-    # for the whole scenario, shared by every batch (see GriddedIntensity).
-    grid = GriddedIntensity(
-        rupture,
-        {im_type: IM_TYPE_TO_IMT[im_type] for im_type in sorted(fragility_table.used_im_types())},
-        ref_lat,
-        sigma_multiplier=sigma_multiplier,
-    )
+    if method.model == "capacity_spectrum":
+        capacity_table = load_capacity_table(method.database)
+        imts = required_imts(capacity_table)
+
+        def damage_for(batch: pa.RecordBatch, ims: dict[str, np.ndarray]) -> DamageArrays:
+            return evaluate_capacity_spectrum(
+                capacity_table,
+                batch.column("taxonomy_class"),
+                batch.column("height_class").to_numpy(),
+                ims,
+                damage_percentile=damage_percentile,
+            )
+    else:
+        fragility_table = FragilityTable.from_parquet(fragility_path)
+        # Only the IM types this fragility set actually vendors (FragilityTable.
+        # used_im_types), not every entry in IM_TYPE_TO_IMT -- avoids paying for
+        # a GMPE evaluation of an IM type nothing here is indexed by.
+        imts = {im: IM_TYPE_TO_IMT[im] for im in sorted(fragility_table.used_im_types())}
+
+        def damage_for(batch: pa.RecordBatch, ims: dict[str, np.ndarray]) -> DamageArrays:
+            return evaluate_damage_arrays(
+                fragility_table,
+                batch.column("taxonomy_class"),
+                batch.column("height_class").to_numpy(),
+                ims,
+                damage_percentile=damage_percentile,
+            )
+
+    # One grid for the whole scenario, shared by every batch (see
+    # GriddedIntensity).
+    grid = GriddedIntensity(rupture, imts, ref_lat, sigma_multiplier=sigma_multiplier)
     for batch in batches:
         if batch.num_rows == 0:
             continue
@@ -479,11 +509,4 @@ def _evaluate_batches(
             batch.column("lon").to_numpy(),
             batch.column("vs30").to_numpy(),
         )
-        damage = evaluate_damage_arrays(
-            fragility_table,
-            batch.column("taxonomy_class"),
-            batch.column("height_class").to_numpy(),
-            im_values_by_type,
-            damage_percentile=damage_percentile,
-        )
-        yield batch, damage
+        yield batch, damage_for(batch, im_values_by_type)

@@ -302,3 +302,28 @@ def test_flood_scenario_bad_request_is_a_400(handler, flood_data):  # noqa: F811
         {"return_period": 100, "region": {"type": "admin", "level": "ccaa", "code": "99"}},
     )
     assert status == 400
+
+
+def test_methods_route_and_capacity_spectrum_fault_scenario(handler):
+    """ADR-0033, mirroring local.py: GET /methods, and the scenario routes'
+    damage_model/vulnerability_db (validated, echoed, hashed into the id)."""
+    status, methods = _call(handler, "/methods")
+    assert status == 200
+    assert len(methods["compatible"]) == 3
+    status, default = _call(handler, "/scenarios/fault", {"fault_id": "TEST001"})
+    assert status == 200
+    status, body = _call(
+        handler,
+        "/scenarios/fault",
+        {"fault_id": "TEST001", "damage_model": "capacity_spectrum", "vulnerability_db": "risk_ue"},
+    )
+    assert status == 200
+    assert body["damage_method"] == {
+        "damage_model": "capacity_spectrum",
+        "vulnerability_db": "risk_ue",
+    }
+    assert body["scenario_id"] != default["scenario_id"]
+    status, _ = _call(
+        handler, "/scenarios/fault", {"fault_id": "TEST001", "vulnerability_db": "risk_ue"}
+    )
+    assert status == 400

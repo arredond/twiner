@@ -303,6 +303,11 @@ $$
 
 con $P(DS \ge \text{sin daño}) = 1$ y $P(DS \ge ds_5) = 0$.
 
+Este es el **modelo de daño** por defecto. TWIN-ER puede calcular también
+el daño con el método del espectro de capacidad (nivel II de RISK-UE), con
+los datos de edificios de GEM o de RISK-UE: ver
+[Modelos de daño](/docs/es/damage-models/).
+
 Cada edificio se evalúa con la medida de intensidad para la que está
 definida su propia curva (ver la tabla del paso 2). El grado presentado
 depende del nivel de probabilidad: el más probable o el percentil 85. La

@@ -182,6 +182,16 @@ Roughly in order of expected impact per unit of effort:
    improving which generic class each building maps to. Independent of,
    and a bigger ask than, (1)–(5) above.
 
+## 4b. Other vulnerability databases (ADR-0033)
+
+The classes above are GEM-taxonomy classes from Martins & Silva (2021).
+The capacity-spectrum damage model can also use RISK-UE's capacity curves,
+which are keyed by RISK-UE building type. TWIN-ER maps its own class to
+the closest one: `CR_LDUAL-DUL` → RC1 low code, `MUR_LWAL-DNO` → M3.4
+pre-code, `MUR-STRUB_LWAL-DNO` → M1.1 pre-code, with a height band of L
+1–2, M 3–5, H 6+ storeys (`capacity_spectrum.GEM_TO_RISK_UE`). Any finer
+class split above (§4) should update that mapping too.
+
 ## 5. Where this is implemented
 
 - `pipelines/exposure/src/exposure/taxonomy.py` — the heuristic itself.

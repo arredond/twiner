@@ -37,6 +37,14 @@ from .flood import (
 from .ground_motion import estimate_significant_distance_km
 from .impact import section_severity
 from .infrastructure import facility_building_ids, summarize_assets, summarize_infrastructure
+from .methods import (
+    DEFAULT_DAMAGE_MODEL,
+    DEFAULT_METHOD,
+    DEFAULT_VULNERABILITY_DB,
+    DamageMethod,
+    methods_payload,
+    resolve_damage_method,
+)
 from .probability_level import ProbabilityLevel, resolve_probability_level
 from .realtime import RealtimeUnavailable, aemet_observations, aemet_warnings, dgt_incidents
 from .response import evaluated_region, stored_results_columns
@@ -132,6 +140,16 @@ DEBRIS_PMTILES_PATH = os.environ.get(
 )
 
 
+DAMAGE_MODEL_HELP = (
+    "How damage is calculated: `fragility` (fragility functions on an intensity measure) or "
+    "`capacity_spectrum` (RISK-UE Level II). See GET /methods."
+)
+VULNERABILITY_DB_HELP = (
+    "Where each building class's vulnerability data comes from: `gem` (Martins & Silva "
+    "2021) or `risk_ue` (RISK-UE 2003, capacity curves only). See GET /methods."
+)
+
+
 class ManualRuptureRequest(BaseModel):
     # The API reference's example request: the 2011 Lorca earthquake.
     model_config = ConfigDict(
@@ -167,6 +185,22 @@ class ManualRuptureRequest(BaseModel):
         description="`high`: median ground motion, most likely damage state. `low`: median + 1σ "
         "ground motion. `very_low`: median + 1σ and the 85th-percentile damage state.",
     )
+    damage_model: str = Field(default=DEFAULT_DAMAGE_MODEL, description=DAMAGE_MODEL_HELP)
+    vulnerability_db: str = Field(
+        default=DEFAULT_VULNERABILITY_DB, description=VULNERABILITY_DB_HELP
+    )
+
+
+def _resolve_method(damage_model: str | None, vulnerability_db: str | None) -> DamageMethod:
+    try:
+        return resolve_damage_method(damage_model, vulnerability_db)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+
+
+def _method_id_params(method: DamageMethod) -> dict | None:
+    """What scenario ids hash for the method: nothing for the default."""
+    return None if method.is_default else method.params()
 
 
 def _validate_probability_level(probability_level: str) -> None:
@@ -195,7 +229,12 @@ def _cached_response(scenario_id: str) -> dict | None:
     return payload
 
 
-def _run_and_serialize(rupture: Rupture, probability_level: str, scenario_id: str) -> dict:
+def _run_and_serialize(
+    rupture: Rupture,
+    probability_level: str,
+    scenario_id: str,
+    method: DamageMethod = DEFAULT_METHOD,
+) -> dict:
     """Computes the scenario and stores it under `scenario_id` (content-
     addressed, scenario_id.py -- minted by the caller, which is also where
     the cache lookup happens, before any rupture is built)."""
@@ -228,6 +267,7 @@ def _run_and_serialize(rupture: Rupture, probability_level: str, scenario_id: st
             # Critical-infrastructure facilities' buildings (ADR-0025): kept
             # in full, so each facility reports its building's distribution.
             track_building_ids=facility_building_ids(),
+            method=method,
         )
         n_evaluated = summary.n_evaluated
         n_damaged = summary.n_damaged
@@ -290,6 +330,8 @@ def _run_and_serialize(rupture: Rupture, probability_level: str, scenario_id: st
             # than needing to remember the default.
             "probability_level": probability_level,
         },
+        # Which damage model and vulnerability database ran (ADR-0033).
+        "damage_method": method.params(),
         # See response.evaluated_region's docstring (centered on the
         # rupture's own point, widened to cover a finite surface's extent).
         "evaluated_region": evaluated_region(rupture, radius_km),
@@ -320,8 +362,17 @@ def _run_and_serialize(rupture: Rupture, probability_level: str, scenario_id: st
 )
 def run_manual_scenario(req: ManualRuptureRequest) -> dict:
     _validate_probability_level(req.probability_level)
+    method = _resolve_method(req.damage_model, req.vulnerability_db)
     scenario_id = manual_scenario_id(
-        req.lat, req.lon, req.mag, req.rake, req.strike, req.dip, req.ztor_km, req.probability_level
+        req.lat,
+        req.lon,
+        req.mag,
+        req.rake,
+        req.strike,
+        req.dip,
+        req.ztor_km,
+        req.probability_level,
+        method=_method_id_params(method),
     )
     if (cached := _cached_response(scenario_id)) is not None:
         return cached
@@ -334,7 +385,7 @@ def run_manual_scenario(req: ManualRuptureRequest) -> dict:
         dip=req.dip,
         ztor_km=req.ztor_km,
     )
-    return _run_and_serialize(rupture, req.probability_level, scenario_id)
+    return _run_and_serialize(rupture, req.probability_level, scenario_id, method)
 
 
 class FloodScenarioRequest(BaseModel):
@@ -404,6 +455,20 @@ def flood_scenario(req: FloodScenarioRequest) -> dict:
 
 
 @app.get(
+    "/methods",
+    tags=["Earthquake"],
+    summary="List the damage models and vulnerability databases",
+    description="Every damage model and vulnerability database a scenario can use, what "
+    "each needs and provides, and the valid combinations (`damage_model` + "
+    "`vulnerability_db` on the scenario routes).",
+    response_model=None,
+    responses=ok(api_models.MethodsResponse),
+)
+def list_methods() -> dict:
+    return methods_payload()
+
+
+@app.get(
     "/faults",
     tags=["Earthquake"],
     summary="List the active faults",
@@ -441,6 +506,10 @@ def run_fault_scenario(
     probability_level: ProbabilityLevel = "high",
     near_lat: float | None = None,
     near_lon: float | None = None,
+    damage_model: Annotated[str, Query(description=DAMAGE_MODEL_HELP)] = DEFAULT_DAMAGE_MODEL,
+    vulnerability_db: Annotated[
+        str, Query(description=VULNERABILITY_DB_HELP)
+    ] = DEFAULT_VULNERABILITY_DB,
 ) -> dict:
     """Automatic mode (docs/merisur.md §4.1): a QAFI fault's own
     maximum-magnitude earthquake. A GET, not a POST: `fault_id` and
@@ -465,11 +534,13 @@ def run_fault_scenario(
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e)) from e
 
+    method = _resolve_method(damage_model, vulnerability_db)
     scenario_id = fault_scenario_id(
         fault_id,
         probability_level,
         near_lat if near_used else None,
         near_lon if near_used else None,
+        method=_method_id_params(method),
     )
     if (cached := _cached_response(scenario_id)) is not None:
         return cached
@@ -486,7 +557,7 @@ def run_fault_scenario(
         min_depth_km=fault["min_depth_km"],
         max_depth_km=fault["max_depth_km"],
     )
-    return _run_and_serialize(rupture, probability_level, scenario_id)
+    return _run_and_serialize(rupture, probability_level, scenario_id, method)
 
 
 @app.get(
