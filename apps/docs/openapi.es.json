@@ -2,13 +2,13 @@
   "openapi": "3.1.0",
   "info": {
     "title": "TWIN-ER API",
-    "description": "The HTTP API behind the TWIN-ER web app: run earthquake and flood scenarios,\nthen read their results by area, as map tiles, or as GeoJSON.\n\n## How it fits together\n\n1. **Run a scenario.** `GET /scenarios/fault` (a fault's maximum-magnitude\n   earthquake), `POST /scenarios/manual` (an earthquake you define) or\n   `POST /scenarios/flood`. The response has a `scenario_id` and one row of\n   figures per affected municipality.\n2. **Read the details** with that id: per-census-section figures, affected\n   critical infrastructure, intensity bands (`/results/{scenario_id}/...`),\n   and building/debris vector tiles (`/tiles/{scenario_id}/...`).\n\nScenario ids are content-addressed: the same inputs on the same data and\ncode version give the same id, so results can be cached and shared.\n\n## Deployments\n\n- **Local** (`bin/twiner start`): every route below, on one server.\n- **Cloud** (AWS Lambda function URLs): the scenario function serves every\n  route except `/tiles/...`, which a separate tiles function serves, and the\n  two local-only routes `/results/{scenario_id}/status` and\n  `/results/{scenario_id}/municipality_stats`.\n\nThere is no authentication, versioning guarantee or rate limit yet: this\nreference describes the API the web app uses, not a stable public contract.\n\n## Errors\n\nThe local server answers errors as `{\"detail\": \"...\"}`; the Lambda as\n`{\"error\": \"...\"}`.\n\nSee the [twinQUAKE](/docs/hazards/earthquake/) and\n[twinFLOOD](/docs/hazards/flood/) pages for what the numbers mean.\n",
+    "description": "La API HTTP de la aplicación web de TWIN-ER: simula escenarios sísmicos y\nde inundación y consulta sus resultados por zona, como teselas de mapa o en\nGeoJSON.\n\n## Cómo encaja todo\n\n1. **Simula un escenario.** `GET /scenarios/fault` (el terremoto de magnitud\n   máxima de una falla), `POST /scenarios/manual` (un terremoto definido por\n   ti) o `POST /scenarios/flood`. La respuesta incluye un `scenario_id` y una\n   fila de cifras por municipio afectado.\n2. **Consulta los detalles** con ese identificador: cifras por sección\n   censal, infraestructuras críticas afectadas, bandas de intensidad\n   (`/results/{scenario_id}/...`) y teselas vectoriales de edificios y\n   escombros (`/tiles/{scenario_id}/...`).\n\nLos identificadores de escenario se derivan de su contenido: las mismas\nentradas, con la misma versión de datos y de código, dan el mismo\nidentificador, así que los resultados pueden cachearse y compartirse.\n\n## Despliegues\n\n- **Local** (`bin/twiner start`): todas las rutas, en un solo servidor.\n- **Nube** (URL de funciones AWS Lambda): la función de escenarios sirve\n  todas las rutas salvo `/tiles/...`, que sirve una función de teselas\n  aparte, y las dos rutas solo locales `/results/{scenario_id}/status` y\n  `/results/{scenario_id}/municipality_stats`.\n\nTodavía no hay autenticación, garantía de versiones ni límite de\npeticiones: esta referencia describe la API que usa la aplicación web, no un\ncontrato público estable.\n\n## Errores\n\nEl servidor local responde a los errores con `{\"detail\": \"...\"}`; la\nLambda, con `{\"error\": \"...\"}`.\n\nConsulta las páginas de [twinQUAKE](/docs/es/hazards/earthquake/) y\n[twinFLOOD](/docs/es/hazards/flood/) para saber qué significan las cifras.\n",
     "version": "6"
   },
   "servers": [
     {
       "url": "http://localhost:8000",
-      "description": "Local development server"
+      "description": "Servidor de desarrollo local"
     }
   ],
   "paths": {
@@ -17,8 +17,8 @@
         "tags": [
           "Earthquake"
         ],
-        "summary": "Run a manual earthquake scenario",
-        "description": "Simulates an earthquake you define: epicentre, magnitude and, optionally, the fault mechanism and rupture plane. Returns the scenario id and per-municipality damage and impact figures.",
+        "summary": "Simular un escenario sísmico manual",
+        "description": "Simula un terremoto definido por ti: epicentro, magnitud y, opcionalmente, el mecanismo de la falla y el plano de ruptura. Devuelve el identificador del escenario y las cifras de daño e impacto por municipio.",
         "operationId": "run_manual_scenario",
         "requestBody": {
           "content": {
@@ -32,7 +32,7 @@
         },
         "responses": {
           "200": {
-            "description": "Successful response",
+            "description": "Respuesta correcta",
             "content": {
               "application/json": {
                 "schema": {
@@ -42,7 +42,7 @@
             }
           },
           "400": {
-            "description": "Invalid parameters.",
+            "description": "Parámetros no válidos.",
             "content": {
               "application/json": {
                 "schema": {
@@ -52,7 +52,7 @@
             }
           },
           "500": {
-            "description": "A pipeline output is missing on the server.",
+            "description": "Falta en el servidor un resultado de los pipelines.",
             "content": {
               "application/json": {
                 "schema": {
@@ -62,7 +62,7 @@
             }
           },
           "422": {
-            "description": "Validation Error",
+            "description": "Error de validación",
             "content": {
               "application/json": {
                 "schema": {
@@ -79,8 +79,8 @@
         "tags": [
           "Flood"
         ],
-        "summary": "Run a flood scenario",
-        "description": "Buildings, residents and critical infrastructure inside MITECO's flood zone for one return period, in a circle (up to 200 km) or an administrative area.",
+        "summary": "Simular un escenario de inundación",
+        "description": "Edificios, residentes e infraestructuras críticas dentro de la zona inundable del MITECO para un periodo de retorno, en un círculo (de hasta 200 km) o una unidad administrativa.",
         "operationId": "flood_scenario",
         "requestBody": {
           "content": {
@@ -94,7 +94,7 @@
         },
         "responses": {
           "200": {
-            "description": "Successful response",
+            "description": "Respuesta correcta",
             "content": {
               "application/json": {
                 "schema": {
@@ -104,7 +104,7 @@
             }
           },
           "400": {
-            "description": "Invalid parameters.",
+            "description": "Parámetros no válidos.",
             "content": {
               "application/json": {
                 "schema": {
@@ -114,7 +114,7 @@
             }
           },
           "500": {
-            "description": "A pipeline output is missing on the server.",
+            "description": "Falta en el servidor un resultado de los pipelines.",
             "content": {
               "application/json": {
                 "schema": {
@@ -124,7 +124,7 @@
             }
           },
           "422": {
-            "description": "Validation Error",
+            "description": "Error de validación",
             "content": {
               "application/json": {
                 "schema": {
@@ -141,12 +141,12 @@
         "tags": [
           "Earthquake"
         ],
-        "summary": "List the active faults",
-        "description": "Every QAFI v4 fault available to automatic mode, with its maximum magnitude, mechanism, seismogenic depth range and trace.",
+        "summary": "Listar las fallas activas",
+        "description": "Todas las fallas de QAFI v4 disponibles en el modo automático, con su magnitud máxima, mecanismo, rango de profundidad sismogénica y traza.",
         "operationId": "list_faults",
         "responses": {
           "200": {
-            "description": "Successful response",
+            "description": "Respuesta correcta",
             "content": {
               "application/json": {
                 "schema": {
@@ -156,7 +156,7 @@
             }
           },
           "500": {
-            "description": "A pipeline output is missing on the server.",
+            "description": "Falta en el servidor un resultado de los pipelines.",
             "content": {
               "application/json": {
                 "schema": {
@@ -173,8 +173,8 @@
         "tags": [
           "Earthquake"
         ],
-        "summary": "Run a fault's maximum-magnitude earthquake",
-        "description": "Automatic mode: the maximum-magnitude earthquake of one QAFI fault, rupturing its whole modelled plane. A GET, so the result is cacheable by URL. `near_lat`/`near_lon` only matter for a fault without rupture geometry (none in QAFI v4 today).",
+        "summary": "Simular el terremoto de magnitud máxima de una falla",
+        "description": "Modo automático: el terremoto de magnitud máxima de una falla de QAFI, rompiendo todo su plano modelado. Es un GET, así que el resultado puede cachearse por URL. `near_lat`/`near_lon` solo se usan con una falla sin geometría de ruptura (ninguna en QAFI v4 actualmente).",
         "operationId": "run_fault_scenario",
         "parameters": [
           {
@@ -183,12 +183,12 @@
             "required": true,
             "schema": {
               "type": "string",
-              "description": "QAFI fault id, from GET /faults.",
+              "description": "Identificador de la falla en QAFI, de GET /faults.",
               "examples": [
                 "ES626"
               ]
             },
-            "description": "QAFI fault id, from GET /faults."
+            "description": "Identificador de la falla en QAFI, de GET /faults."
           },
           {
             "name": "probability_level",
@@ -237,7 +237,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Successful response",
+            "description": "Respuesta correcta",
             "content": {
               "application/json": {
                 "schema": {
@@ -247,7 +247,7 @@
             }
           },
           "404": {
-            "description": "Not found.",
+            "description": "No encontrado.",
             "content": {
               "application/json": {
                 "schema": {
@@ -257,7 +257,7 @@
             }
           },
           "500": {
-            "description": "A pipeline output is missing on the server.",
+            "description": "Falta en el servidor un resultado de los pipelines.",
             "content": {
               "application/json": {
                 "schema": {
@@ -267,7 +267,7 @@
             }
           },
           "422": {
-            "description": "Validation Error",
+            "description": "Error de validación",
             "content": {
               "application/json": {
                 "schema": {
@@ -284,8 +284,8 @@
         "tags": [
           "Exposure"
         ],
-        "summary": "Get a building's vulnerability class",
-        "description": "The vulnerability (taxonomy) and height class assigned to one cadastral building. Its footprint, floors, year and use are in the buildings vector tiles.",
+        "summary": "Obtener la clase de vulnerabilidad de un edificio",
+        "description": "La clase de vulnerabilidad (taxonomía) y la clase de altura asignadas a un edificio catastral. Su huella, plantas, año y uso están en las teselas vectoriales de edificios.",
         "operationId": "building_info",
         "parameters": [
           {
@@ -299,7 +299,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Successful response",
+            "description": "Respuesta correcta",
             "content": {
               "application/json": {
                 "schema": {
@@ -309,7 +309,7 @@
             }
           },
           "404": {
-            "description": "Not found.",
+            "description": "No encontrado.",
             "content": {
               "application/json": {
                 "schema": {
@@ -319,7 +319,7 @@
             }
           },
           "500": {
-            "description": "A pipeline output is missing on the server.",
+            "description": "Falta en el servidor un resultado de los pipelines.",
             "content": {
               "application/json": {
                 "schema": {
@@ -329,7 +329,7 @@
             }
           },
           "422": {
-            "description": "Validation Error",
+            "description": "Error de validación",
             "content": {
               "application/json": {
                 "schema": {
@@ -346,8 +346,8 @@
         "tags": [
           "Results"
         ],
-        "summary": "Get a scenario's layer readiness",
-        "description": "Which of a scenario's outputs are ready. Scenarios currently compute synchronously, so every flag is true once the scenario call has returned. Local server only.",
+        "summary": "Obtener el estado de las capas de un escenario",
+        "description": "Qué resultados de un escenario están listos. Los escenarios se calculan ahora de forma síncrona, así que todos los indicadores son true cuando la llamada del escenario ha terminado. Solo en el servidor local.",
         "operationId": "scenario_status",
         "parameters": [
           {
@@ -361,7 +361,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Successful response",
+            "description": "Respuesta correcta",
             "content": {
               "application/json": {
                 "schema": {
@@ -371,7 +371,7 @@
             }
           },
           "404": {
-            "description": "Not found.",
+            "description": "No encontrado.",
             "content": {
               "application/json": {
                 "schema": {
@@ -381,7 +381,7 @@
             }
           },
           "422": {
-            "description": "Validation Error",
+            "description": "Error de validación",
             "content": {
               "application/json": {
                 "schema": {
@@ -398,8 +398,8 @@
         "tags": [
           "Results"
         ],
-        "summary": "Get per-municipality figures",
-        "description": "The same per-municipality rows the scenario call returned. Local server only.",
+        "summary": "Obtener las cifras por municipio",
+        "description": "Las mismas filas por municipio que devolvió la llamada del escenario. Solo en el servidor local.",
         "operationId": "scenario_municipality_stats",
         "parameters": [
           {
@@ -413,7 +413,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Successful response",
+            "description": "Respuesta correcta",
             "content": {
               "application/json": {
                 "schema": {
@@ -436,7 +436,7 @@
             }
           },
           "404": {
-            "description": "Not found.",
+            "description": "No encontrado.",
             "content": {
               "application/json": {
                 "schema": {
@@ -446,7 +446,7 @@
             }
           },
           "422": {
-            "description": "Validation Error",
+            "description": "Error de validación",
             "content": {
               "application/json": {
                 "schema": {
@@ -463,8 +463,8 @@
         "tags": [
           "Results"
         ],
-        "summary": "Get per-census-section figures",
-        "description": "Impact figures for every affected INE census section, or only one municipality's with `municipality_code`. Earthquake rows carry damage counts and cost/debris estimates; flood rows carry buildings, residents and area in the flood zone.",
+        "summary": "Obtener las cifras por sección censal",
+        "description": "Cifras de impacto de cada sección censal del INE afectada, o solo las de un municipio con `municipality_code`. Las filas sísmicas incluyen recuentos de daño y estimaciones de coste y escombros; las de inundación, edificios, residentes y superficie en zona inundable.",
         "operationId": "scenario_section_stats",
         "parameters": [
           {
@@ -493,7 +493,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Successful response",
+            "description": "Respuesta correcta",
             "content": {
               "application/json": {
                 "schema": {
@@ -516,7 +516,7 @@
             }
           },
           "404": {
-            "description": "Not found.",
+            "description": "No encontrado.",
             "content": {
               "application/json": {
                 "schema": {
@@ -526,7 +526,7 @@
             }
           },
           "422": {
-            "description": "Validation Error",
+            "description": "Error de validación",
             "content": {
               "application/json": {
                 "schema": {
@@ -543,8 +543,8 @@
         "tags": [
           "Results"
         ],
-        "summary": "Get the census-section choropleth values",
-        "description": "Census section code to one number per section: the mean damage state (0 None to 4 Complete) for an earthquake, or the % of buildings in the flood zone for a flood.",
+        "summary": "Obtener los valores del coropletas por sección censal",
+        "description": "Código de sección censal → un valor por sección: el grado de daño medio (de 0, sin daño, a 4, completo) en un terremoto, o el % de edificios en zona inundable en una inundación.",
         "operationId": "scenario_section_severity",
         "parameters": [
           {
@@ -558,7 +558,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Successful response",
+            "description": "Respuesta correcta",
             "content": {
               "application/json": {
                 "schema": {
@@ -571,7 +571,7 @@
             }
           },
           "404": {
-            "description": "Not found.",
+            "description": "No encontrado.",
             "content": {
               "application/json": {
                 "schema": {
@@ -581,7 +581,7 @@
             }
           },
           "422": {
-            "description": "Validation Error",
+            "description": "Error de validación",
             "content": {
               "application/json": {
                 "schema": {
@@ -598,8 +598,8 @@
         "tags": [
           "Results"
         ],
-        "summary": "Get affected critical infrastructure",
-        "description": "Hospitals, schools, care homes, emergency services, power facilities, bridges and dams affected by the scenario, most intense first. For an earthquake: assets at estimated intensity VI or more, plus facilities whose building was damaged. For a flood: assets inside the flood zone.",
+        "summary": "Obtener las infraestructuras críticas afectadas",
+        "description": "Hospitales, colegios, residencias, servicios de emergencia, instalaciones eléctricas, puentes y presas afectados por el escenario, de mayor a menor intensidad. En un terremoto: elementos con intensidad estimada VI o superior, más las instalaciones cuyo edificio resultó dañado. En una inundación: elementos dentro de la zona inundable.",
         "operationId": "scenario_infrastructure",
         "parameters": [
           {
@@ -628,7 +628,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Successful response",
+            "description": "Respuesta correcta",
             "content": {
               "application/json": {
                 "schema": {
@@ -641,7 +641,7 @@
             }
           },
           "404": {
-            "description": "Not found.",
+            "description": "No encontrado.",
             "content": {
               "application/json": {
                 "schema": {
@@ -651,7 +651,7 @@
             }
           },
           "422": {
-            "description": "Validation Error",
+            "description": "Error de validación",
             "content": {
               "application/json": {
                 "schema": {
@@ -668,8 +668,8 @@
         "tags": [
           "Results"
         ],
-        "summary": "Get the intensity bands",
-        "description": "Contours of estimated macroseismic intensity (EMS-98) as GeoJSON. Earthquake scenarios only.",
+        "summary": "Obtener las bandas de intensidad",
+        "description": "Isolíneas de intensidad macrosísmica estimada (EMS-98) en GeoJSON. Solo escenarios sísmicos.",
         "operationId": "scenario_intensity",
         "parameters": [
           {
@@ -683,7 +683,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Successful response",
+            "description": "Respuesta correcta",
             "content": {
               "application/json": {
                 "schema": {
@@ -693,7 +693,7 @@
             }
           },
           "404": {
-            "description": "Not found.",
+            "description": "No encontrado.",
             "content": {
               "application/json": {
                 "schema": {
@@ -703,7 +703,7 @@
             }
           },
           "422": {
-            "description": "Validation Error",
+            "description": "Error de validación",
             "content": {
               "application/json": {
                 "schema": {
@@ -720,8 +720,8 @@
         "tags": [
           "Tiles"
         ],
-        "summary": "Get a buildings tile with scenario results",
-        "description": "A Mapbox Vector Tile of building footprints, each carrying this scenario's damage state and probabilities when it has one. 204 for an empty tile. Served by a separate tiles function in the cloud deployment.",
+        "summary": "Obtener una tesela de edificios con los resultados del escenario",
+        "description": "Una tesela vectorial Mapbox (MVT) con las huellas de los edificios, cada una con el grado de daño y las probabilidades de este escenario cuando los tiene. 204 si la tesela está vacía. En el despliegue en la nube la sirve una función de teselas aparte.",
         "operationId": "scenario_tile",
         "parameters": [
           {
@@ -759,16 +759,16 @@
         ],
         "responses": {
           "200": {
-            "description": "Tile",
+            "description": "Tesela",
             "content": {
               "application/vnd.mapbox-vector-tile": {}
             }
           },
           "204": {
-            "description": "No buildings in this tile."
+            "description": "No hay edificios en esta tesela."
           },
           "404": {
-            "description": "Not found.",
+            "description": "No encontrado.",
             "content": {
               "application/json": {
                 "schema": {
@@ -778,7 +778,7 @@
             }
           },
           "422": {
-            "description": "Validation Error",
+            "description": "Error de validación",
             "content": {
               "application/json": {
                 "schema": {
@@ -795,8 +795,8 @@
         "tags": [
           "Tiles"
         ],
-        "summary": "Get a debris tile",
-        "description": "A Mapbox Vector Tile of the debris envelopes (the area around each damaged building that rubble may reach) for this scenario's damaged buildings.",
+        "summary": "Obtener una tesela de escombros",
+        "description": "Una tesela vectorial Mapbox (MVT) con las envolventes de escombros (la zona alrededor de cada edificio dañado que pueden alcanzar sus cascotes) de los edificios dañados de este escenario.",
         "operationId": "scenario_debris_tile",
         "parameters": [
           {
@@ -834,16 +834,16 @@
         ],
         "responses": {
           "200": {
-            "description": "Tile",
+            "description": "Tesela",
             "content": {
               "application/vnd.mapbox-vector-tile": {}
             }
           },
           "204": {
-            "description": "No debris in this tile."
+            "description": "No hay escombros en esta tesela."
           },
           "404": {
-            "description": "Not found.",
+            "description": "No encontrado.",
             "content": {
               "application/json": {
                 "schema": {
@@ -853,7 +853,7 @@
             }
           },
           "422": {
-            "description": "Validation Error",
+            "description": "Error de validación",
             "content": {
               "application/json": {
                 "schema": {
@@ -870,12 +870,12 @@
         "tags": [
           "Real time"
         ],
-        "summary": "Get current traffic incidents",
-        "description": "Active incidents from the DGT, Servei Català de Trànsit and Trafikoa DATEX II feeds, as GeoJSON.",
+        "summary": "Obtener las incidencias de tráfico actuales",
+        "description": "Incidencias activas de los feeds DATEX II de la DGT, el Servei Català de Trànsit y Trafikoa, en GeoJSON.",
         "operationId": "realtime_dgt_incidents",
         "responses": {
           "200": {
-            "description": "Successful response",
+            "description": "Respuesta correcta",
             "content": {
               "application/json": {
                 "schema": {
@@ -885,7 +885,7 @@
             }
           },
           "503": {
-            "description": "The upstream real-time feed is unavailable.",
+            "description": "El feed de origen en tiempo real no está disponible.",
             "content": {
               "application/json": {
                 "schema": {
@@ -902,12 +902,12 @@
         "tags": [
           "Real time"
         ],
-        "summary": "Get latest weather observations",
-        "description": "Each AEMET automatic station's latest hourly reading, as GeoJSON.",
+        "summary": "Obtener las últimas observaciones meteorológicas",
+        "description": "La última lectura horaria de cada estación automática de la AEMET, en GeoJSON.",
         "operationId": "realtime_aemet_observations",
         "responses": {
           "200": {
-            "description": "Successful response",
+            "description": "Respuesta correcta",
             "content": {
               "application/json": {
                 "schema": {
@@ -917,7 +917,7 @@
             }
           },
           "503": {
-            "description": "The upstream real-time feed is unavailable.",
+            "description": "El feed de origen en tiempo real no está disponible.",
             "content": {
               "application/json": {
                 "schema": {
@@ -934,12 +934,12 @@
         "tags": [
           "Real time"
         ],
-        "summary": "Get weather warnings",
-        "description": "AEMET's current and upcoming Meteoalerta warnings, as GeoJSON polygons.",
+        "summary": "Obtener los avisos meteorológicos",
+        "description": "Los avisos Meteoalerta actuales y próximos de la AEMET, como polígonos GeoJSON.",
         "operationId": "realtime_aemet_warnings",
         "responses": {
           "200": {
-            "description": "Successful response",
+            "description": "Respuesta correcta",
             "content": {
               "application/json": {
                 "schema": {
@@ -949,7 +949,7 @@
             }
           },
           "503": {
-            "description": "The upstream real-time feed is unavailable.",
+            "description": "El feed de origen en tiempo real no está disponible.",
             "content": {
               "application/json": {
                 "schema": {
@@ -966,12 +966,12 @@
         "tags": [
           "Operations"
         ],
-        "summary": "Warm up the scenario function",
-        "description": "Loads data and compiled code ahead of the first scenario. The web app calls it on page load.",
+        "summary": "Precalentar la función de escenarios",
+        "description": "Carga los datos y el código compilado antes del primer escenario. La aplicación web la llama al cargar la página.",
         "operationId": "warmup",
         "responses": {
           "200": {
-            "description": "Successful response",
+            "description": "Respuesta correcta",
             "content": {
               "application/json": {
                 "schema": {
@@ -988,11 +988,11 @@
         "tags": [
           "Operations"
         ],
-        "summary": "Health check",
+        "summary": "Comprobación de estado",
         "operationId": "health",
         "responses": {
           "200": {
-            "description": "Successful response",
+            "description": "Respuesta correcta",
             "content": {
               "application/json": {
                 "schema": {
@@ -1023,7 +1023,7 @@
           },
           "code": {
             "type": "string",
-            "description": "INE code: 2 digits for a CCAA or province, 5 for a municipality.",
+            "description": "Código del INE: 2 dígitos para una comunidad autónoma o provincia, 5 para un municipio.",
             "examples": [
               "46250"
             ]
@@ -1056,11 +1056,11 @@
           },
           "height_class": {
             "type": "integer",
-            "description": "Storeys, 1 to 12."
+            "description": "Plantas, de 1 a 12."
           },
           "taxonomy_source": {
             "type": "string",
-            "description": "How the class was assigned (`heuristic_v2`: from construction year and floors)."
+            "description": "Cómo se asignó la clase (`heuristic_v2`: a partir del año de construcción y las plantas)."
           }
         },
         "additionalProperties": true,
@@ -1129,13 +1129,13 @@
           "Complete"
         ],
         "title": "DamageCounts",
-        "description": "Buildings per damage state (the state reported at the chosen probability level)."
+        "description": "Edificios por grado de daño (el grado presentado con el nivel de probabilidad elegido)."
       },
       "EarthquakeScenarioResponse": {
         "properties": {
           "scenario_id": {
             "type": "string",
-            "description": "Content-addressed id: the same inputs always give the same id. Use it with the /results/{scenario_id}/... and /tiles/{scenario_id}/... routes."
+            "description": "Identificador derivado del contenido: las mismas entradas dan siempre el mismo identificador. Úsalo con las rutas /results/{scenario_id}/... y /tiles/{scenario_id}/...."
           },
           "rupture": {
             "$ref": "#/components/schemas/Rupture"
@@ -1154,7 +1154,7 @@
               "$ref": "#/components/schemas/SeismicMunicipalityStats"
             },
             "type": "array",
-            "description": "Every municipality with at least one evaluated building."
+            "description": "Todos los municipios con al menos un edificio evaluado."
           },
           "infrastructure_summary": {
             "anyOf": [
@@ -1165,11 +1165,11 @@
                 "type": "null"
               }
             ],
-            "description": "Null when no infrastructure data is deployed."
+            "description": "Null si no hay datos de infraestructuras desplegados."
           },
           "cached": {
             "type": "boolean",
-            "description": "Whether the result came from the result cache."
+            "description": "Si el resultado procede de la caché de resultados."
           },
           "elapsed_ms": {
             "anyOf": [
@@ -1180,7 +1180,7 @@
                 "type": "null"
               }
             ],
-            "description": "Server-side time. Local server only."
+            "description": "Tiempo de cálculo en el servidor. Solo en el servidor local."
           }
         },
         "additionalProperties": true,
@@ -1201,7 +1201,7 @@
         "properties": {
           "detail": {
             "type": "string",
-            "description": "What went wrong."
+            "description": "Qué ha fallado."
           }
         },
         "additionalProperties": true,
@@ -1210,7 +1210,7 @@
           "detail"
         ],
         "title": "Error",
-        "description": "Local server shape. The AWS Lambda answers `{\"error\": \"...\"}` instead."
+        "description": "Formato del servidor local. La función AWS Lambda responde `{\"error\": \"...\"}` en su lugar."
       },
       "EvaluatedRegion": {
         "properties": {
@@ -1232,13 +1232,13 @@
           "radius_km"
         ],
         "title": "EvaluatedRegion",
-        "description": "The circle the scenario searched. Buildings outside it were not\nevaluated, which is different from evaluated and undamaged."
+        "description": "El círculo en el que buscó el escenario. Los edificios fuera de él no se\nevaluaron, que no es lo mismo que evaluados y sin daño."
       },
       "Fault": {
         "properties": {
           "fault_id": {
             "type": "string",
-            "description": "QAFI v4 fault id, e.g. `ES626`.",
+            "description": "Identificador de la falla en QAFI v4, p. ej. `ES626`.",
             "examples": [
               "ES626"
             ]
@@ -1251,7 +1251,7 @@
           },
           "mmax": {
             "type": "number",
-            "description": "Maximum moment magnitude (Mw) used in automatic mode."
+            "description": "Magnitud momento máxima (Mw) usada en el modo automático."
           },
           "mmax_source": {
             "type": "string",
@@ -1259,7 +1259,7 @@
               "qafi_v4_published",
               "estimated_wells_coppersmith_1994"
             ],
-            "description": "Literature value published in QAFI, or estimated from trace length with Wells & Coppersmith (1994)."
+            "description": "Valor de la literatura publicado en QAFI, o estimado a partir de la longitud de la traza con Wells y Coppersmith (1994)."
           },
           "length_km": {
             "type": "number"
@@ -1273,7 +1273,7 @@
                 "type": "null"
               }
             ],
-            "description": "Degrees, Aki & Richards convention."
+            "description": "Grados, convenio de Aki y Richards."
           },
           "dip": {
             "anyOf": [
@@ -1284,7 +1284,7 @@
                 "type": "null"
               }
             ],
-            "description": "Degrees."
+            "description": "Grados."
           },
           "min_depth_km": {
             "anyOf": [
@@ -1295,7 +1295,7 @@
                 "type": "null"
               }
             ],
-            "description": "Top of the seismogenic layer."
+            "description": "Techo de la capa sismogénica."
           },
           "max_depth_km": {
             "anyOf": [
@@ -1306,15 +1306,15 @@
                 "type": "null"
               }
             ],
-            "description": "Bottom of the seismogenic layer."
+            "description": "Base de la capa sismogénica."
           },
           "has_rupture_geometry": {
             "type": "boolean",
-            "description": "Whether QAFI gives the dip and depth range needed for a finite rupture plane (true for every QAFI v4 fault)."
+            "description": "Si QAFI da el buzamiento y el rango de profundidad necesarios para un plano de ruptura finito (true en todas las fallas de QAFI v4)."
           },
           "geometry_geojson": {
             "type": "string",
-            "description": "The fault trace as a GeoJSON (Multi)LineString, serialised as a string."
+            "description": "La traza de la falla como (Multi)LineString GeoJSON, serializada como texto."
           }
         },
         "additionalProperties": true,
@@ -1341,7 +1341,7 @@
               "$ref": "#/components/schemas/Fault"
             },
             "type": "array",
-            "description": "Every fault, sorted by name."
+            "description": "Todas las fallas, ordenadas por nombre."
           }
         },
         "additionalProperties": true,
@@ -1361,11 +1361,11 @@
               "type": "number"
             },
             "type": "array",
-            "description": "[west, south, east, north], degrees."
+            "description": "[oeste, sur, este, norte], en grados."
           },
           "n_flooded": {
             "type": "integer",
-            "description": "Buildings in the flood zone."
+            "description": "Edificios en la zona inundable."
           },
           "n_buildings": {
             "type": "integer"
@@ -1381,7 +1381,7 @@
           },
           "affected_population": {
             "type": "integer",
-            "description": "Residents in the flood zone (estimated)."
+            "description": "Residentes en la zona inundable (estimación)."
           },
           "pct_population_affected": {
             "type": "number"
@@ -1397,7 +1397,7 @@
           },
           "flooded_area_km2": {
             "type": "number",
-            "description": "Flood-zone area inside the area (and circle)."
+            "description": "Superficie de zona inundable dentro de la zona (y del círculo)."
           },
           "municipality_code": {
             "type": "string"
@@ -1443,7 +1443,7 @@
               "type": "string"
             },
             "type": "array",
-            "description": "Provinces in the region with no map at this return period (Canarias has no T10/T50). Not mapped is not the same as not flooded."
+            "description": "Provincias de la zona sin mapa para este periodo de retorno (Canarias no tiene T10/T50). No cartografiado no es lo mismo que no inundado."
           }
         },
         "additionalProperties": true,
@@ -1459,7 +1459,7 @@
         "properties": {
           "return_period": {
             "type": "integer",
-            "description": "Years: 10, 50, 100 or 500.",
+            "description": "Años: 10, 50, 100 o 500.",
             "examples": [
               100
             ]
@@ -1510,7 +1510,7 @@
                   },
                   "code": {
                     "type": "string",
-                    "description": "INE code: 2 digits for a CCAA or province, 5 for a municipality.",
+                    "description": "Código del INE: 2 dígitos para una comunidad autónoma o provincia, 5 para un municipio.",
                     "examples": [
                       "46250"
                     ]
@@ -1528,7 +1528,7 @@
             ],
             "additionalProperties": true,
             "type": "object",
-            "description": "A circle, `{type: circle, lat, lon, radius_km}` with radius_km up to 200, or an administrative area, `{type: admin, level: ccaa | province | municipality, code}` with an INE code.",
+            "description": "Un círculo, `{type: circle, lat, lon, radius_km}` con radius_km de hasta 200, o una unidad administrativa, `{type: admin, level: ccaa | province | municipality, code}` con un código del INE.",
             "examples": [
               {
                 "code": "46250",
@@ -1579,7 +1579,7 @@
                 "type": "null"
               }
             ],
-            "description": "[west, south, east, north], degrees."
+            "description": "[oeste, sur, este, norte], en grados."
           },
           "n_flooded": {
             "type": "integer"
@@ -1642,11 +1642,11 @@
               "type": "number"
             },
             "type": "array",
-            "description": "[west, south, east, north], degrees."
+            "description": "[oeste, sur, este, norte], en grados."
           },
           "n_flooded": {
             "type": "integer",
-            "description": "Buildings in the flood zone."
+            "description": "Edificios en la zona inundable."
           },
           "n_buildings": {
             "type": "integer"
@@ -1662,7 +1662,7 @@
           },
           "affected_population": {
             "type": "integer",
-            "description": "Residents in the flood zone (estimated)."
+            "description": "Residentes en la zona inundable (estimación)."
           },
           "pct_population_affected": {
             "type": "number"
@@ -1678,7 +1678,7 @@
           },
           "flooded_area_km2": {
             "type": "number",
-            "description": "Flood-zone area inside the area (and circle)."
+            "description": "Superficie de zona inundable dentro de la zona (y del círculo)."
           },
           "section_code": {
             "type": "string"
@@ -1825,7 +1825,7 @@
                 "type": "null"
               }
             ],
-            "description": "Estimated macroseismic intensity (EMS-98) at the asset. Earthquakes only."
+            "description": "Intensidad macrosísmica estimada (EMS-98) en el elemento. Solo terremotos."
           },
           "damage_state_code": {
             "anyOf": [
@@ -1836,7 +1836,7 @@
                 "type": "null"
               }
             ],
-            "description": "0 None to 4 Complete, for facilities in an evaluated building; null otherwise. Earthquakes only."
+            "description": "De 0 (sin daño) a 4 (completo), para instalaciones en un edificio evaluado; null en otro caso. Solo terremotos."
           },
           "damage_probs": {
             "anyOf": [
@@ -1850,7 +1850,7 @@
                 "type": "null"
               }
             ],
-            "description": "Probability of each damage state, None to Complete. Earthquakes only."
+            "description": "Probabilidad de cada grado de daño, de sin daño a completo. Solo terremotos."
           }
         },
         "additionalProperties": true,
@@ -1942,7 +1942,7 @@
         "additionalProperties": true,
         "type": "object",
         "title": "InfrastructureSummary",
-        "description": "Affected assets per category. Categories with none are omitted."
+        "description": "Elementos afectados por categoría. Se omiten las categorías sin ninguno."
       },
       "IntensityBands": {
         "properties": {
@@ -1959,7 +1959,7 @@
           },
           "cell_km": {
             "type": "number",
-            "description": "Grid resolution the bands were contoured from."
+            "description": "Resolución de la malla a partir de la que se trazaron las bandas."
           }
         },
         "additionalProperties": true,
@@ -1970,34 +1970,34 @@
           "cell_km"
         ],
         "title": "IntensityBands",
-        "description": "GeoJSON FeatureCollection, one (Multi)Polygon per integer intensity\nlevel from IV up, in `properties.intensity`."
+        "description": "FeatureCollection GeoJSON, con un (Multi)Polygon por grado entero de\nintensidad a partir del IV, en `properties.intensity`."
       },
       "ManualRuptureRequest": {
         "properties": {
           "lat": {
             "type": "number",
-            "description": "Epicentre latitude, degrees.",
+            "description": "Latitud del epicentro, en grados.",
             "examples": [
               37.699
             ]
           },
           "lon": {
             "type": "number",
-            "description": "Epicentre longitude, degrees.",
+            "description": "Longitud del epicentro, en grados.",
             "examples": [
               -1.673
             ]
           },
           "mag": {
             "type": "number",
-            "description": "Moment magnitude (Mw), 3.0 to 9.0.",
+            "description": "Magnitud momento (Mw), de 3,0 a 9,0.",
             "examples": [
               5.2
             ]
           },
           "rake": {
             "type": "number",
-            "description": "Degrees: 0 strike-slip, 90 reverse, -90 normal.",
+            "description": "Grados: 0 desgarre, 90 inversa, -90 normal.",
             "default": 0.0,
             "examples": [
               44
@@ -2012,7 +2012,7 @@
                 "type": "null"
               }
             ],
-            "description": "Degrees. See `ztor_km`."
+            "description": "Grados. Ver `ztor_km`."
           },
           "dip": {
             "anyOf": [
@@ -2023,7 +2023,7 @@
                 "type": "null"
               }
             ],
-            "description": "Degrees. See `ztor_km`."
+            "description": "Grados. Ver `ztor_km`."
           },
           "ztor_km": {
             "anyOf": [
@@ -2034,7 +2034,7 @@
                 "type": "null"
               }
             ],
-            "description": "Depth to the top of the rupture, km. With strike, dip and ztor_km all given, the rupture is a finite plane sized from the magnitude (Wells & Coppersmith 1994); otherwise it's a point source."
+            "description": "Profundidad del techo de la ruptura, en km. Si se dan strike, dip y ztor_km, la ruptura es un plano finito dimensionado a partir de la magnitud (Wells y Coppersmith 1994); si no, es una fuente puntual."
           },
           "probability_level": {
             "type": "string",
@@ -2043,7 +2043,7 @@
               "low",
               "very_low"
             ],
-            "description": "`high`: median ground motion, most likely damage state. `low`: median + 1σ ground motion. `very_low`: median + 1σ and the 85th-percentile damage state.",
+            "description": "`high` (alta): movimiento mediano, grado de daño más probable. `low` (baja): movimiento mediano + 1σ. `very_low` (muy baja): mediana + 1σ y el grado de daño del percentil 85.",
             "default": "high"
           }
         },
@@ -2068,25 +2068,25 @@
         "properties": {
           "lat": {
             "type": "number",
-            "description": "Rupture point: the epicentre, or the fault trace's midpoint."
+            "description": "Punto de la ruptura: el epicentro, o el punto medio de la traza de la falla."
           },
           "lon": {
             "type": "number"
           },
           "mag": {
             "type": "number",
-            "description": "Moment magnitude (Mw)."
+            "description": "Magnitud momento (Mw)."
           },
           "source": {
             "type": "string",
-            "description": "`manual`, or `fault:<fault_id>:<name>` in automatic mode.",
+            "description": "`manual`, o `fault:<fault_id>:<name>` en el modo automático.",
             "examples": [
               "fault:ES626:Alhama de Murcia (1/4)"
             ]
           },
           "finite_rupture": {
             "type": "boolean",
-            "description": "True when distances were measured to a finite rupture plane, false for the point-source approximation."
+            "description": "True si las distancias se midieron a un plano de ruptura finito, false con la aproximación de fuente puntual."
           },
           "probability_level": {
             "type": "string",
@@ -2122,7 +2122,7 @@
           },
           "updated_at": {
             "type": "number",
-            "description": "Unix time, seconds."
+            "description": "Tiempo Unix, en segundos."
           }
         },
         "additionalProperties": true,
@@ -2159,15 +2159,15 @@
                 "type": "null"
               }
             ],
-            "description": "[west, south, east, north], degrees."
+            "description": "[oeste, sur, este, norte], en grados."
           },
           "n_evaluated": {
             "type": "integer",
-            "description": "Buildings the scenario evaluated."
+            "description": "Edificios evaluados por el escenario."
           },
           "n_damaged": {
             "type": "integer",
-            "description": "Evaluated buildings in any state other than None."
+            "description": "Edificios evaluados en cualquier grado salvo sin daño."
           },
           "counts": {
             "$ref": "#/components/schemas/DamageCounts"
@@ -2181,7 +2181,7 @@
                 "type": "null"
               }
             ],
-            "description": "All buildings in the area, evaluated or not."
+            "description": "Todos los edificios de la zona, evaluados o no."
           },
           "pct_buildings_affected": {
             "anyOf": [
@@ -2192,7 +2192,7 @@
                 "type": "null"
               }
             ],
-            "description": "n_damaged / n_buildings, in %."
+            "description": "n_damaged / n_buildings, en %."
           },
           "population": {
             "anyOf": [
@@ -2203,7 +2203,7 @@
                 "type": "null"
               }
             ],
-            "description": "Residents, INE 1 January 2025."
+            "description": "Residentes, INE a 1 de enero de 2025."
           },
           "vulnerable_population": {
             "anyOf": [
@@ -2214,7 +2214,7 @@
                 "type": "null"
               }
             ],
-            "description": "Residents under 15 or aged 65 and over."
+            "description": "Residentes menores de 15 años o de 65 y más."
           },
           "affected_population": {
             "anyOf": [
@@ -2265,7 +2265,7 @@
                 "type": "null"
               }
             ],
-            "description": "Residents of Extensive or Complete buildings."
+            "description": "Residentes en edificios con daño Extenso o Completo."
           },
           "cost_meur": {
             "anyOf": [
@@ -2276,7 +2276,7 @@
                 "type": "null"
               }
             ],
-            "description": "Material repair cost, millions of euros."
+            "description": "Coste material de reparación, en millones de euros."
           },
           "debris_t": {
             "anyOf": [
@@ -2287,7 +2287,7 @@
                 "type": "null"
               }
             ],
-            "description": "Debris weight, tonnes."
+            "description": "Peso de los escombros, en toneladas."
           },
           "truck_rotations": {
             "anyOf": [
@@ -2298,7 +2298,7 @@
                 "type": "null"
               }
             ],
-            "description": "20-tonne truck trips to remove the debris."
+            "description": "Viajes de camión de 20 toneladas para retirar los escombros."
           },
           "shoring_props": {
             "anyOf": [
@@ -2309,11 +2309,11 @@
                 "type": "null"
               }
             ],
-            "description": "Shoring props (puntales) needed."
+            "description": "Puntales necesarios."
           },
           "municipality_code": {
             "type": "string",
-            "description": "INE 5-digit municipality code.",
+            "description": "Código de municipio del INE, de 5 dígitos.",
             "examples": [
               "30024"
             ]
@@ -2353,15 +2353,15 @@
                 "type": "null"
               }
             ],
-            "description": "[west, south, east, north], degrees."
+            "description": "[oeste, sur, este, norte], en grados."
           },
           "n_evaluated": {
             "type": "integer",
-            "description": "Buildings the scenario evaluated."
+            "description": "Edificios evaluados por el escenario."
           },
           "n_damaged": {
             "type": "integer",
-            "description": "Evaluated buildings in any state other than None."
+            "description": "Edificios evaluados en cualquier grado salvo sin daño."
           },
           "counts": {
             "$ref": "#/components/schemas/DamageCounts"
@@ -2375,7 +2375,7 @@
                 "type": "null"
               }
             ],
-            "description": "All buildings in the area, evaluated or not."
+            "description": "Todos los edificios de la zona, evaluados o no."
           },
           "pct_buildings_affected": {
             "anyOf": [
@@ -2386,7 +2386,7 @@
                 "type": "null"
               }
             ],
-            "description": "n_damaged / n_buildings, in %."
+            "description": "n_damaged / n_buildings, en %."
           },
           "population": {
             "anyOf": [
@@ -2397,7 +2397,7 @@
                 "type": "null"
               }
             ],
-            "description": "Residents, INE 1 January 2025."
+            "description": "Residentes, INE a 1 de enero de 2025."
           },
           "vulnerable_population": {
             "anyOf": [
@@ -2408,7 +2408,7 @@
                 "type": "null"
               }
             ],
-            "description": "Residents under 15 or aged 65 and over."
+            "description": "Residentes menores de 15 años o de 65 y más."
           },
           "affected_population": {
             "anyOf": [
@@ -2459,7 +2459,7 @@
                 "type": "null"
               }
             ],
-            "description": "Residents of Extensive or Complete buildings."
+            "description": "Residentes en edificios con daño Extenso o Completo."
           },
           "cost_meur": {
             "anyOf": [
@@ -2470,7 +2470,7 @@
                 "type": "null"
               }
             ],
-            "description": "Material repair cost, millions of euros."
+            "description": "Coste material de reparación, en millones de euros."
           },
           "debris_t": {
             "anyOf": [
@@ -2481,7 +2481,7 @@
                 "type": "null"
               }
             ],
-            "description": "Debris weight, tonnes."
+            "description": "Peso de los escombros, en toneladas."
           },
           "truck_rotations": {
             "anyOf": [
@@ -2492,7 +2492,7 @@
                 "type": "null"
               }
             ],
-            "description": "20-tonne truck trips to remove the debris."
+            "description": "Viajes de camión de 20 toneladas para retirar los escombros."
           },
           "shoring_props": {
             "anyOf": [
@@ -2503,11 +2503,11 @@
                 "type": "null"
               }
             ],
-            "description": "Shoring props (puntales) needed."
+            "description": "Puntales necesarios."
           },
           "section_code": {
             "type": "string",
-            "description": "INE 10-digit census section code."
+            "description": "Código de sección censal del INE, de 10 dígitos."
           },
           "municipality_code": {
             "type": "string"
@@ -2552,7 +2552,7 @@
               "type": "string"
             },
             "type": "object",
-            "description": "Status of each upstream feed."
+            "description": "Estado de cada feed de origen."
           }
         },
         "additionalProperties": true,
@@ -2564,7 +2564,7 @@
           "sources"
         ],
         "title": "TrafficIncidents",
-        "description": "Point/line features with `source` (DGT, SCT, DT-GV), `category`,\n`road`, `km_from`/`km_to`, `start_time`/`end_time` and more."
+        "description": "Puntos y líneas con `source` (DGT, SCT, DT-GV), `category`,\n`road`, `km_from`/`km_to`, `start_time`/`end_time` y más."
       },
       "ValidationError": {
         "properties": {
@@ -2664,7 +2664,7 @@
           "observed"
         ],
         "title": "WeatherObservations",
-        "description": "One point per AEMET station: `ta` temperature (°C), `hr` humidity (%),\n`prec` precipitation (mm), `vv`/`vmax` wind speed (m/s), `dv` wind\ndirection (°), `pres` pressure (hPa)."
+        "description": "Un punto por estación de la AEMET: `ta` temperatura (°C), `hr` humedad (%),\n`prec` precipitación (mm), `vv`/`vmax` velocidad del viento (m/s), `dv`\ndirección del viento (°), `pres` presión (hPa)."
       },
       "WeatherWarnings": {
         "properties": {
@@ -2698,38 +2698,38 @@
           "issued"
         ],
         "title": "WeatherWarnings",
-        "description": "One polygon per warning zone: `level` (yellow, orange, red),\n`phenomenon`, `event_es`/`event_en`, `onset`, `expires`."
+        "description": "Un polígono por zona de aviso: `level` (amarillo, naranja, rojo),\n`phenomenon`, `event_es`/`event_en`, `onset`, `expires`."
       }
     }
   },
   "tags": [
     {
       "name": "Earthquake",
-      "description": "twinQUAKE: faults and earthquake scenarios."
+      "description": "twinQUAKE: fallas y escenarios sísmicos."
     },
     {
       "name": "Flood",
-      "description": "twinFLOOD: flood-zone scenarios."
+      "description": "twinFLOOD: escenarios de zonas inundables."
     },
     {
       "name": "Results",
-      "description": "A scenario's outputs, by its `scenario_id`."
+      "description": "Los resultados de un escenario, por su `scenario_id`."
     },
     {
       "name": "Tiles",
-      "description": "Vector tiles joined with a scenario's results."
+      "description": "Teselas vectoriales unidas a los resultados de un escenario."
     },
     {
       "name": "Exposure",
-      "description": "Static attributes of the building stock."
+      "description": "Atributos estáticos del parque de edificios."
     },
     {
       "name": "Real time",
-      "description": "Live traffic and weather layers (proxied)."
+      "description": "Capas de tráfico y meteorología en tiempo real (a través de la API)."
     },
     {
       "name": "Operations",
-      "description": "Health and warm-up."
+      "description": "Estado y precalentamiento."
     }
   ]
 }

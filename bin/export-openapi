@@ -1,7 +1,10 @@
 #!/usr/bin/env bash
 # export-openapi: regenerate the docs site's API reference
-# (apps/docs/openapi.json) from the scenario API's FastAPI app
-# (services/scenario/src/scenario/local.py + api_models.py).
+# (apps/docs/openapi.json, and the Spanish apps/docs/openapi.es.json) from
+# the scenario API's FastAPI app (services/scenario/src/scenario/local.py +
+# api_models.py). The Spanish text comes from the catalog
+# apps/docs/src/i18n/openapi.es.json, keyed by the English text; a string
+# without a translation makes this fail, listing it.
 #
 # Run after changing a route, its metadata or api_models.py;
 # services/scenario/tests/test_api_reference.py fails until you do.
@@ -12,5 +15,6 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
-uv run --package twiner-scenario python -m scenario.openapi_export apps/docs/openapi.json
-echo "export-openapi: wrote apps/docs/openapi.json"
+uv run --package twiner-scenario python -m scenario.openapi_export \
+  apps/docs/openapi.json apps/docs/openapi.es.json apps/docs/src/i18n/openapi.es.json
+echo "export-openapi: wrote apps/docs/openapi.json and apps/docs/openapi.es.json"

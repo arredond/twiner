@@ -44,8 +44,27 @@ linked from each hazard card.
     the two drift.
   - `test_api_reference.py` fails when `openapi.json` is stale.
     `test_local_api.py` validates real responses against the models.
-  - The reference is descriptive. It is English only, and it is not a
-    stable public contract: no auth, versioning or rate limits yet.
+  - The reference is descriptive, not a stable public contract: no auth,
+    versioning or rate limits yet.
+  - **Spanish** (added after the first version, which reused the English
+    spec under `/docs/es/api/`). The plugin has no i18n, so:
+    - `bin/export-openapi` also writes `openapi.es.json`, with every
+      summary and description replaced from the catalog
+      `apps/docs/src/i18n/openapi.es.json`, keyed by the English text. The
+      test fails on a missing or unused translation, so a route change
+      can't leave the Spanish reference behind.
+    - Tag names stay English in the Spanish spec, because the plugin builds
+      tag page URLs from them and the language picker needs matching URLs.
+      Their display names (`apiSidebar.mjs`) are applied by the sidebar
+      route middleware and by `src/middleware.ts`.
+    - `src/middleware.ts` also translates the plugin's own hardcoded labels
+      ("Request Body", "required", "Any of:"...) on `/docs/es/api/` pages,
+      on the rendered HTML (exact text nodes, «anchor» labels and
+      aria-label/title attributes only). It works in dev and in the static
+      build alike.
+    - Field titles that Pydantic and FastAPI generate from field names
+      ("Scenario Id") are dropped from both specs. They only repeated the
+      field name.
 
 **Hosting: the same Cloudflare Pages project as the app.** `apps/web`'s
 `npm run build` now also runs `build:docs`, which builds `apps/docs` and

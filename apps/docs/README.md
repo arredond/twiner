@@ -37,4 +37,8 @@ npm run build      # static site in dist/
   `/docs/es/...`.
 - The API reference comes from the scenario API's FastAPI app. Change
   routes and `services/scenario/src/scenario/api_models.py`, then run
-  `bin/export-openapi`. Don't edit `openapi.json` by hand.
+  `bin/export-openapi`. Don't edit `openapi.json` or `openapi.es.json` by
+  hand. Spanish text for the API goes in `src/i18n/openapi.es.json` (keyed
+  by the English text; the export fails, naming the string, when one is
+  missing). Spanish names for the API's tags go in `src/apiSidebar.mjs`,
+  and for the plugin's own labels in `src/middleware.ts`.

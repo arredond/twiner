@@ -35,9 +35,10 @@ export default defineConfig({
 				// Generated from the scenario API's FastAPI app by
 				// bin/export-openapi; a test fails when it goes stale.
 				// The plugin has no i18n: the reference is generated twice, under
-				// /docs/api/ and /docs/es/api/ (same English content, Spanish site
-				// chrome), so the language picker never lands on a 404. Each
-				// locale's sidebar keeps only its own copy (src/routeData.ts).
+				// /docs/api/ from openapi.json and /docs/es/api/ from its Spanish
+				// translation (bin/export-openapi). Each locale's sidebar keeps
+				// only its own copy (src/routeData.ts), and src/middleware.ts
+				// translates the plugin's own labels on the Spanish pages.
 				starlightOpenAPI([
 					{
 						base: 'api',
@@ -46,7 +47,7 @@ export default defineConfig({
 					},
 					{
 						base: 'es/api',
-						schema: './openapi.json',
+						schema: './openapi.es.json',
 						sidebar: { label: API_SIDEBAR_LABELS.es, collapsed: true },
 					},
 				]),
