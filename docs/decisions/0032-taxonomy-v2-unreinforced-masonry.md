@@ -56,8 +56,9 @@ assert a unit material Catastro doesn't record.
   masonry, 2,953,201 rubble-stone masonry. Lorca: 15,634 / 6,380 / 5,870.
 - Damage rises substantially wherever there is old masonry. For Lorca 2011
   (Mw 5.2), "very low" goes from 2,344 Moderate to 4,745 Moderate + 1,075
-  Extensive. "Low" and "very low" now bracket the 2,346 buildings observed
-  at EMS-98 grade 3+. See docs/validation-lorca-2011.md §13.
+  Extensive. The town's inspection found 2,346 buildings at moderate damage
+  or worse (municipality-wide model vs. town-only observation, so
+  indicative only). See docs/validation-lorca-2011.md §1 and §13.
 - **Deploying** needs `exposure.parquet` and `fragility.parquet` uploaded
   to S3 (docs/deploy-aws-setup.md), a `DATA_VERSION` bump, a deploy, and
   `bin/warm-scenario-cache`. Cached results computed with the old classes

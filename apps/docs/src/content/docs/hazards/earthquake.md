@@ -339,8 +339,11 @@ The 11 May 2011 Lorca earthquake is the reference event:
 
 - **Event.** Mw 5.2, very shallow (a few km deep), on the Alhama de Murcia
   fault.
-- **Losses.** Nine deaths. Of 6,416 inspected buildings, about 2,350 had
-  moderate or worse damage on the EMS-98 scale.
+- **Losses.** Nine deaths. The town's post-earthquake inspection covered
+  6,416 of its 7,890 buildings: 4,035 had slight damage (EMS-98 grades
+  1–2), 1,328 moderate (grades 2–3), 689 moderate to severe (grades 3–4),
+  and 329 had to be demolished (grades 4–5) [15]. That is 2,346 buildings
+  with moderate damage or worse.
 - **Recorded shaking.** About 0.36 g peak ground acceleration near the
   town.
 
@@ -351,9 +354,9 @@ Re-running it in manual mode on the national data shows:
   few percent of it.
 - **Intensity.** The estimate for the town is VI at median and between VI
   and VII at +1σ. IGN observed VII.
-- **Damage.** In 2011, 2,346 of the inspected buildings had moderate or
-  worse damage (EMS-98 grade 3 or more). Of Lorca's 27,884 buildings,
-  TWIN-ER gives:
+- **Damage.** TWIN-ER's figures cover the whole municipality of Lorca,
+  27,884 buildings, about 3.5 times the town's 7,890: Lorca is one of
+  Spain's largest municipalities, and mostly rural. They give:
 
   | Level | Slight | Moderate | Extensive | Complete |
   |---|---|---|---|---|
@@ -361,13 +364,16 @@ Re-running it in manual mode on the national data shows:
   | Low | 10,554 | 0 | 0 | 0 |
   | Very low | 8,641 | 4,745 | 1,075 | 0 |
 
-  So "low" probability under-predicts moderate damage and "very low"
-  over-predicts it (about 5,800 buildings at Moderate or worse). The two
-  levels bracket what was observed.
+  At "low" probability no building reaches Moderate, against 2,346 at
+  moderate or worse in the town alone. At "very low", about 5,800 do,
+  across the whole municipality. "Low" clearly under-predicts. "Very low"
+  is of the right order, but the two counts cover different areas.
 
-The comparison is indicative, not a calibration. The inspections targeted
-buildings reported as damaged rather than the whole stock, and EMS-98
-damage grades don't map exactly onto the fragility model's damage states.
+The comparison is indicative, not a calibration. The observed counts cover
+the town and the model's the municipality. The inspection's categories
+were set by the town's building-safety forms and span EMS-98 grades
+(moderate is grades 2–3), so they don't map exactly onto the fragility
+model's damage states either.
 Site amplification is unlikely to be a major source of error: ESRM20's
 $V_{S30}$ in Lorca matches local surveys. The fragility model is the larger
 uncertainty. Martins & Silva's functions are analytical and global, and
@@ -451,3 +457,6 @@ damage records is the next step.
 14. Musson, R. M. W., Grünthal, G., & Stucchi, M. (2010). The comparison of
     macroseismic intensity scales. *Journal of Seismology*, 14, 413–428.
     [doi:10.1007/s10950-009-9172-0](https://doi.org/10.1007/s10950-009-9172-0)
+15. Feriche, M., Vidal, F., Alguacil, G., Navarro, M., & Aranda, C. (2012).
+    Vulnerabilidad y daño en el terremoto de Lorca de 2011. *Física de la
+    Tierra*, 24, 255–287.

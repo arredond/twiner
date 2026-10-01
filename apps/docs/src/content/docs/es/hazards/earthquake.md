@@ -361,8 +361,11 @@ El terremoto de Lorca del 11 de mayo de 2011 es el evento de referencia:
 
 - **Evento.** Mw 5,2, muy superficial (pocos km de profundidad), en la
   falla de Alhama de Murcia.
-- **Pérdidas.** Nueve fallecidos. De 6.416 edificios inspeccionados, unos
-  2.350 tuvieron daño moderado o superior en la escala EMS-98.
+- **Pérdidas.** Nueve fallecidos. La inspección posterior al terremoto
+  cubrió 6.416 de los 7.890 edificios de la ciudad: 4.035 con daños leves
+  (grados 1–2 de la EMS-98), 1.328 moderados (grados 2–3), 689 de
+  moderados a graves (grados 3–4), y 329 tuvieron que ser demolidos
+  (grados 4–5) [15]. Son 2.346 edificios con daño moderado o superior.
 - **Movimiento registrado.** Unos 0,36 g de aceleración máxima cerca de la
   ciudad.
 
@@ -373,9 +376,9 @@ Al reproducirlo en modo manual con los datos nacionales:
   "muy baja") queda a pocos puntos porcentuales.
 - **Intensidad.** La estimación para la ciudad es VI con la mediana y entre
   VI y VII con +1σ. El IGN observó VII.
-- **Daño.** En 2011, 2.346 de los edificios inspeccionados tuvieron daño
-  moderado o superior (grado 3 o más de la EMS-98). De los 27.884 edificios
-  de Lorca, TWIN-ER da:
+- **Daño.** Las cifras de TWIN-ER cubren todo el municipio de Lorca,
+  27.884 edificios, unas 3,5 veces los 7.890 de la ciudad: Lorca es uno de
+  los municipios más extensos de España, y mayoritariamente rural. Dan:
 
   | Nivel | Leve | Moderado | Extenso | Completo |
   |---|---|---|---|---|
@@ -383,14 +386,18 @@ Al reproducirlo en modo manual con los datos nacionales:
   | Baja | 10.554 | 0 | 0 | 0 |
   | Muy baja | 8.641 | 4.745 | 1.075 | 0 |
 
-  Así, la probabilidad "baja" subestima el daño moderado y la "muy baja" lo
-  sobrestima (unos 5.800 edificios con daño Moderado o superior). Los dos
-  niveles acotan lo observado.
+  Con probabilidad "baja" ningún edificio llega a Moderado, frente a 2.346
+  con daño moderado o superior solo en la ciudad. Con "muy baja" llegan
+  unos 5.800, en todo el municipio. La "baja" subestima claramente; la "muy
+  baja" da el orden de magnitud correcto, pero los dos recuentos cubren
+  zonas distintas.
 
-La comparación es orientativa, no una calibración. Las inspecciones se
-centraron en los edificios notificados como dañados, no en todo el parque,
-y los grados de daño de la EMS-98 no se corresponden exactamente con los
-grados del modelo de fragilidad. Es poco probable que la amplificación
+La comparación es orientativa, no una calibración. Los recuentos
+observados cubren la ciudad y los del modelo, el municipio. Además, las
+categorías de la inspección proceden de las fichas de seguridad de los
+edificios y abarcan varios grados de la EMS-98 (moderado son los grados
+2–3), así que tampoco se corresponden exactamente con los grados del
+modelo de fragilidad. Es poco probable que la amplificación
 local sea una fuente de error importante: la $V_{S30}$ del ESRM20 en Lorca
 coincide con los estudios locales. La mayor incertidumbre está en el
 modelo de fragilidad. Las funciones de Martins y Silva son analíticas y
@@ -473,3 +480,6 @@ calibrar con los registros de daño de Lorca, edificio a edificio.
 14. Musson, R. M. W., Grünthal, G., & Stucchi, M. (2010). The comparison of
     macroseismic intensity scales. *Journal of Seismology*, 14, 413–428.
     [doi:10.1007/s10950-009-9172-0](https://doi.org/10.1007/s10950-009-9172-0)
+15. Feriche, M., Vidal, F., Alguacil, G., Navarro, M., & Aranda, C. (2012).
+    Vulnerabilidad y daño en el terremoto de Lorca de 2011. *Física de la
+    Tierra*, 24, 255–287.

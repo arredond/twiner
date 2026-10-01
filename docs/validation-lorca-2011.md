@@ -18,14 +18,26 @@ anything beyond a demo.
 - 9 fatalities, almost all from falling non-structural building elements,
   not structural collapse — the reason MERISUR built a debris model at all
   (`merisur.md` §2).
-- Of **6,416 buildings inspected**, EMS-98 grading came back: 4,035 at
-  grade 2 (slight), 1,328 at grade 3 (moderate), 689 at grade 4
-  (substantial/heavy), 329 at grade 5 (destruction) — i.e. essentially every
-  *inspected* building had at least slight damage (inspection targeted
-  reported-damaged buildings, not a full census, so this isn't directly "X%
-  of Lorca's building stock" — see caveats below).
+- **Damage, town of Lorca** (corrected 2026-10-01 against the primary
+  source, Feriche et al. 2012 — earlier versions of this doc said "grade 2
+  (slight), grade 3 (moderate)...", which misstated the categories): of the
+  town's 7,890 cadastral buildings, IGN inspected 7,839 within a week;
+  6,416 have a municipal inspection form. Those forms, classified by
+  functionality and mapped onto EMS-98 grade *ranges*, give 4,035 slight
+  (grades 1–2), 1,328 moderate (2–3), 689 moderate to severe (3–4) and 329
+  demolished (4–5): **2,346 at moderate or worse**. These counts cover the
+  **town** only; twiner's Lorca figures cover the whole municipality
+  (27,884 buildings, mostly rural). Later sections (§10.3, §10.5, §10.6)
+  describe the inspection as "targeting reported-damaged buildings" and
+  compare it against the municipality's 27,884: both are wrong per this
+  source. The inspection covered almost the whole town, and the right
+  denominator is the town's 7,890.
 
-Sources: [2011 Lorca earthquake — Wikipedia](https://en.wikipedia.org/wiki/2011_Lorca_earthquake),
+Sources: Feriche, M., Vidal, F., Alguacil, G., Navarro, M. & Aranda, C.
+(2012), *Vulnerabilidad y daño en el terremoto de Lorca de 2011*, Física de
+la Tierra 24, 255–287 (damage counts; the paper itself applies a Risk-UE
+LM1-style vulnerability-index method);
+[2011 Lorca earthquake — Wikipedia](https://en.wikipedia.org/wiki/2011_Lorca_earthquake),
 [BGS event page](https://www.earthquakes.bgs.ac.uk/research/events/LorcaSpainMay2011.html),
 source-parameter studies cited there for the focal mechanism.
 
@@ -666,11 +678,14 @@ Before the fix, the same runs gave 0 damaged at "high", 8,884 Slight at
 | Low | 7,756 | 15,846 | 154 | 0 | 4,128 |
 | Very low | 3,848 | 6,380 | 5,119 | 3,686 | 8,851 |
 
-**Reading.** In 2011, 2,346 inspected buildings were EMS-98 grade 3 or
-worse. "Low" (0 Moderate+) and "very low" (5,820 Moderate+) now bracket
-that, where before both fell short. §1's caveat still applies: the
-inspection targeted reported-damaged buildings, so these aren't
-like-for-like counts.
+**Reading.** In 2011, 2,346 of the *town's* inspected buildings had
+moderate damage or worse (§1, inspection categories spanning EMS-98
+grades 2–3 and up). "Low" gives 0 Moderate+ and clearly under-predicts.
+"Very low" gives 5,820 Moderate+ across the whole *municipality* (27,884
+buildings vs. the town's 7,890), so the right order of magnitude, but not
+a like-for-like count. A fair comparison needs twiner's results restricted
+to the town's buildings, and a documented mapping between the inspection
+categories and the fragility model's damage states.
 
 Against MERISUR's live tool on ES626 at "high" (§11: mostly Moderate, some
 Extensive and Complete), twiner still gives only None/Slight. The modal
