@@ -26,3 +26,5 @@ infra/cdk.out/
 # buildings files written by services/scenario (results_store.py).
 results/
 
+# Other
+.DS_Store
