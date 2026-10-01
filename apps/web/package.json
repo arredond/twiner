@@ -5,9 +5,10 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "build": "tsc -b && vite build && npm run build:docs",
     "lint": "oxlint",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "build:docs": "npm ci --prefix ../docs && npm run build --prefix ../docs && rm -rf dist/docs && cp -R ../docs/dist dist/docs"
   },
   "dependencies": {
     "@mapbox/maki": "^8.2.0",

@@ -1,0 +1,2950 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "TWIN-ER API",
+    "description": "The HTTP API behind the TWIN-ER web app: run earthquake and flood scenarios,\nthen read their results by area, as map tiles, or as GeoJSON.\n\n## How it fits together\n\n1. **Run a scenario.** `GET /scenarios/fault` (a fault's maximum-magnitude\n   earthquake), `POST /scenarios/manual` (an earthquake you define) or\n   `POST /scenarios/flood`. The response has a `scenario_id` and one row of\n   figures per affected municipality.\n2. **Read the details** with that id: per-census-section figures, affected\n   critical infrastructure, intensity bands (`/results/{scenario_id}/...`),\n   and building/debris vector tiles (`/tiles/{scenario_id}/...`).\n\nScenario ids are content-addressed: the same inputs on the same data and\ncode version give the same id, so results can be cached and shared.\n\n## Deployments\n\n- **Local** (`bin/twiner start`): every route below, on one server.\n- **Cloud** (AWS Lambda function URLs): the scenario function serves every\n  route except `/tiles/...`, which a separate tiles function serves, and the\n  two local-only routes `/results/{scenario_id}/status` and\n  `/results/{scenario_id}/municipality_stats`.\n\nThere is no authentication, versioning guarantee or rate limit yet: this\nreference describes the API the web app uses, not a stable public contract.\n\n## Errors\n\nThe local server answers errors as `{\"detail\": \"...\"}`; the Lambda as\n`{\"error\": \"...\"}`.\n\nSee the [twinQUAKE](/docs/hazards/earthquake/) and\n[twinFLOOD](/docs/hazards/flood/) pages for what the numbers mean.\n",
+    "version": "6"
+  },
+  "servers": [
+    {
+      "url": "http://localhost:8000",
+      "description": "Local development server"
+    }
+  ],
+  "paths": {
+    "/scenarios/manual": {
+      "post": {
+        "tags": [
+          "Earthquake"
+        ],
+        "summary": "Run a manual earthquake scenario",
+        "description": "Simulates an earthquake you define: epicentre, magnitude and, optionally, the fault mechanism and rupture plane. Returns the scenario id and per-municipality damage and impact figures.",
+        "operationId": "run_manual_scenario",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ManualRuptureRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EarthquakeScenarioResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid parameters.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "A pipeline output is missing on the server.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/scenarios/flood": {
+      "post": {
+        "tags": [
+          "Flood"
+        ],
+        "summary": "Run a flood scenario",
+        "description": "Buildings, residents and critical infrastructure inside MITECO's flood zone for one return period, in a circle (up to 200 km) or an administrative area.",
+        "operationId": "flood_scenario",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FloodScenarioRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FloodScenarioResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid parameters.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "A pipeline output is missing on the server.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/faults": {
+      "get": {
+        "tags": [
+          "Earthquake"
+        ],
+        "summary": "List the active faults",
+        "description": "Every QAFI v4 fault available to automatic mode, with its maximum magnitude, mechanism, seismogenic depth range and trace.",
+        "operationId": "list_faults",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FaultsResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "A pipeline output is missing on the server.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/scenarios/fault": {
+      "get": {
+        "tags": [
+          "Earthquake"
+        ],
+        "summary": "Run a fault's maximum-magnitude earthquake",
+        "description": "Automatic mode: the maximum-magnitude earthquake of one QAFI fault, rupturing its whole modelled plane. A GET, so the result is cacheable by URL. `near_lat`/`near_lon` only matter for a fault without rupture geometry (none in QAFI v4 today).",
+        "operationId": "run_fault_scenario",
+        "parameters": [
+          {
+            "name": "fault_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "QAFI fault id, from GET /faults.",
+              "examples": [
+                "ES626"
+              ],
+              "title": "Fault Id"
+            },
+            "description": "QAFI fault id, from GET /faults."
+          },
+          {
+            "name": "probability_level",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "high",
+                "low",
+                "very_low"
+              ],
+              "type": "string",
+              "default": "high",
+              "title": "Probability Level"
+            }
+          },
+          {
+            "name": "near_lat",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Near Lat"
+            }
+          },
+          {
+            "name": "near_lon",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Near Lon"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EarthquakeScenarioResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "A pipeline output is missing on the server.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/buildings/{building_id}": {
+      "get": {
+        "tags": [
+          "Exposure"
+        ],
+        "summary": "Get a building's vulnerability class",
+        "description": "The vulnerability (taxonomy) and height class assigned to one cadastral building. Its footprint, floors, year and use are in the buildings vector tiles.",
+        "operationId": "building_info",
+        "parameters": [
+          {
+            "name": "building_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Building Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Building"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "A pipeline output is missing on the server.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/results/{scenario_id}/status": {
+      "get": {
+        "tags": [
+          "Results"
+        ],
+        "summary": "Get a scenario's layer readiness",
+        "description": "Which of a scenario's outputs are ready. Scenarios currently compute synchronously, so every flag is true once the scenario call has returned. Local server only.",
+        "operationId": "scenario_status",
+        "parameters": [
+          {
+            "name": "scenario_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Scenario Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScenarioStatus"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/results/{scenario_id}/municipality_stats": {
+      "get": {
+        "tags": [
+          "Results"
+        ],
+        "summary": "Get per-municipality figures",
+        "description": "The same per-municipality rows the scenario call returned. Local server only.",
+        "operationId": "scenario_municipality_stats",
+        "parameters": [
+          {
+            "name": "scenario_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Scenario Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/SeismicMunicipalityStats"
+                      }
+                    },
+                    {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/FloodMunicipalityStats"
+                      }
+                    }
+                  ],
+                  "title": "Response 200 Scenario Municipality Stats"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/results/{scenario_id}/section_stats": {
+      "get": {
+        "tags": [
+          "Results"
+        ],
+        "summary": "Get per-census-section figures",
+        "description": "Impact figures for every affected INE census section, or only one municipality's with `municipality_code`. Earthquake rows carry damage counts and cost/debris estimates; flood rows carry buildings, residents and area in the flood zone.",
+        "operationId": "scenario_section_stats",
+        "parameters": [
+          {
+            "name": "scenario_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Scenario Id"
+            }
+          },
+          {
+            "name": "municipality_code",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Municipality Code"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/SeismicSectionStats"
+                      }
+                    },
+                    {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/FloodSectionStats"
+                      }
+                    }
+                  ],
+                  "title": "Response 200 Scenario Section Stats"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/results/{scenario_id}/section_severity": {
+      "get": {
+        "tags": [
+          "Results"
+        ],
+        "summary": "Get the census-section choropleth values",
+        "description": "Census section code to one number per section: the mean damage state (0 None to 4 Complete) for an earthquake, or the % of buildings in the flood zone for a flood.",
+        "operationId": "scenario_section_severity",
+        "parameters": [
+          {
+            "name": "scenario_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Scenario Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "number"
+                  },
+                  "title": "Response 200 Scenario Section Severity"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/results/{scenario_id}/infrastructure": {
+      "get": {
+        "tags": [
+          "Results"
+        ],
+        "summary": "Get affected critical infrastructure",
+        "description": "Hospitals, schools, care homes, emergency services, power facilities, bridges and dams affected by the scenario, most intense first. For an earthquake: assets at estimated intensity VI or more, plus facilities whose building was damaged. For a flood: assets inside the flood zone.",
+        "operationId": "scenario_infrastructure",
+        "parameters": [
+          {
+            "name": "scenario_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Scenario Id"
+            }
+          },
+          {
+            "name": "municipality_code",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Municipality Code"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/InfrastructureAsset"
+                  },
+                  "title": "Response 200 Scenario Infrastructure"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/results/{scenario_id}/intensity": {
+      "get": {
+        "tags": [
+          "Results"
+        ],
+        "summary": "Get the intensity bands",
+        "description": "Contours of estimated macroseismic intensity (EMS-98) as GeoJSON. Earthquake scenarios only.",
+        "operationId": "scenario_intensity",
+        "parameters": [
+          {
+            "name": "scenario_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Scenario Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IntensityBands"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/tiles/{scenario_id}/{z}/{x}/{y}.mvt": {
+      "get": {
+        "tags": [
+          "Tiles"
+        ],
+        "summary": "Get a buildings tile with scenario results",
+        "description": "A Mapbox Vector Tile of building footprints, each carrying this scenario's damage state and probabilities when it has one. 204 for an empty tile. Served by a separate tiles function in the cloud deployment.",
+        "operationId": "scenario_tile",
+        "parameters": [
+          {
+            "name": "scenario_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Scenario Id"
+            }
+          },
+          {
+            "name": "z",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Z"
+            }
+          },
+          {
+            "name": "x",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "X"
+            }
+          },
+          {
+            "name": "y",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Y"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Tile",
+            "content": {
+              "application/vnd.mapbox-vector-tile": {}
+            }
+          },
+          "204": {
+            "description": "No buildings in this tile."
+          },
+          "404": {
+            "description": "Not found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/tiles/{scenario_id}/debris/{z}/{x}/{y}.mvt": {
+      "get": {
+        "tags": [
+          "Tiles"
+        ],
+        "summary": "Get a debris tile",
+        "description": "A Mapbox Vector Tile of the debris envelopes (the area around each damaged building that rubble may reach) for this scenario's damaged buildings.",
+        "operationId": "scenario_debris_tile",
+        "parameters": [
+          {
+            "name": "scenario_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Scenario Id"
+            }
+          },
+          {
+            "name": "z",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Z"
+            }
+          },
+          {
+            "name": "x",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "X"
+            }
+          },
+          {
+            "name": "y",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Y"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Tile",
+            "content": {
+              "application/vnd.mapbox-vector-tile": {}
+            }
+          },
+          "204": {
+            "description": "No debris in this tile."
+          },
+          "404": {
+            "description": "Not found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/realtime/dgt-incidents": {
+      "get": {
+        "tags": [
+          "Real time"
+        ],
+        "summary": "Get current traffic incidents",
+        "description": "Active incidents from the DGT, Servei Català de Trànsit and Trafikoa DATEX II feeds, as GeoJSON.",
+        "operationId": "realtime_dgt_incidents",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TrafficIncidents"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "The upstream real-time feed is unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/realtime/aemet-observations": {
+      "get": {
+        "tags": [
+          "Real time"
+        ],
+        "summary": "Get latest weather observations",
+        "description": "Each AEMET automatic station's latest hourly reading, as GeoJSON.",
+        "operationId": "realtime_aemet_observations",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WeatherObservations"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "The upstream real-time feed is unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/realtime/aemet-warnings": {
+      "get": {
+        "tags": [
+          "Real time"
+        ],
+        "summary": "Get weather warnings",
+        "description": "AEMET's current and upcoming Meteoalerta warnings, as GeoJSON polygons.",
+        "operationId": "realtime_aemet_warnings",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WeatherWarnings"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "The upstream real-time feed is unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/warmup": {
+      "get": {
+        "tags": [
+          "Operations"
+        ],
+        "summary": "Warm up the scenario function",
+        "description": "Loads data and compiled code ahead of the first scenario. The web app calls it on page load.",
+        "operationId": "warmup",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Warmup"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/health": {
+      "get": {
+        "tags": [
+          "Operations"
+        ],
+        "summary": "Health check",
+        "operationId": "health",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Health"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "AdminRegion": {
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "admin",
+            "title": "Type"
+          },
+          "level": {
+            "type": "string",
+            "enum": [
+              "ccaa",
+              "province",
+              "municipality"
+            ],
+            "title": "Level"
+          },
+          "code": {
+            "type": "string",
+            "title": "Code",
+            "description": "INE code: 2 digits for a CCAA or province, 5 for a municipality.",
+            "examples": [
+              "46250"
+            ]
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "type",
+          "level",
+          "code"
+        ],
+        "title": "AdminRegion"
+      },
+      "Building": {
+        "properties": {
+          "building_id": {
+            "type": "string",
+            "title": "Building Id",
+            "examples": [
+              "000100100XG17C"
+            ]
+          },
+          "taxonomy_class": {
+            "type": "string",
+            "enum": [
+              "CR_LDUAL-DUL",
+              "MR_LWAL-DUL",
+              "MUR-STRUB_LWAL-DNO"
+            ],
+            "title": "Taxonomy Class"
+          },
+          "height_class": {
+            "type": "integer",
+            "title": "Height Class",
+            "description": "Storeys, 1 to 12."
+          },
+          "taxonomy_source": {
+            "type": "string",
+            "title": "Taxonomy Source",
+            "description": "How the class was assigned (`heuristic_v1`: from construction year and floors)."
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "building_id",
+          "taxonomy_class",
+          "height_class",
+          "taxonomy_source"
+        ],
+        "title": "Building"
+      },
+      "CircleRegion": {
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "circle",
+            "title": "Type"
+          },
+          "lat": {
+            "type": "number",
+            "title": "Lat"
+          },
+          "lon": {
+            "type": "number",
+            "title": "Lon"
+          },
+          "radius_km": {
+            "type": "number",
+            "maximum": 200.0,
+            "exclusiveMinimum": 0.0,
+            "title": "Radius Km"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "type",
+          "lat",
+          "lon",
+          "radius_km"
+        ],
+        "title": "CircleRegion"
+      },
+      "DamageCounts": {
+        "properties": {
+          "None": {
+            "type": "integer",
+            "title": "None"
+          },
+          "Slight": {
+            "type": "integer",
+            "title": "Slight"
+          },
+          "Moderate": {
+            "type": "integer",
+            "title": "Moderate"
+          },
+          "Extensive": {
+            "type": "integer",
+            "title": "Extensive"
+          },
+          "Complete": {
+            "type": "integer",
+            "title": "Complete"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "None",
+          "Slight",
+          "Moderate",
+          "Extensive",
+          "Complete"
+        ],
+        "title": "DamageCounts",
+        "description": "Buildings per damage state (the state reported at the chosen probability level)."
+      },
+      "EarthquakeScenarioResponse": {
+        "properties": {
+          "scenario_id": {
+            "type": "string",
+            "title": "Scenario Id",
+            "description": "Content-addressed id: the same inputs always give the same id. Use it with the /results/{scenario_id}/... and /tiles/{scenario_id}/... routes."
+          },
+          "rupture": {
+            "$ref": "#/components/schemas/Rupture"
+          },
+          "evaluated_region": {
+            "$ref": "#/components/schemas/EvaluatedRegion"
+          },
+          "n_evaluated": {
+            "type": "integer",
+            "title": "N Evaluated"
+          },
+          "n_damaged": {
+            "type": "integer",
+            "title": "N Damaged"
+          },
+          "municipality_stats": {
+            "items": {
+              "$ref": "#/components/schemas/SeismicMunicipalityStats"
+            },
+            "type": "array",
+            "title": "Municipality Stats",
+            "description": "Every municipality with at least one evaluated building."
+          },
+          "infrastructure_summary": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/InfrastructureSummary"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Null when no infrastructure data is deployed."
+          },
+          "cached": {
+            "type": "boolean",
+            "title": "Cached",
+            "description": "Whether the result came from the result cache."
+          },
+          "elapsed_ms": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Elapsed Ms",
+            "description": "Server-side time. Local server only."
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "scenario_id",
+          "rupture",
+          "evaluated_region",
+          "n_evaluated",
+          "n_damaged",
+          "municipality_stats",
+          "infrastructure_summary",
+          "cached"
+        ],
+        "title": "EarthquakeScenarioResponse"
+      },
+      "Error": {
+        "properties": {
+          "detail": {
+            "type": "string",
+            "title": "Detail",
+            "description": "What went wrong."
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "detail"
+        ],
+        "title": "Error",
+        "description": "Local server shape. The AWS Lambda answers `{\"error\": \"...\"}` instead."
+      },
+      "EvaluatedRegion": {
+        "properties": {
+          "lat": {
+            "type": "number",
+            "title": "Lat"
+          },
+          "lon": {
+            "type": "number",
+            "title": "Lon"
+          },
+          "radius_km": {
+            "type": "number",
+            "title": "Radius Km"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "lat",
+          "lon",
+          "radius_km"
+        ],
+        "title": "EvaluatedRegion",
+        "description": "The circle the scenario searched. Buildings outside it were not\nevaluated, which is different from evaluated and undamaged."
+      },
+      "Fault": {
+        "properties": {
+          "fault_id": {
+            "type": "string",
+            "title": "Fault Id",
+            "description": "QAFI v4 fault id, e.g. `ES626`.",
+            "examples": [
+              "ES626"
+            ]
+          },
+          "name": {
+            "type": "string",
+            "title": "Name",
+            "examples": [
+              "Alhama de Murcia (1/4)"
+            ]
+          },
+          "mmax": {
+            "type": "number",
+            "title": "Mmax",
+            "description": "Maximum moment magnitude (Mw) used in automatic mode."
+          },
+          "mmax_source": {
+            "type": "string",
+            "enum": [
+              "qafi_v4_published",
+              "estimated_wells_coppersmith_1994"
+            ],
+            "title": "Mmax Source",
+            "description": "Literature value published in QAFI, or estimated from trace length with Wells & Coppersmith (1994)."
+          },
+          "length_km": {
+            "type": "number",
+            "title": "Length Km"
+          },
+          "rake": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rake",
+            "description": "Degrees, Aki & Richards convention."
+          },
+          "dip": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dip",
+            "description": "Degrees."
+          },
+          "min_depth_km": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Min Depth Km",
+            "description": "Top of the seismogenic layer."
+          },
+          "max_depth_km": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Depth Km",
+            "description": "Bottom of the seismogenic layer."
+          },
+          "has_rupture_geometry": {
+            "type": "boolean",
+            "title": "Has Rupture Geometry",
+            "description": "Whether QAFI gives the dip and depth range needed for a finite rupture plane (true for every QAFI v4 fault)."
+          },
+          "geometry_geojson": {
+            "type": "string",
+            "title": "Geometry Geojson",
+            "description": "The fault trace as a GeoJSON (Multi)LineString, serialised as a string."
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "fault_id",
+          "name",
+          "mmax",
+          "mmax_source",
+          "length_km",
+          "rake",
+          "dip",
+          "min_depth_km",
+          "max_depth_km",
+          "has_rupture_geometry",
+          "geometry_geojson"
+        ],
+        "title": "Fault"
+      },
+      "FaultsResponse": {
+        "properties": {
+          "faults": {
+            "items": {
+              "$ref": "#/components/schemas/Fault"
+            },
+            "type": "array",
+            "title": "Faults",
+            "description": "Every fault, sorted by name."
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "faults"
+        ],
+        "title": "FaultsResponse"
+      },
+      "FloodMunicipalityStats": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "bbox": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "title": "Bbox",
+            "description": "[west, south, east, north], degrees."
+          },
+          "n_flooded": {
+            "type": "integer",
+            "title": "N Flooded",
+            "description": "Buildings in the flood zone."
+          },
+          "n_buildings": {
+            "type": "integer",
+            "title": "N Buildings"
+          },
+          "pct_buildings_flooded": {
+            "type": "number",
+            "title": "Pct Buildings Flooded"
+          },
+          "flooded_dwellings": {
+            "type": "integer",
+            "title": "Flooded Dwellings"
+          },
+          "population": {
+            "type": "integer",
+            "title": "Population"
+          },
+          "affected_population": {
+            "type": "integer",
+            "title": "Affected Population",
+            "description": "Residents in the flood zone (estimated)."
+          },
+          "pct_population_affected": {
+            "type": "number",
+            "title": "Pct Population Affected"
+          },
+          "vulnerable_population": {
+            "type": "integer",
+            "title": "Vulnerable Population"
+          },
+          "affected_vulnerable_population": {
+            "type": "integer",
+            "title": "Affected Vulnerable Population"
+          },
+          "pct_vulnerable_affected": {
+            "type": "number",
+            "title": "Pct Vulnerable Affected"
+          },
+          "flooded_area_km2": {
+            "type": "number",
+            "title": "Flooded Area Km2",
+            "description": "Flood-zone area inside the area (and circle)."
+          },
+          "municipality_code": {
+            "type": "string",
+            "title": "Municipality Code"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "name",
+          "bbox",
+          "n_flooded",
+          "n_buildings",
+          "pct_buildings_flooded",
+          "flooded_dwellings",
+          "population",
+          "affected_population",
+          "pct_population_affected",
+          "vulnerable_population",
+          "affected_vulnerable_population",
+          "pct_vulnerable_affected",
+          "flooded_area_km2",
+          "municipality_code"
+        ],
+        "title": "FloodMunicipalityStats"
+      },
+      "FloodParams": {
+        "properties": {
+          "return_period": {
+            "type": "integer",
+            "title": "Return Period"
+          },
+          "region": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CircleRegion"
+              },
+              {
+                "$ref": "#/components/schemas/AdminRegion"
+              }
+            ],
+            "title": "Region"
+          },
+          "unmapped_provinces": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Unmapped Provinces",
+            "description": "Provinces in the region with no map at this return period (Canarias has no T10/T50). Not mapped is not the same as not flooded."
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "return_period",
+          "region",
+          "unmapped_provinces"
+        ],
+        "title": "FloodParams"
+      },
+      "FloodScenarioRequest": {
+        "properties": {
+          "return_period": {
+            "type": "integer",
+            "title": "Return Period",
+            "description": "Years: 10, 50, 100 or 500.",
+            "examples": [
+              100
+            ]
+          },
+          "region": {
+            "oneOf": [
+              {
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "const": "circle",
+                    "title": "Type"
+                  },
+                  "lat": {
+                    "type": "number",
+                    "title": "Lat"
+                  },
+                  "lon": {
+                    "type": "number",
+                    "title": "Lon"
+                  },
+                  "radius_km": {
+                    "type": "number",
+                    "maximum": 200.0,
+                    "exclusiveMinimum": 0.0,
+                    "title": "Radius Km"
+                  }
+                },
+                "additionalProperties": true,
+                "type": "object",
+                "required": [
+                  "type",
+                  "lat",
+                  "lon",
+                  "radius_km"
+                ],
+                "title": "CircleRegion"
+              },
+              {
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "const": "admin",
+                    "title": "Type"
+                  },
+                  "level": {
+                    "type": "string",
+                    "enum": [
+                      "ccaa",
+                      "province",
+                      "municipality"
+                    ],
+                    "title": "Level"
+                  },
+                  "code": {
+                    "type": "string",
+                    "title": "Code",
+                    "description": "INE code: 2 digits for a CCAA or province, 5 for a municipality.",
+                    "examples": [
+                      "46250"
+                    ]
+                  }
+                },
+                "additionalProperties": true,
+                "type": "object",
+                "required": [
+                  "type",
+                  "level",
+                  "code"
+                ],
+                "title": "AdminRegion"
+              }
+            ],
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Region",
+            "description": "A circle, `{type: circle, lat, lon, radius_km}` with radius_km up to 200, or an administrative area, `{type: admin, level: ccaa | province | municipality, code}` with an INE code.",
+            "examples": [
+              {
+                "code": "46250",
+                "level": "municipality",
+                "type": "admin"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "return_period",
+          "region"
+        ],
+        "title": "FloodScenarioRequest",
+        "examples": [
+          {
+            "region": {
+              "code": "46250",
+              "level": "municipality",
+              "type": "admin"
+            },
+            "return_period": 100
+          }
+        ]
+      },
+      "FloodScenarioResponse": {
+        "properties": {
+          "scenario_id": {
+            "type": "string",
+            "title": "Scenario Id"
+          },
+          "hazard": {
+            "type": "string",
+            "const": "flood",
+            "title": "Hazard"
+          },
+          "flood": {
+            "$ref": "#/components/schemas/FloodParams"
+          },
+          "region_bbox": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Region Bbox",
+            "description": "[west, south, east, north], degrees."
+          },
+          "n_flooded": {
+            "type": "integer",
+            "title": "N Flooded"
+          },
+          "totals": {
+            "$ref": "#/components/schemas/FloodTotals"
+          },
+          "municipality_stats": {
+            "items": {
+              "$ref": "#/components/schemas/FloodMunicipalityStats"
+            },
+            "type": "array",
+            "title": "Municipality Stats"
+          },
+          "infrastructure_summary": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/InfrastructureSummary"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "cached": {
+            "type": "boolean",
+            "title": "Cached"
+          },
+          "elapsed_ms": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Elapsed Ms"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "scenario_id",
+          "hazard",
+          "flood",
+          "region_bbox",
+          "n_flooded",
+          "totals",
+          "municipality_stats",
+          "infrastructure_summary",
+          "cached"
+        ],
+        "title": "FloodScenarioResponse"
+      },
+      "FloodSectionStats": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "bbox": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "title": "Bbox",
+            "description": "[west, south, east, north], degrees."
+          },
+          "n_flooded": {
+            "type": "integer",
+            "title": "N Flooded",
+            "description": "Buildings in the flood zone."
+          },
+          "n_buildings": {
+            "type": "integer",
+            "title": "N Buildings"
+          },
+          "pct_buildings_flooded": {
+            "type": "number",
+            "title": "Pct Buildings Flooded"
+          },
+          "flooded_dwellings": {
+            "type": "integer",
+            "title": "Flooded Dwellings"
+          },
+          "population": {
+            "type": "integer",
+            "title": "Population"
+          },
+          "affected_population": {
+            "type": "integer",
+            "title": "Affected Population",
+            "description": "Residents in the flood zone (estimated)."
+          },
+          "pct_population_affected": {
+            "type": "number",
+            "title": "Pct Population Affected"
+          },
+          "vulnerable_population": {
+            "type": "integer",
+            "title": "Vulnerable Population"
+          },
+          "affected_vulnerable_population": {
+            "type": "integer",
+            "title": "Affected Vulnerable Population"
+          },
+          "pct_vulnerable_affected": {
+            "type": "number",
+            "title": "Pct Vulnerable Affected"
+          },
+          "flooded_area_km2": {
+            "type": "number",
+            "title": "Flooded Area Km2",
+            "description": "Flood-zone area inside the area (and circle)."
+          },
+          "section_code": {
+            "type": "string",
+            "title": "Section Code"
+          },
+          "municipality_code": {
+            "type": "string",
+            "title": "Municipality Code"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "name",
+          "bbox",
+          "n_flooded",
+          "n_buildings",
+          "pct_buildings_flooded",
+          "flooded_dwellings",
+          "population",
+          "affected_population",
+          "pct_population_affected",
+          "vulnerable_population",
+          "affected_vulnerable_population",
+          "pct_vulnerable_affected",
+          "flooded_area_km2",
+          "section_code",
+          "municipality_code"
+        ],
+        "title": "FloodSectionStats"
+      },
+      "FloodTotals": {
+        "properties": {
+          "n_flooded": {
+            "type": "integer",
+            "title": "N Flooded"
+          },
+          "flooded_dwellings": {
+            "type": "integer",
+            "title": "Flooded Dwellings"
+          },
+          "affected_population": {
+            "type": "integer",
+            "title": "Affected Population"
+          },
+          "affected_vulnerable_population": {
+            "type": "integer",
+            "title": "Affected Vulnerable Population"
+          },
+          "flooded_area_km2": {
+            "type": "number",
+            "title": "Flooded Area Km2"
+          },
+          "n_municipalities": {
+            "type": "integer",
+            "title": "N Municipalities"
+          },
+          "n_sections": {
+            "type": "integer",
+            "title": "N Sections"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "n_flooded",
+          "flooded_dwellings",
+          "affected_population",
+          "affected_vulnerable_population",
+          "flooded_area_km2",
+          "n_municipalities",
+          "n_sections"
+        ],
+        "title": "FloodTotals"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "Health": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "const": "ok",
+            "title": "Status"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "status"
+        ],
+        "title": "Health"
+      },
+      "InfrastructureAsset": {
+        "properties": {
+          "asset_id": {
+            "type": "integer",
+            "title": "Asset Id"
+          },
+          "category": {
+            "type": "string",
+            "enum": [
+              "health",
+              "education",
+              "care",
+              "emergency",
+              "power",
+              "bridge",
+              "dam"
+            ],
+            "title": "Category"
+          },
+          "subtype": {
+            "type": "string",
+            "title": "Subtype",
+            "examples": [
+              "hospital",
+              "school",
+              "substation",
+              "bridge"
+            ]
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "municipality_code": {
+            "type": "string",
+            "title": "Municipality Code"
+          },
+          "lon": {
+            "type": "number",
+            "title": "Lon"
+          },
+          "lat": {
+            "type": "number",
+            "title": "Lat"
+          },
+          "intensity": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Intensity",
+            "description": "Estimated macroseismic intensity (EMS-98) at the asset. Earthquakes only."
+          },
+          "damage_state_code": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Damage State Code",
+            "description": "0 None to 4 Complete, for facilities in an evaluated building; null otherwise. Earthquakes only."
+          },
+          "damage_probs": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Damage Probs",
+            "description": "Probability of each damage state, None to Complete. Earthquakes only."
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "asset_id",
+          "category",
+          "subtype",
+          "name",
+          "municipality_code",
+          "lon",
+          "lat"
+        ],
+        "title": "InfrastructureAsset"
+      },
+      "InfrastructureSummary": {
+        "properties": {
+          "health": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Health"
+          },
+          "education": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Education"
+          },
+          "care": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Care"
+          },
+          "emergency": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Emergency"
+          },
+          "power": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Power"
+          },
+          "bridge": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bridge"
+          },
+          "dam": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dam"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "title": "InfrastructureSummary",
+        "description": "Affected assets per category. Categories with none are omitted."
+      },
+      "IntensityBands": {
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "FeatureCollection",
+            "title": "Type"
+          },
+          "features": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Features"
+          },
+          "cell_km": {
+            "type": "number",
+            "title": "Cell Km",
+            "description": "Grid resolution the bands were contoured from."
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "type",
+          "features",
+          "cell_km"
+        ],
+        "title": "IntensityBands",
+        "description": "GeoJSON FeatureCollection, one (Multi)Polygon per integer intensity\nlevel from IV up, in `properties.intensity`."
+      },
+      "ManualRuptureRequest": {
+        "properties": {
+          "lat": {
+            "type": "number",
+            "title": "Lat",
+            "description": "Epicentre latitude, degrees.",
+            "examples": [
+              37.699
+            ]
+          },
+          "lon": {
+            "type": "number",
+            "title": "Lon",
+            "description": "Epicentre longitude, degrees.",
+            "examples": [
+              -1.673
+            ]
+          },
+          "mag": {
+            "type": "number",
+            "title": "Mag",
+            "description": "Moment magnitude (Mw), 3.0 to 9.0.",
+            "examples": [
+              5.2
+            ]
+          },
+          "rake": {
+            "type": "number",
+            "title": "Rake",
+            "description": "Degrees: 0 strike-slip, 90 reverse, -90 normal.",
+            "default": 0.0,
+            "examples": [
+              44
+            ]
+          },
+          "strike": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Strike",
+            "description": "Degrees. See `ztor_km`."
+          },
+          "dip": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dip",
+            "description": "Degrees. See `ztor_km`."
+          },
+          "ztor_km": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ztor Km",
+            "description": "Depth to the top of the rupture, km. With strike, dip and ztor_km all given, the rupture is a finite plane sized from the magnitude (Wells & Coppersmith 1994); otherwise it's a point source."
+          },
+          "probability_level": {
+            "type": "string",
+            "enum": [
+              "high",
+              "low",
+              "very_low"
+            ],
+            "title": "Probability Level",
+            "description": "`high`: median ground motion, most likely damage state. `low`: median + 1σ ground motion. `very_low`: median + 1σ and the 85th-percentile damage state.",
+            "default": "high"
+          }
+        },
+        "type": "object",
+        "required": [
+          "lat",
+          "lon",
+          "mag"
+        ],
+        "title": "ManualRuptureRequest",
+        "examples": [
+          {
+            "lat": 37.699,
+            "lon": -1.673,
+            "mag": 5.2,
+            "probability_level": "low",
+            "rake": 44
+          }
+        ]
+      },
+      "Rupture": {
+        "properties": {
+          "lat": {
+            "type": "number",
+            "title": "Lat",
+            "description": "Rupture point: the epicentre, or the fault trace's midpoint."
+          },
+          "lon": {
+            "type": "number",
+            "title": "Lon"
+          },
+          "mag": {
+            "type": "number",
+            "title": "Mag",
+            "description": "Moment magnitude (Mw)."
+          },
+          "source": {
+            "type": "string",
+            "title": "Source",
+            "description": "`manual`, or `fault:<fault_id>:<name>` in automatic mode.",
+            "examples": [
+              "fault:ES626:Alhama de Murcia (1/4)"
+            ]
+          },
+          "finite_rupture": {
+            "type": "boolean",
+            "title": "Finite Rupture",
+            "description": "True when distances were measured to a finite rupture plane, false for the point-source approximation."
+          },
+          "probability_level": {
+            "type": "string",
+            "enum": [
+              "high",
+              "low",
+              "very_low"
+            ],
+            "title": "Probability Level"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "lat",
+          "lon",
+          "mag",
+          "source",
+          "finite_rupture",
+          "probability_level"
+        ],
+        "title": "Rupture"
+      },
+      "ScenarioStatus": {
+        "properties": {
+          "municipal_stats_ready": {
+            "type": "boolean",
+            "title": "Municipal Stats Ready"
+          },
+          "buildings_ready": {
+            "type": "boolean",
+            "title": "Buildings Ready"
+          },
+          "debris_ready": {
+            "type": "boolean",
+            "title": "Debris Ready"
+          },
+          "updated_at": {
+            "type": "number",
+            "title": "Updated At",
+            "description": "Unix time, seconds."
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "municipal_stats_ready",
+          "buildings_ready",
+          "debris_ready",
+          "updated_at"
+        ],
+        "title": "ScenarioStatus"
+      },
+      "SeismicMunicipalityStats": {
+        "properties": {
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "bbox": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bbox",
+            "description": "[west, south, east, north], degrees."
+          },
+          "n_evaluated": {
+            "type": "integer",
+            "title": "N Evaluated",
+            "description": "Buildings the scenario evaluated."
+          },
+          "n_damaged": {
+            "type": "integer",
+            "title": "N Damaged",
+            "description": "Evaluated buildings in any state other than None."
+          },
+          "counts": {
+            "$ref": "#/components/schemas/DamageCounts"
+          },
+          "n_buildings": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "N Buildings",
+            "description": "All buildings in the area, evaluated or not."
+          },
+          "pct_buildings_affected": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pct Buildings Affected",
+            "description": "n_damaged / n_buildings, in %."
+          },
+          "population": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Population",
+            "description": "Residents, INE 1 January 2025."
+          },
+          "vulnerable_population": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vulnerable Population",
+            "description": "Residents under 15 or aged 65 and over."
+          },
+          "affected_population": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Affected Population"
+          },
+          "pct_population_affected": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pct Population Affected"
+          },
+          "affected_vulnerable_population": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Affected Vulnerable Population"
+          },
+          "pct_vulnerable_affected": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pct Vulnerable Affected"
+          },
+          "displaced_population": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Displaced Population",
+            "description": "Residents of Extensive or Complete buildings."
+          },
+          "cost_meur": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cost Meur",
+            "description": "Material repair cost, millions of euros."
+          },
+          "debris_t": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Debris T",
+            "description": "Debris weight, tonnes."
+          },
+          "truck_rotations": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Truck Rotations",
+            "description": "20-tonne truck trips to remove the debris."
+          },
+          "shoring_props": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Shoring Props",
+            "description": "Shoring props (puntales) needed."
+          },
+          "municipality_code": {
+            "type": "string",
+            "title": "Municipality Code",
+            "description": "INE 5-digit municipality code.",
+            "examples": [
+              "30024"
+            ]
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "n_evaluated",
+          "n_damaged",
+          "counts",
+          "municipality_code"
+        ],
+        "title": "SeismicMunicipalityStats"
+      },
+      "SeismicSectionStats": {
+        "properties": {
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "bbox": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bbox",
+            "description": "[west, south, east, north], degrees."
+          },
+          "n_evaluated": {
+            "type": "integer",
+            "title": "N Evaluated",
+            "description": "Buildings the scenario evaluated."
+          },
+          "n_damaged": {
+            "type": "integer",
+            "title": "N Damaged",
+            "description": "Evaluated buildings in any state other than None."
+          },
+          "counts": {
+            "$ref": "#/components/schemas/DamageCounts"
+          },
+          "n_buildings": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "N Buildings",
+            "description": "All buildings in the area, evaluated or not."
+          },
+          "pct_buildings_affected": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pct Buildings Affected",
+            "description": "n_damaged / n_buildings, in %."
+          },
+          "population": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Population",
+            "description": "Residents, INE 1 January 2025."
+          },
+          "vulnerable_population": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vulnerable Population",
+            "description": "Residents under 15 or aged 65 and over."
+          },
+          "affected_population": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Affected Population"
+          },
+          "pct_population_affected": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pct Population Affected"
+          },
+          "affected_vulnerable_population": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Affected Vulnerable Population"
+          },
+          "pct_vulnerable_affected": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pct Vulnerable Affected"
+          },
+          "displaced_population": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Displaced Population",
+            "description": "Residents of Extensive or Complete buildings."
+          },
+          "cost_meur": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cost Meur",
+            "description": "Material repair cost, millions of euros."
+          },
+          "debris_t": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Debris T",
+            "description": "Debris weight, tonnes."
+          },
+          "truck_rotations": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Truck Rotations",
+            "description": "20-tonne truck trips to remove the debris."
+          },
+          "shoring_props": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Shoring Props",
+            "description": "Shoring props (puntales) needed."
+          },
+          "section_code": {
+            "type": "string",
+            "title": "Section Code",
+            "description": "INE 10-digit census section code."
+          },
+          "municipality_code": {
+            "type": "string",
+            "title": "Municipality Code"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "n_evaluated",
+          "n_damaged",
+          "counts",
+          "section_code",
+          "municipality_code"
+        ],
+        "title": "SeismicSectionStats"
+      },
+      "TrafficIncidents": {
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "FeatureCollection",
+            "title": "Type"
+          },
+          "features": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Features"
+          },
+          "published": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Published"
+          },
+          "sources": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Sources",
+            "description": "Status of each upstream feed."
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "type",
+          "features",
+          "published",
+          "sources"
+        ],
+        "title": "TrafficIncidents",
+        "description": "Point/line features with `source` (DGT, SCT, DT-GV), `category`,\n`road`, `km_from`/`km_to`, `start_time`/`end_time` and more."
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      },
+      "Warmup": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "already_warm": {
+            "type": "boolean",
+            "title": "Already Warm"
+          },
+          "seconds": {
+            "type": "number",
+            "title": "Seconds"
+          },
+          "numba_cache_files_written": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Numba Cache Files Written"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "status",
+          "already_warm",
+          "seconds",
+          "numba_cache_files_written"
+        ],
+        "title": "Warmup"
+      },
+      "WeatherObservations": {
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "FeatureCollection",
+            "title": "Type"
+          },
+          "features": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Features"
+          },
+          "observed": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Observed"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "type",
+          "features",
+          "observed"
+        ],
+        "title": "WeatherObservations",
+        "description": "One point per AEMET station: `ta` temperature (°C), `hr` humidity (%),\n`prec` precipitation (mm), `vv`/`vmax` wind speed (m/s), `dv` wind\ndirection (°), `pres` pressure (hPa)."
+      },
+      "WeatherWarnings": {
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "FeatureCollection",
+            "title": "Type"
+          },
+          "features": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Features"
+          },
+          "issued": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Issued"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "type",
+          "features",
+          "issued"
+        ],
+        "title": "WeatherWarnings",
+        "description": "One polygon per warning zone: `level` (yellow, orange, red),\n`phenomenon`, `event_es`/`event_en`, `onset`, `expires`."
+      }
+    }
+  },
+  "tags": [
+    {
+      "name": "Earthquake",
+      "description": "twinQUAKE: faults and earthquake scenarios."
+    },
+    {
+      "name": "Flood",
+      "description": "twinFLOOD: flood-zone scenarios."
+    },
+    {
+      "name": "Results",
+      "description": "A scenario's outputs, by its `scenario_id`."
+    },
+    {
+      "name": "Tiles",
+      "description": "Vector tiles joined with a scenario's results."
+    },
+    {
+      "name": "Exposure",
+      "description": "Static attributes of the building stock."
+    },
+    {
+      "name": "Real time",
+      "description": "Live traffic and weather layers (proxied)."
+    },
+    {
+      "name": "Operations",
+      "description": "Health and warm-up."
+    }
+  ]
+}

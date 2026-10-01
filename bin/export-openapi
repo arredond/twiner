@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+# export-openapi: regenerate the docs site's API reference
+# (apps/docs/openapi.json) from the scenario API's FastAPI app
+# (services/scenario/src/scenario/local.py + api_models.py).
+#
+# Run after changing a route, its metadata or api_models.py;
+# services/scenario/tests/test_api_reference.py fails until you do.
+#
+# Usage: bin/export-openapi   (run from anywhere inside the repo)
+
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$ROOT"
+uv run --package twiner-scenario python -m scenario.openapi_export apps/docs/openapi.json
+echo "export-openapi: wrote apps/docs/openapi.json"

@@ -1,0 +1,191 @@
+---
+title: Introducción
+description: TWIN-ER es un simulador abierto de riesgos naturales múltiples para España, construido con datos abiertos.
+---
+
+import { Card, CardGrid, LinkCard } from '@astrojs/starlight/components';
+import ArchitectureDiagram from '../../../components/ArchitectureDiagram.astro';
+
+**TWIN-ER** es un gemelo digital del riesgo natural en España. Eliges un
+escenario de peligro sobre un mapa y estima qué le haría ese escenario a
+cada edificio a su alcance. Después agrega esas estimaciones en informes por
+municipio y por sección censal: cuántos edificios sufren daños, cuántas
+personas viven en ellos y qué necesitaría la respuesta.
+
+Cubre toda España, unos 13 millones de edificios catastrales en más de
+8.100 municipios. Todo se construye a partir de datos abiertos y oficiales.
+El diseño no es específico de España: cada conjunto de datos propio del país
+está detrás de un pipeline que puede sustituirse por el equivalente de otro
+país.
+
+TWIN-ER nació como una reconstrucción moderna de [MERISUR](#antecedentes),
+un simulador de escenarios sísmicos para Lorca desarrollado por la
+Universidad Politécnica de Madrid (UPM). Desde entonces ha crecido en tres
+direcciones: de una ciudad a todo el país, de un peligro a varios, y de una
+herramienta de investigación a una operativa.
+
+## Peligros
+
+<CardGrid>
+	<Card title="twinQUAKE: terremotos">
+		Elige una falla activa y simula su terremoto de magnitud máxima, o define
+		uno tú mismo. TWIN-ER estima el movimiento del suelo en cada edificio y,
+		según su clase de vulnerabilidad, la probabilidad de cada grado de daño.
+		[Cómo funciona →](/docs/es/hazards/earthquake/)
+	</Card>
+	<Card title="twinFLOOD: inundaciones fluviales">
+		Elige un periodo de retorno (10, 50, 100 o 500 años) y una zona. TWIN-ER
+		superpone las zonas inundables oficiales del Ministerio para la
+		Transición Ecológica (MITECO) a la huella de cada edificio y a cada
+		sección censal.
+		[Cómo funciona →](/docs/es/hazards/flood/)
+	</Card>
+</CardGrid>
+
+Los dos peligros comparten el mismo modelo de exposición, las mismas
+unidades de informe y la misma API. Junto a ellos hay capas en tiempo real:
+incidencias de tráfico de las autoridades de tráfico y observaciones y
+avisos de la Agencia Estatal de Meteorología (AEMET). Muestran lo que está
+pasando ahora junto a lo que predice un escenario.
+
+## Qué produce un escenario
+
+Cada escenario responde a tres niveles de detalle:
+
+- **Edificios.** En un terremoto, el grado de daño más probable de cada
+  edificio (Sin daño, Leve, Moderado, Extenso o Completo) y la distribución
+  de probabilidad completa que hay detrás. En una inundación, si su huella
+  está dentro de la zona inundable. En el mapa, los edificios dañados
+  muestran además una **envolvente de escombros**: la franja de calle que
+  pueden alcanzar sus cascotes.
+- **Secciones censales y municipios.** Las unidades del Instituto Nacional
+  de Estadística (INE): 36.554 secciones censales, anidadas en municipios,
+  provincias y comunidades autónomas. Para cada una:
+  - edificios afectados, en número y en % del parque de la zona;
+  - población residente afectada, y cuánta de ella es **vulnerable**
+    (menores de 15 años o de 65 y más);
+  - en terremotos: población **desplazada** (residentes en edificios con
+    daño Extenso o Completo), **coste** material de reparación, peso de los
+    **escombros**, número de **viajes de camión** para retirarlos y
+    **puntales** necesarios;
+  - en inundaciones: viviendas y superficie dentro de la zona inundable.
+- **Infraestructuras críticas.** Hospitales, centros de salud, colegios,
+  universidades, residencias, policía y servicios de emergencia, centrales
+  eléctricas y subestaciones, puentes y presas. Cada uno con su intensidad
+  sísmica estimada (escala EMS-98) o su exposición a la inundación. Las
+  instalaciones indican también el grado de daño del edificio que ocupan.
+
+Estas cifras son **órdenes de magnitud para comparar lugares y
+escenarios**, no predicciones calibradas de pérdidas. Cada página explica
+sus hipótesis y limitaciones. La página de
+[estimaciones de impacto](/docs/es/impact-estimates/) recoge las fórmulas
+exactas.
+
+## Arquitectura
+
+Unos pocos principios guían el diseño técnico.
+
+**Código abierto, datos abiertos.** Todos los datos de entrada los publica
+un organismo público con licencia abierta: el Catastro, los institutos
+geográfico y estadístico, el servicio geológico, el Ministerio para la
+Transición Ecológica y consorcios europeos de investigación. Los componentes
+científicos son modelos consolidados, revisados por pares y con
+implementaciones abiertas. Cualquier resultado puede rastrearse hasta sus
+datos de entrada y reproducirse. Consulta las
+[fuentes de datos](/docs/es/data-sources/).
+
+**Independiente del modelo y modular.** Cada paso de la cadena de un peligro
+es una etapa independiente y sustituible con una interfaz acotada. En un
+terremoto, esas etapas son la ruptura, el modelo de movimiento del suelo,
+la amplificación local, las clases de vulnerabilidad, las funciones de
+fragilidad y el modelo de impacto. Cambiar el modelo de movimiento del suelo
+o añadir un conjunto de curvas de fragilidad no afecta al resto. Un peligro
+nuevo reutiliza el modelo de exposición, las capas de censo e
+infraestructuras, las unidades de informe y la API: twinFLOOD se construyó
+así sobre las bases de twinQUAKE.
+
+**Precalcular lo que no depende del escenario.** Las huellas de los
+edificios, las clases de vulnerabilidad, las condiciones del suelo, la
+asignación censal, las envolventes de escombros y la pertenencia a zonas
+inundables son propiedades del lugar, no del evento. Unos **pipelines**
+offline las calculan una vez para todo el país. En cada petición, un
+escenario solo calcula lo que realmente depende de él, como el movimiento
+del suelo y el daño resultante. Después une esos resultados a datos que ya
+existen.
+
+**Consultar ficheros estáticos en formatos nativos de la nube.** Los datos
+precalculados se guardan como ficheros en almacenamiento de objetos,
+organizados para leerse por fragmentos mediante peticiones HTTP de rango, en
+lugar de a través de un servidor de bases de datos:
+
+- **GeoParquet**, ordenado espacialmente, de modo que una consulta sobre una
+  región solo lee los grupos de filas que la tocan. Se consulta con
+  **DuckDB** directamente desde el almacenamiento de objetos.
+- **PMTiles**, archivos de teselas vectoriales en un único fichero que el
+  navegador lee directamente: edificios, secciones censales, municipios,
+  zonas inundables, infraestructuras y un mapa base de OpenStreetMap
+  alojado por el propio proyecto.
+
+**Serverless y ligero.** La API se ejecuta como funciones serverless de vida
+corta (AWS Lambda), así que no hay nada en marcha entre escenarios. La
+respuesta de un escenario solo contiene agregados. Los resultados por
+edificio se unen a las teselas estáticas de edificios tesela a tesela,
+según el mapa las pide, y el navegador nunca descarga una lista de millones
+de edificios. Los resultados se guardan con un identificador derivado de su
+contenido: el mismo escenario sobre la misma versión de los datos se calcula
+una vez y después se sirve desde el almacenamiento.
+
+<ArchitectureDiagram
+	labels={{
+		offline: 'Offline, una vez',
+		online: 'Por escenario',
+		sources: 'Datos abiertos',
+		sourcesDetail: 'Catastro, IGN, INE…',
+		pipelines: 'Pipelines',
+		pipelinesDetail: 'exposición, fallas…',
+		storage: 'Almacenamiento',
+		storageDetail: 'GeoParquet + PMTiles',
+		api: 'API de escenarios',
+		apiDetail: 'funciones serverless',
+		app: 'Aplicación web',
+		appDetail: 'React + MapLibre',
+		tiles: 'teselas estáticas, lectura directa',
+		queries: 'consultas por rangos',
+	}}
+/>
+
+La aplicación web es una aplicación de página única en React que dibuja con
+MapLibre GL. Está disponible en español e inglés, con tema claro y oscuro.
+
+## Antecedentes
+
+MERISUR (*Metodología para la Evaluación Efectiva del Riesgo Sísmico
+Urbano*) fue un proyecto de investigación del Grupo de Investigación en
+Ingeniería Sísmica de la UPM. Produjo un simulador web de escenarios
+sísmicos para Lorca (Murcia), la ciudad afectada por el terremoto de Mw 5,2
+del 11 de mayo de 2011 [1, 2]. TWIN-ER conserva la lógica de escenarios de
+MERISUR: un modo automático basado en la base de datos de fallas activas, un
+modo manual, el modelo de movimiento del suelo de Akkar et al. (2014) y tres
+niveles de probabilidad. Donde los datos propios de Lorca (trabajo de campo,
+una microzonación local del suelo, curvas de capacidad) no pueden
+extenderse a todo el país, los sustituye por conjuntos de datos nacionales
+abiertos. La página de [twinQUAKE](/docs/es/hazards/earthquake/) detalla
+cada sustitución.
+
+<CardGrid>
+	<LinkCard title="twinQUAKE" description="Escenarios sísmicos, paso a paso." href="/docs/es/hazards/earthquake/" />
+	<LinkCard title="twinFLOOD" description="Escenarios de inundación a partir de las zonas inundables del MITECO." href="/docs/es/hazards/flood/" />
+	<LinkCard title="Referencia de la API" description="Todos los endpoints, con sus esquemas de petición y respuesta (en inglés)." href="/docs/api/" />
+	<LinkCard title="Fuentes de datos" description="Cada conjunto de datos, con enlace al recurso exacto." href="/docs/es/data-sources/" />
+</CardGrid>
+
+## Referencias
+
+1. Gaspar-Escribano, J. M., et al. (2017). Methodology for an effective
+   risk assessment of urban areas: progress and first results of the
+   MERISUR project. *16th World Conference on Earthquake Engineering*,
+   Santiago de Chile.
+2. Yazdi, P., Gaspar-Escribano, J. M., Martínez-Cuevas, S., &
+   Chavarria-Meneces, D. (2018). A web-based tool for scenario-based
+   seismic risk assessment. *12th Canadian Conference on Earthquake
+   Engineering*; EGU General Assembly 2018.

@@ -1,5 +1,11 @@
 # Data sources
 
+> The public, user-facing version of this list is the docs site's
+> [Data sources](https://twiner.arredon.do/docs/data-sources/) page
+> (`apps/docs/src/content/docs/data-sources.md` and its `es/` twin). This
+> file stays the engineering record (manual-download notes, known issues).
+> When a dataset is added or changes, update both.
+
 One entry per external dataset the pipelines download, each linking to the
 actual resource used (an ATOM feed, WFS endpoint, or direct download) —
 not the publishing org's homepage. See `docs/decisions/` for the ADRs

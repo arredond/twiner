@@ -13,6 +13,10 @@ and [`docs/basque-navarra-cadastral-sources.md`](docs/basque-navarra-cadastral-s
 All of Spain is now covered, in the single `data/exposure` dataset (the
 Lorca-only and Murcia+Andalucía-only datasets those milestones used along
 the way have been retired).
+User-facing documentation (the science behind each hazard, data sources,
+API reference, in English and Spanish) is the site in `apps/docs/`, served
+at <https://twiner.arredon.do/docs/> and locally by `bin/twiner start` at
+http://localhost:5173/docs/ ([ADR-0031](docs/decisions/0031-documentation-site.md)).
 See [`docs/milestone-1-plan.md`](docs/milestone-1-plan.md) for the
 milestone-1 plan, [`docs/decisions/`](docs/decisions/) for architecture
 decisions, and [`DATA-SOURCES.md`](DATA-SOURCES.md) for every external
@@ -23,6 +27,7 @@ endpoint) rather than a homepage.
 
 ```
 apps/web/         React + MapLibre frontend
+apps/docs/        Documentation site (Astro Starlight), served under /docs
 services/scenario/  Scenario function (rupture -> ground motion -> damage);
                      runs as a local dev server or an AWS Lambda
 pipelines/           Three ETL pipelines (faults, exposure, fragility) --
@@ -33,8 +38,8 @@ bin/twiner            Start/stop/restart the local dev stack (see below)
 ```
 
 Python packages are a `uv` workspace (one `.venv` for everything under
-`services/` and `pipelines/`); the frontend is a separate npm project under
-`apps/web/`.
+`services/` and `pipelines/`); the frontend and the docs site are separate
+npm projects under `apps/web/` and `apps/docs/`.
 
 ## Quickstart
 
@@ -159,8 +164,12 @@ either path if it already has real content.
 
 ```bash
 uv run pytest              # all Python packages
-cd apps/web && npx tsc --noEmit && npm run build
+cd apps/web && npx tsc --noEmit && npm run build   # also builds the docs into dist/docs/
 ```
+
+`services/scenario/tests/test_api_reference.py` fails when the docs' API
+reference is stale: run `bin/export-openapi` after changing a scenario API
+route or `api_models.py`.
 
 ## Cloud deployment
 

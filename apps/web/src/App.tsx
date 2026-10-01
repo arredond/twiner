@@ -42,7 +42,7 @@ import { Segmented } from "./components/Segmented";
 import { SettingsMenu } from "./components/SettingsMenu";
 import { BasemapPicker } from "./components/BasemapPicker";
 import { resolveBasemap } from "./basemaps";
-import type { I18n } from "./i18n";
+import type { I18n, Language } from "./i18n";
 import { useSettings } from "./settings";
 import { INFRA_CATEGORY_KEYS, type InfraCategory } from "./infrastructure";
 import {
@@ -677,6 +677,8 @@ export default function App() {
                     : t(card === "seismic" ? "card.quakeTitle" : "card.floodTitle")
                 }
                 onHeaderClick={() => onCardClick(card)}
+                docsHref={hazardDocsHref(card, settings.language)}
+                docsLabel={t("card.docs")}
                 status={status}
               >
                 {card === "flood" ? (
@@ -879,6 +881,13 @@ const COLLAPSED_PANEL_WIDTH = "8rem";
 
 // One of the bottom-left collapsible panels, at the column width when open
 // and the (shared) collapsed width when not.
+// The hazard's docs page (apps/docs, served under /docs), in the app's
+// language: English pages sit at the root, Spanish ones under /docs/es/.
+function hazardDocsHref(card: "seismic" | "flood", language: Language): string {
+  const page = card === "seismic" ? "earthquake" : "flood";
+  return `/docs/${language === "es" ? "es/" : ""}hazards/${page}/`;
+}
+
 function stackedPanel(open: boolean): React.CSSProperties {
   return { ...stackedPanelBase, width: open ? LEFT_COLUMN_WIDTH : COLLAPSED_PANEL_WIDTH };
 }

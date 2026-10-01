@@ -1,5 +1,10 @@
 # Post-scenario impact estimates
 
+> The public version of this page is the docs site's
+> [Impact estimates](https://twiner.arredon.do/docs/impact-estimates/)
+> (`apps/docs/src/content/docs/impact-estimates.md` and its `es/` twin).
+> Change the parameters there too.
+
 What the impact sidebar and the municipality/census-section popups report
 after a scenario runs, and exactly how each figure is computed. The
 architecture (census sections as a spatial level, where the numbers are
@@ -13,7 +18,8 @@ Every parameter below is either a round-number assumption or a generic
 been validated against observed Spanish losses. Treat the figures as
 orders of magnitude for comparing places and scenarios, not as predictions.
 The constants live in `services/scenario/src/scenario/impact.py`, and the
-sidebar tooltips (`apps/web/src/impactFormat.ts`) quote them; change both
+sidebar tooltips (`apps/web/src/impactFormat.ts`) and the docs site's
+impact-estimates pages (English and Spanish) quote them; change all of them
 together.
 
 ## Inputs

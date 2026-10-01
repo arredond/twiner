@@ -1,0 +1,119 @@
+---
+// The offline-precompute / online-query split, for the introduction's
+// Architecture section. Labels come in as props so both languages share it.
+interface Props {
+	labels: {
+		offline: string;
+		online: string;
+		sources: string;
+		sourcesDetail: string;
+		pipelines: string;
+		pipelinesDetail: string;
+		storage: string;
+		storageDetail: string;
+		api: string;
+		apiDetail: string;
+		app: string;
+		appDetail: string;
+		tiles: string;
+		queries: string;
+	};
+}
+const { labels: l } = Astro.props;
+---
+
+<figure class="arch">
+	<svg viewBox="0 0 760 300" role="img" aria-labelledby="arch-title">
+		<title id="arch-title">{l.offline} / {l.online}</title>
+		<defs>
+			<marker id="arch-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+				<path d="M0,0 L10,5 L0,10 z" fill="currentColor"></path>
+			</marker>
+		</defs>
+
+		<text x="10" y="22" class="zone">{l.offline}</text>
+		<text x="410" y="22" class="zone">{l.online}</text>
+		<line x1="395" y1="10" x2="395" y2="290" class="divider"></line>
+
+		<rect x="10" y="40" width="160" height="70" rx="6" class="box"></rect>
+		<text x="90" y="68" class="title">{l.sources}</text>
+		<text x="90" y="88" class="detail">{l.sourcesDetail}</text>
+
+		<rect x="10" y="150" width="160" height="70" rx="6" class="box"></rect>
+		<text x="90" y="178" class="title">{l.pipelines}</text>
+		<text x="90" y="198" class="detail">{l.pipelinesDetail}</text>
+
+		<rect x="215" y="150" width="165" height="70" rx="6" class="box accent"></rect>
+		<text x="297" y="178" class="title">{l.storage}</text>
+		<text x="297" y="198" class="detail">{l.storageDetail}</text>
+
+		<rect x="430" y="150" width="140" height="70" rx="6" class="box"></rect>
+		<text x="500" y="178" class="title">{l.api}</text>
+		<text x="500" y="198" class="detail">{l.apiDetail}</text>
+
+		<rect x="610" y="40" width="140" height="70" rx="6" class="box"></rect>
+		<text x="680" y="68" class="title">{l.app}</text>
+		<text x="680" y="88" class="detail">{l.appDetail}</text>
+
+		<line x1="90" y1="110" x2="90" y2="146" class="edge" marker-end="url(#arch-arrow)"></line>
+		<line x1="170" y1="185" x2="211" y2="185" class="edge" marker-end="url(#arch-arrow)"></line>
+		<line x1="380" y1="185" x2="426" y2="185" class="edge" marker-end="url(#arch-arrow)"></line>
+		<text x="403" y="240" class="detail">{l.queries}</text>
+		<path d="M570,170 C600,170 640,150 670,114" class="edge" marker-end="url(#arch-arrow)"></path>
+		<path d="M297,150 C297,70 450,75 606,75" class="edge dashed" marker-end="url(#arch-arrow)"></path>
+		<text x="440" y="66" class="detail">{l.tiles}</text>
+	</svg>
+</figure>
+
+<style>
+	.arch {
+		margin: 1.5rem 0;
+		overflow-x: auto;
+	}
+	svg {
+		min-width: 560px;
+		width: 100%;
+		height: auto;
+		color: var(--sl-color-gray-2);
+		font-family: var(--sl-font);
+	}
+	.box {
+		fill: var(--sl-color-gray-6);
+		stroke: var(--sl-color-gray-4);
+		stroke-width: 1.2;
+	}
+	.box.accent {
+		stroke: var(--sl-color-accent);
+		stroke-width: 2;
+	}
+	.title {
+		fill: var(--sl-color-white);
+		font-size: 14px;
+		font-weight: 600;
+		text-anchor: middle;
+	}
+	.detail {
+		fill: var(--sl-color-gray-3);
+		font-size: 11.5px;
+		text-anchor: middle;
+	}
+	.zone {
+		fill: var(--sl-color-gray-3);
+		font-size: 12px;
+		font-weight: 600;
+		letter-spacing: 0.06em;
+		text-transform: uppercase;
+	}
+	.divider {
+		stroke: var(--sl-color-gray-5);
+		stroke-dasharray: 4 4;
+	}
+	.edge {
+		stroke: currentColor;
+		stroke-width: 1.4;
+		fill: none;
+	}
+	.edge.dashed {
+		stroke-dasharray: 5 4;
+	}
+</style>

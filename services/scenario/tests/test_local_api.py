@@ -776,3 +776,46 @@ def test_flood_rejects_bad_regions(client, flood_data):
         "/scenarios/flood", json={"return_period": 100, "region": {"type": "circle", "lat": 1}}
     )
     assert resp.status_code == 400
+
+
+# --- API reference shapes (api_models.py, the docs' openapi.json) ----------
+
+
+def test_earthquake_responses_match_the_documented_shapes(client):
+    from scenario import api_models
+
+    body = client.post(
+        "/scenarios/manual", json={"lat": NEAR_LAT, "lon": NEAR_LON, "mag": 6.5, "rake": 20.0}
+    ).json()
+    api_models.EarthquakeScenarioResponse.model_validate(body)
+    api_models.EarthquakeScenarioResponse.model_validate(
+        client.get("/scenarios/fault", params={"fault_id": "TEST001"}).json()
+    )
+    api_models.FaultsResponse.model_validate(client.get("/faults").json())
+    sid = body["scenario_id"]
+    api_models.ScenarioStatus.model_validate(client.get(f"/results/{sid}/status").json())
+    # The fixture has no census sections, so this is usually empty.
+    for row in client.get(f"/results/{sid}/section_stats").json():
+        api_models.SeismicSectionStats.model_validate(row)
+    for row in client.get(f"/results/{sid}/municipality_stats").json():
+        api_models.SeismicMunicipalityStats.model_validate(row)
+    for row in client.get(f"/results/{sid}/infrastructure").json():
+        api_models.InfrastructureAsset.model_validate(row)
+    api_models.IntensityBands.model_validate(client.get(f"/results/{sid}/intensity").json())
+
+
+def test_flood_responses_match_the_documented_shapes(client, flood_data):
+    from scenario import api_models
+
+    body = client.post(
+        "/scenarios/flood",
+        json={
+            "return_period": 50,
+            "region": {"type": "circle", "lat": 39.47, "lon": -0.376, "radius_km": 5},
+        },
+    ).json()
+    api_models.FloodScenarioResponse.model_validate(body)
+    rows = client.get(f"/results/{body['scenario_id']}/section_stats").json()
+    assert rows
+    for row in rows:
+        api_models.FloodSectionStats.model_validate(row)

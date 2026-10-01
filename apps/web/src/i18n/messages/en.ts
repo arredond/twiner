@@ -14,6 +14,7 @@ export const en = {
 
   "card.quakeTitle": "Earthquake scenarios: open",
   "card.floodTitle": "Flood scenarios: open",
+  "card.docs": "How this hazard is modelled (documentation, opens in a new tab)",
 
   // Flood mode (ADR-0029).
   "flood.returnPeriod": "Return period",

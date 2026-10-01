@@ -1,0 +1,181 @@
+---
+title: Introduction
+description: TWIN-ER is an open, multi-hazard risk simulator for Spain, built on open data.
+---
+
+import { Card, CardGrid, LinkCard } from '@astrojs/starlight/components';
+import ArchitectureDiagram from '../../components/ArchitectureDiagram.astro';
+
+**TWIN-ER** is a digital twin for natural-hazard risk in Spain. Pick a hazard
+scenario on a map, and it estimates what that scenario would do to every
+building in its path. It then rolls those estimates up into reports per
+municipality and per census section: how many buildings are damaged, how
+many people live in them, and what the response would need.
+
+It covers all of Spain, about 13 million cadastral buildings in more than
+8,100 municipalities. Everything is built from open, official data. The
+design is not specific to Spain: each country-specific dataset sits behind a
+pipeline that can be swapped for another country's equivalent.
+
+TWIN-ER started as a modern rebuild of
+[MERISUR](#background), a seismic scenario simulator for the town of Lorca
+built by the Universidad Politécnica de Madrid (UPM). It then grew in three
+directions: from one town to the whole country, from one hazard to several,
+and from a research tool towards an operational one.
+
+## Hazards
+
+<CardGrid>
+	<Card title="twinQUAKE: earthquakes">
+		Choose an active fault and simulate its maximum-magnitude earthquake, or
+		define one yourself. TWIN-ER estimates ground shaking at every building
+		and, from the building's vulnerability class, the probability of each
+		damage state.
+		[How it works →](/docs/hazards/earthquake/)
+	</Card>
+	<Card title="twinFLOOD: river floods">
+		Choose a return period (10, 50, 100 or 500 years) and an area. TWIN-ER
+		overlays the official flood zones mapped by Spain's environment ministry
+		(MITECO) on every building footprint and census section.
+		[How it works →](/docs/hazards/flood/)
+	</Card>
+</CardGrid>
+
+Both hazards share the same exposure model, the same reporting units and the
+same API. Live layers sit alongside them: traffic incidents from Spain's
+traffic authorities, and observations and warnings from the state weather
+agency (AEMET). They show what is happening now next to what a scenario
+predicts.
+
+## What a scenario produces
+
+Every scenario answers at three levels of detail:
+
+- **Buildings.** For an earthquake, each building's most likely damage
+  state (None, Slight, Moderate, Extensive or Complete) and the full
+  probability distribution behind it. For a flood, whether its footprint
+  lies in the flood zone. On the map, damaged buildings also show a
+  **debris envelope**: the strip of street their rubble could reach.
+- **Census sections and municipalities.** The reporting units of Spain's
+  National Statistics Institute (INE): 36,554 census sections nested in
+  municipalities, provinces and autonomous communities (CCAA). For each one:
+  - buildings affected, in number and as a % of the area's stock;
+  - resident population affected, and how many of them are **vulnerable**
+    (under 15 or 65 and over);
+  - for earthquakes: residents **displaced** (living in buildings with
+    Extensive or Complete damage), material repair **cost**, **debris**
+    weight, the number of **truck trips** to clear it, and the **shoring
+    props** needed;
+  - for floods: dwellings and area inside the flood zone.
+- **Critical infrastructure.** Hospitals, health centres, schools,
+  universities, care homes, police and emergency services, power plants and
+  substations, bridges and dams, each with its estimated shaking intensity
+  (EMS-98 scale) or flood exposure. Facilities also carry the damage state
+  of the building they occupy.
+
+These figures are **orders of magnitude for comparing places and
+scenarios**, not calibrated loss predictions. Each page states its
+assumptions and limitations. The
+[impact estimates](/docs/impact-estimates/) page gives the exact formulas.
+
+## Architecture
+
+A handful of principles shape the technical design.
+
+**Open source, open data.** Every input is published by a public body under
+an open licence: the cadastre, the national geographic and statistics
+institutes, the geological survey, the environment ministry, and European
+research consortia. The scientific components are established, peer-reviewed
+models with open implementations. Any result can be traced back to its
+inputs and reproduced. See [data sources](/docs/data-sources/).
+
+**Model-agnostic and modular.** Each step of a hazard chain is a separate,
+swappable stage with a narrow interface. For an earthquake those stages are
+the rupture, the ground-motion model, the site amplification, the
+vulnerability classes, the fragility functions and the impact model.
+Changing the ground-motion model or adding a set of fragility curves doesn't
+touch the rest. A new hazard reuses the exposure model, the census and
+infrastructure layers, the reporting units and the API: twinFLOOD was built
+this way on top of twinQUAKE's foundations.
+
+**Precompute what doesn't depend on the scenario.** Building footprints,
+vulnerability classes, site conditions, census assignments, debris
+envelopes and flood-zone membership are all properties of the place, not of
+the event. Offline **pipelines** compute them once, for the whole country.
+At request time a scenario only computes what genuinely depends on it, such
+as the ground motion and the resulting damage. It then joins those results
+onto data that already exists.
+
+**Query static files in cloud-native formats.** The precomputed data is
+stored as plain files in object storage, laid out so they can be read in
+small pieces over HTTP range requests rather than through a database
+server:
+
+- **GeoParquet**, sorted spatially, so a query for one region reads only
+  the row groups that overlap it. It is queried with **DuckDB** straight
+  from object storage.
+- **PMTiles**, single-file vector-tile archives that the browser reads
+  directly: buildings, census sections, municipalities, flood zones,
+  infrastructure, and a self-hosted OpenStreetMap basemap.
+
+**Serverless and thin.** The API runs as short-lived serverless functions
+(AWS Lambda), so there is nothing to keep running between scenarios. A
+scenario's response holds only aggregates. Per-building results are joined
+into the static building tiles one tile at a time as the map requests them,
+so the browser never downloads a list of millions of buildings. Results are
+stored under a content-addressed id: the same scenario on the same data
+version is computed once and then served from storage.
+
+<ArchitectureDiagram
+	labels={{
+		offline: 'Offline, once',
+		online: 'Per scenario',
+		sources: 'Open data',
+		sourcesDetail: 'Catastro, IGN, INE…',
+		pipelines: 'Pipelines',
+		pipelinesDetail: 'exposure, faults, flood…',
+		storage: 'Object storage',
+		storageDetail: 'GeoParquet + PMTiles',
+		api: 'Scenario API',
+		apiDetail: 'serverless functions',
+		app: 'Web app',
+		appDetail: 'React + MapLibre',
+		tiles: 'static tiles, read directly',
+		queries: 'range-request queries',
+	}}
+/>
+
+The web app is a React single-page application drawing with MapLibre GL. It
+is available in Spanish and English, with light and dark themes.
+
+## Background
+
+MERISUR (*Metodología para la Evaluación Efectiva del Riesgo Sísmico
+Urbano*) was a research project of UPM's Earthquake Engineering Research
+Group. It produced a web simulator of earthquake scenarios for Lorca
+(Murcia), the town hit by the damaging Mw 5.2 earthquake of 11 May 2011
+[1, 2]. TWIN-ER keeps MERISUR's scenario logic: an automatic mode driven by
+the active-fault database, a manual mode, the Akkar et al. (2014)
+ground-motion model, and three probability levels. Where Lorca-specific
+inputs (field surveys, a local soil microzonation, capacity curves) can't
+extend to the whole country, it replaces them with national open datasets.
+The [twinQUAKE](/docs/hazards/earthquake/) page sets out each of these
+substitutions.
+
+<CardGrid>
+	<LinkCard title="twinQUAKE" description="Earthquake scenarios, step by step." href="/docs/hazards/earthquake/" />
+	<LinkCard title="twinFLOOD" description="Flood scenarios from MITECO's flood zones." href="/docs/hazards/flood/" />
+	<LinkCard title="API reference" description="Every endpoint, with request and response schemas." href="/docs/api/" />
+	<LinkCard title="Data sources" description="Every dataset, with links to the exact resource." href="/docs/data-sources/" />
+</CardGrid>
+
+## References
+
+1. Gaspar-Escribano, J. M., et al. (2017).
+   Methodology for an effective risk assessment of urban areas: progress and
+   first results of the MERISUR project. *16th World Conference on
+   Earthquake Engineering*, Santiago de Chile.
+2. Yazdi, P., Gaspar-Escribano, J. M., Martínez-Cuevas, S., &
+   Chavarria-Meneces, D. (2018). A web-based tool for scenario-based
+   seismic risk assessment. *12th Canadian Conference on Earthquake
+   Engineering*; EGU General Assembly 2018.

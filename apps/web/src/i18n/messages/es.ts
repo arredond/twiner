@@ -10,6 +10,7 @@ export const es: Messages = {
 
   "card.quakeTitle": "Escenarios sísmicos: abrir",
   "card.floodTitle": "Escenarios de inundación: abrir",
+  "card.docs": "Cómo se modela este riesgo (documentación, se abre en una pestaña nueva)",
 
   "flood.returnPeriod": "Periodo de retorno",
   "flood.returnPeriodTitle.10": "T=10 años: alta probabilidad (10% anual)",

@@ -75,7 +75,16 @@ list and re-run `cdk deploy` before the frontend will be able to fetch
 PMTiles from it (the browser will show a CORS error in devtools, not a 404,
 if this drifts).
 
-## 4. Redeploys
+## 4. Documentation site (/docs)
+
+No extra Pages setup: `npm run build` in `apps/web` also builds
+`apps/docs` (Astro Starlight) and copies it into `dist/docs/`, so the
+same deploy serves the docs at `https://twiner.arredon.do/docs/`. Pages
+needs nothing but the repo checkout for this: the build installs the
+docs' dependencies itself (`npm ci --prefix ../docs`). See
+[ADR-0031](decisions/0031-documentation-site.md).
+
+## 5. Redeploys
 
 Every push to the connected branch (main, per Cloudflare Pages' default)
 triggers a rebuild automatically — no separate deploy step once step 1 is

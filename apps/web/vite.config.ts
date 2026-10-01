@@ -17,4 +17,14 @@ export default defineConfig({
   worker: {
     format: 'es',
   },
+  // The docs site (apps/docs) is served under /docs: in production from
+  // this build's dist/docs/ (see package.json's build:docs), locally by its
+  // own dev server, which bin/twiner starts and points this proxy at.
+  server: process.env.TWINER_DOCS_PORT
+    ? {
+        proxy: {
+          '/docs': { target: `http://localhost:${process.env.TWINER_DOCS_PORT}`, ws: true },
+        },
+      }
+    : {},
 })

@@ -1,0 +1,16 @@
+/* Match the app's hazard colours and keep display math scrollable on phones. */
+:root {
+	--twiner-quake: #8b5cf6;
+	--twiner-flood: #0ea5e9;
+}
+.math-display {
+	overflow-x: auto;
+	overflow-y: hidden;
+	padding-block: 0.25rem;
+}
+.hazard-quake {
+	color: var(--twiner-quake);
+}
+.hazard-flood {
+	color: var(--twiner-flood);
+}
