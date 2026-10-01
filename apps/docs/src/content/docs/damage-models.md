@@ -174,34 +174,36 @@ are close to GEM's.
 
 ## Comparison: Lorca 2011
 
-The 2011 Lorca earthquake (Mw 5.2, manual mode) with each method. These
-are buildings in each damage state across the municipality of Lorca
-(27,884 buildings):
+The 2011 Lorca earthquake (Mw 5.2, manual mode) with each method, in the
+town of Lorca (INE census district 01, 7,001 buildings), the area the
+post-earthquake inspection covered. Figures are expected counts (summed
+probabilities). "Low" and "very low" give the same expected counts.
 
-| Level | Method | Slight | Moderate | Extensive | Complete |
-|---|---|---|---|---|---|
-| High | Fragility (GEM) | 565 | 0 | 0 | 0 |
-| | Capacity spectrum (GEM) | 1,883 | 3,132 | 0 | 0 |
-| | Capacity spectrum (RISK-UE) | 1,254 | 4,825 | 5 | 0 |
-| Low | Fragility (GEM) | 10,554 | 0 | 0 | 0 |
-| | Capacity spectrum (GEM) | 852 | 11,047 | 1,229 | 0 |
-| | Capacity spectrum (RISK-UE) | 2,799 | 8,491 | 2,673 | 222 |
-| Very low | Fragility (GEM) | 8,641 | 4,745 | 1,075 | 0 |
-| | Capacity spectrum (GEM) | 1,684 | 5,328 | 6,991 | 4,571 |
-| | Capacity spectrum (RISK-UE) | 2,944 | 4,208 | 7,229 | 5,799 |
+| Level | Method | Slight | Moderate | Extensive | Complete | Any damage | Moderate or worse |
+|---|---|---|---|---|---|---|---|
+| | **Observed** (of 7,890) | 4,035 | 1,328 | 689 *(mod.–severe)* | 329 *(demolished)* | 81% | 30% |
+| High | Fragility (GEM) | 1,670 | 142 | 25 | 11 | 26% | 3% |
+| | Capacity spectrum (GEM) | 1,537 | 1,582 | 572 | 216 | 56% | 34% |
+| | Capacity spectrum (RISK-UE) | 1,047 | 1,557 | 794 | 332 | 53% | 38% |
+| Low / very low | Fragility (GEM) | 3,263 | 868 | 283 | 241 | 67% | 20% |
+| | Capacity spectrum (GEM) | 1,061 | 2,689 | 1,689 | 888 | 90% | 75% |
+| | Capacity spectrum (RISK-UE) | 859 | 1,707 | 1,689 | 1,124 | 77% | 65% |
 
-For reference, the town's post-earthquake inspection found 2,346 of its
-7,890 buildings with moderate damage or worse (see
+- **"Low" is the level whose ground motion matches what was recorded in
+  Lorca.** There, the fragility model is somewhat short of the observed
+  damage. Both capacity-spectrum variants exceed it: two to three times
+  the observed share at moderate or worse.
+- **At "high" probability, the capacity-spectrum variants match the
+  observed share at moderate or worse** (34–38% against 30%), but find
+  fewer damaged buildings overall.
+- **Most of the difference between methods comes from the damage-state
+  definitions.** RISK-UE starts Moderate damage at the yield displacement,
+  while GEM's own fragility functions use milder thresholds.
+
+Treat these methods as alternatives to compare, not as calibrated
+predictions. The inspection's categories span EMS-98 grades, so they don't
+match the model's states one-to-one (see
 [twinQUAKE](/docs/hazards/earthquake/#validation-lorca-2011)).
-
-The capacity-spectrum results are much more severe, even with the same GEM
-data. Most of the difference comes from the damage-state definitions:
-RISK-UE starts Moderate damage at the yield displacement, while GEM's own
-fragility functions use milder thresholds. With RISK-UE's thresholds, the
-capacity-spectrum model already exceeds the observed damage at "low"
-probability, the level whose ground motion matches what was recorded in
-Lorca. At "high" probability it is of the right order. Treat these
-methods as alternatives to compare, not as calibrated predictions.
 
 ## Limitations
 

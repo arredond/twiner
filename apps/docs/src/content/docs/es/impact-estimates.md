@@ -17,9 +17,9 @@ con pérdidas observadas en España.
 
 ## Datos de partida
 
-Para cada edificio que evalúa, un escenario sísmico conoce el grado de
-daño presentado: Sin daño, Leve, Moderado, Extenso o Completo (ver
-[twinQUAKE](/docs/es/hazards/earthquake/)). El modelo de exposición aporta
+Para cada edificio que evalúa, un escenario sísmico conoce la
+probabilidad de cada grado de daño: Sin daño, Leve, Moderado, Extenso y
+Completo (ver [twinQUAKE](/docs/es/hazards/earthquake/)). El modelo de exposición aporta
 tres atributos más de cada edificio:
 
 | Atributo | Origen |
@@ -36,14 +36,34 @@ para cada sección censal [2]:
 - los residentes de 65 años y más.
 
 Mientras se ejecuta un escenario, TWIN-ER suma edificios, viviendas y
-superficie construida por sección censal y grado de daño. Todas las cifras
-siguientes se derivan de esas sumas. Las cifras de un municipio son la suma
-de las de sus secciones. Los porcentajes se recalculan a partir de las
-sumas, nunca se promedian.
+superficie construida por sección censal y grado de daño. Cada edificio
+cuenta en todos los grados **ponderado por su probabilidad** de estar en
+cada uno. Un edificio con un 60 % de probabilidad de daño Leve y un 40 % de
+Moderado suma 0,6 edificios a Leve y 0,4 a Moderado, y reparte del mismo
+modo sus viviendas y su superficie. El resultado son **valores esperados**:
+lo que vería la zona en promedio, teniendo en cuenta todo el rango de daño
+que puede sufrir cada edificio.
 
-**Definiciones.** Un edificio está **afectado** cuando su grado de daño es
-cualquiera salvo "sin daño". Sus residentes están **desplazados** cuando el
-grado es Extenso o Completo.
+- **Todas las cifras siguientes se derivan de esas sumas.** Las cifras de
+  un municipio son la suma de las de sus secciones. Los porcentajes se
+  recalculan a partir de las sumas, nunca se promedian.
+- **Los edificios del mapa son distintos.** Cada edificio sigue mostrando
+  un único grado de daño, elegido según el nivel de probabilidad: el más
+  probable, o el del percentil 85 con probabilidad "muy baja". La API
+  devuelve también los recuentos por zona según ese grado mostrado
+  (`counts_reported`).
+- **Las probabilidades "baja" y "muy baja" dan las mismas cifras por
+  zona.** Las dos usan el mismo movimiento del suelo (mediana + 1σ) y solo
+  difieren en qué grado único muestra cada edificio.
+
+**Definiciones.**
+
+- Un edificio está **afectado** cuando su grado de daño es cualquiera salvo
+  "sin daño". Sus residentes están **desplazados** cuando el grado es
+  Extenso o Completo. Ambos se cuentan por probabilidad, como arriba.
+- Una zona se considera afectada si tiene al menos medio edificio dañado
+  esperado, o algún edificio que el mapa muestra dañado. Por debajo, se
+  presenta como sin daño.
 
 ## Cifras sísmicas
 
@@ -198,9 +218,10 @@ mapas oficiales no dan. Para cada sección censal, agregadas por municipio:
   industrial pesa y cuesta mucho menos por m² que una vivienda. Separar por
   clase y uso es la mejora más evidente.
 - **Solo población nocturna.** No hay modelo de ocupación diurna.
-- **Sin bandas de incertidumbre.** Todas las cifras usan el grado de daño
-  presentado para el nivel de probabilidad elegido, no la distribución
-  completa del daño.
+- **Sin bandas de incertidumbre.** Las cifras son valores esperados,
+  promedios sobre la distribución de daño de cada edificio, sin un rango
+  alrededor. Además, el daño se trata como independiente de un edificio a
+  otro.
 
 ## Referencias
 

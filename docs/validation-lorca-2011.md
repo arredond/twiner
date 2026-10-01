@@ -693,3 +693,94 @@ state jumps straight from Slight to Complete for many rubble-stone
 buildings at "low". That is the modal-state selection reading a wide
 distribution, not a bug: Extensive is rarely the single most likely state
 for those curves.
+
+## 14. Town-only comparison, with expected counts (2026-10-01)
+
+The inspection counts (§1) cover the **town** (7,890 buildings), not the
+municipality (27,884, mostly rural). For a like-for-like area, twiner now
+uses **INE census district 01** of Lorca as the town:
+
+- District 01: 43 sections, 7,001 buildings, 64,207 residents, 6.7 km²,
+  every section under 0.75 km².
+- District 02 is the rural *pedanías*: 25 sections, 20,883 buildings,
+  1,668 km².
+- About 630 district-02 buildings, in sections 02-004, 02-005, 02-001 and
+  others bordering the town, lie within 300 m of district 01. They are part
+  of the continuous built-up area but are left out. Together with
+  cadastre differences (2011 vs 2025), that explains most of the
+  7,001 vs 7,890 gap.
+- No outline of the built-up area itself is available: IGN and INE
+  publish population centres (*núcleos*) as points.
+
+Model figures are now **expected counts** (ADR-0034): each building's
+damage-state probabilities summed, instead of one reported state per
+building. Reproduce with:
+
+```bash
+uv run --package twiner-scenario python -m scenario.validate_lorca
+```
+
+Output on 2026-10-01 (national data, taxonomy v2, ADR-0032):
+
+Town = INE district 01 of Lorca, 7,001 buildings. Observed: 7,890 buildings (Feriche et al. 2012).
+
+| Level | Method | Slight | Moderate | Extensive | Complete | Any damage | Moderate+ |
+|---|---|---|---|---|---|---|---|
+| | **Observed** (inspection categories) | 4,035 | 1,328 | 689 (mod.-severe) | 329 (demolished) | 6,381 (81%) | 2,346 (30%) |
+| high | fragility + gem | 1,670 | 142 | 25 | 11 | 1,847 (26%) | 178 (3%) |
+| high | capacity_spectrum + gem | 1,537 | 1,582 | 572 | 216 | 3,907 (56%) | 2,370 (34%) |
+| high | capacity_spectrum + risk_ue | 1,047 | 1,557 | 794 | 332 | 3,730 (53%) | 2,683 (38%) |
+| low | fragility + gem | 3,263 | 868 | 283 | 241 | 4,656 (67%) | 1,393 (20%) |
+| low | capacity_spectrum + gem | 1,061 | 2,689 | 1,689 | 888 | 6,327 (90%) | 5,265 (75%) |
+| low | capacity_spectrum + risk_ue | 859 | 1,707 | 1,689 | 1,124 | 5,379 (77%) | 4,519 (65%) |
+| very_low | fragility + gem | 3,263 | 868 | 283 | 241 | 4,656 (67%) | 1,393 (20%) |
+| very_low | capacity_spectrum + gem | 1,061 | 2,689 | 1,689 | 888 | 6,327 (90%) | 5,265 (75%) |
+| very_low | capacity_spectrum + risk_ue | 859 | 1,707 | 1,689 | 1,124 | 5,379 (77%) | 4,519 (65%) |
+
+Model columns are expected counts (summed probabilities). Reported counts (one state per building, as on the map), for reference:
+
+| Level | Method | None | Slight | Moderate | Extensive | Complete |
+|---|---|---|---|---|---|---|
+| high | fragility + gem | 6,549 | 452 | 0 | 0 | 0 |
+| high | capacity_spectrum + gem | 3,668 | 1,222 | 2,111 | 0 | 0 |
+| high | capacity_spectrum + risk_ue | 3,190 | 742 | 3,064 | 5 | 0 |
+| low | fragility + gem | 1,363 | 5,638 | 0 | 0 | 0 |
+| low | capacity_spectrum + gem | 788 | 418 | 4,802 | 993 | 0 |
+| low | capacity_spectrum + risk_ue | 1,952 | 345 | 2,715 | 1,776 | 213 |
+| very_low | fragility + gem | 569 | 2,739 | 3,043 | 650 | 0 |
+| very_low | capacity_spectrum + gem | 109 | 47 | 977 | 2,805 | 3,063 |
+| very_low | capacity_spectrum + risk_ue | 966 | 750 | 503 | 971 | 3,811 |
+
+Whole municipality of Lorca (27,884 buildings), expected counts:
+
+| Level | Method | Slight | Moderate | Extensive | Complete |
+|---|---|---|---|---|---|
+| high | fragility + gem | 3,086 | 223 | 38 | 16 |
+| high | capacity_spectrum + gem | 2,879 | 2,879 | 1,004 | 387 |
+| high | capacity_spectrum + risk_ue | 2,510 | 2,825 | 1,386 | 562 |
+| low | fragility + gem | 7,194 | 1,511 | 464 | 378 |
+| low | capacity_spectrum + gem | 3,411 | 6,470 | 3,331 | 1,674 |
+| low | capacity_spectrum + risk_ue | 4,224 | 5,542 | 3,946 | 2,183 |
+| very_low | fragility + gem | 7,194 | 1,511 | 464 | 378 |
+| very_low | capacity_spectrum + gem | 3,411 | 6,470 | 3,331 | 1,674 |
+| very_low | capacity_spectrum + risk_ue | 4,224 | 5,542 | 3,946 | 2,183 |
+
+**Reading.**
+
+- **"Low" is the level whose shaking matches the 2011 recordings** (§10.5).
+  There, the default fragility model gives 67% of the town damaged and 20%
+  at moderate or worse, against 81% and 30% observed, plus 241 Complete
+  against 329 demolished.
+- Counting reported states instead had suggested 0 moderate or worse,
+  which mostly reflected the counting rule, not the model.
+- The capacity-spectrum models (ADR-0033) over-predict at "low": 65–75%
+  moderate or worse.
+- "Low" and "very low" give identical expected counts by construction
+  (same ground motion, ADR-0034). They differ only in reported states.
+
+Caveats still apply. The inspection's categories span EMS-98 grade ranges
+(slight is grades 1–2, moderate 2–3), so "Moderate" is not a one-to-one
+match. The district-01 proxy misses some of the town's fringe. Matching
+the town's georeferenced inspection forms to Catastro footprints would
+make this a building-by-building comparison (ask UPM or the town
+council).

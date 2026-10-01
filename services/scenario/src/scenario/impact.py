@@ -7,9 +7,15 @@ source, in docs/impact-estimates.md. Change one there and here together.
 How it's computed: as a scenario's buildings stream through
 (engine.summarize_scenario), `ImpactCounter` sums, per census section and
 damage state, three things about the evaluated buildings: how many there
-are, their dwellings, and their built floor area. Everything reported is
-derived from those sums plus each section's static census figures
-(`AreaMeta`, from pipelines/exposure's census_sections.py):
+are, their dwellings, and their built floor area. Each building counts in
+every state **weighted by its probability of being in it** (expected
+values, ADR-0034), not only in its reported state: a building 60% Slight
+and 40% Moderate adds 0.6 to Slight and 0.4 to Moderate. The counts by
+reported state (the one the map colours a building with, which follows
+MERISUR's probability levels) are kept alongside as `counts_reported`.
+Everything reported is derived from the expected sums plus each section's
+static census figures (`AreaMeta`, from pipelines/exposure's
+census_sections.py):
 
 - Population is spread over a section's buildings in proportion to their
   dwellings (a section's residents are INE's; which buildings they live in
@@ -60,6 +66,13 @@ PROPS_PER_SHORED_M2 = 1.0
 
 # Damage states whose residents count as displaced (building unusable).
 DISPLACED_STATES = ("Extensive", "Complete")
+
+# With expected values almost every evaluated area has *some* expected
+# damage. An area counts as affected (full figures, listed in section_stats,
+# and shown on the map) when it has at least this many expected damaged
+# buildings, or any building whose reported state is damaged; below that it
+# is reported as undamaged, as before (ADR-0034).
+AFFECTED_MIN_EXPECTED_BUILDINGS = 0.5
 
 # ---------------------------------------------------------------------------
 
@@ -153,7 +166,8 @@ class ImpactCounter:
     figures."""
 
     def __init__(self) -> None:
-        # key -> (3, n_states): buildings, dwellings, built area
+        # key -> (4, n_states): expected buildings, expected dwellings,
+        # expected built area, and buildings by reported state.
         self._sums: dict[str, np.ndarray] = {}
 
     def add(
@@ -163,37 +177,55 @@ class ImpactCounter:
         damage_state_code: np.ndarray,
         dwellings: np.ndarray,
         built_area_m2: np.ndarray,
+        probs: np.ndarray | None = None,
     ) -> None:
+        """`probs`: (n_states, n) damage-state probabilities, rows in
+        DAMAGE_STATES order (damage.DamageArrays.probs). Without it, each
+        building counts fully in its reported state."""
         keys = _area_keys(municipality_codes, section_codes).dictionary_encode()
         indices = keys.indices.to_numpy(zero_copy_only=False)
         valid = keys.indices.is_valid().to_numpy(zero_copy_only=False)
-        bins = indices[valid].astype(np.int64) * _N_STATES + damage_state_code[valid]
-        size = len(keys.dictionary) * _N_STATES
-        sums = np.stack(
-            [
-                np.bincount(bins, minlength=size),
-                np.bincount(bins, weights=dwellings[valid], minlength=size),
-                np.bincount(bins, weights=built_area_m2[valid], minlength=size),
-            ]
-        ).reshape(3, len(keys.dictionary), _N_STATES)
+        codes = np.asarray(damage_state_code)[valid].astype(np.int64)
+        if probs is None:
+            weights = np.zeros((_N_STATES, len(codes)))
+            weights[codes, np.arange(len(codes))] = 1.0
+        else:
+            weights = np.asarray(probs, dtype=np.float64)[:, valid]
+        area_index = indices[valid].astype(np.int64)
+        n_areas = len(keys.dictionary)
+        dw, ba = dwellings[valid], built_area_m2[valid]
+        sums = np.zeros((4, n_areas, _N_STATES))
+        for state in range(_N_STATES):
+            w = weights[state]
+            sums[0, :, state] = np.bincount(area_index, weights=w, minlength=n_areas)
+            sums[1, :, state] = np.bincount(area_index, weights=w * dw, minlength=n_areas)
+            sums[2, :, state] = np.bincount(area_index, weights=w * ba, minlength=n_areas)
+        sums[3] = np.bincount(
+            area_index * _N_STATES + codes, minlength=n_areas * _N_STATES
+        ).reshape(n_areas, _N_STATES)
         for i, key in enumerate(keys.dictionary.to_pylist()):
             row = sums[:, i, :]
             if key in self._sums:
                 self._sums[key] += row
-            elif row[0].any():
-                self._sums[key] = row.astype(np.float64)
+            elif row[3].any():
+                self._sums[key] = row.copy()
 
     @property
-    def n_damaged(self) -> int:
-        """Non-None buildings, the same "affected" definition as the stats."""
-        return int(sum(row[0, 1:].sum() for row in self._sums.values()))
+    def n_damaged(self) -> float:
+        """Expected non-None buildings over everything evaluated."""
+        return round(float(sum(row[0, 1:].sum() for row in self._sums.values())), 1)
+
+    @property
+    def n_damaged_reported(self) -> int:
+        """Buildings whose reported state isn't None."""
+        return int(sum(row[3, 1:].sum() for row in self._sums.values()))
 
     def section_stats(self, meta: AreaMeta | None = None) -> list[dict]:
         """One row per census section with at least one damaged building."""
         meta = meta or area_meta()
         rows = []
         for key, sums in sorted(self._sums.items()):
-            if key.startswith(_NO_SECTION_PREFIX) or not sums[0, 1:].any():
+            if key.startswith(_NO_SECTION_PREFIX) or not _is_affected(sums):
                 continue
             static = meta.sections.get(key, {})
             row = _section_figures(sums, static)
@@ -238,14 +270,16 @@ class ImpactCounter:
 
         rows = []
         for code, (sums, figures) in sorted(by_muni.items()):
-            counts = sums[0].astype(np.int64)
-            if not counts[1:].any():
+            if not _is_affected(sums):
+                n_evaluated = int(sums[3].sum())
+                undamaged = {state: 0 for state in DAMAGE_STATES} | {"None": n_evaluated}
                 rows.append(
                     {
                         "municipality_code": code,
-                        "n_evaluated": int(counts.sum()),
+                        "n_evaluated": n_evaluated,
                         "n_damaged": 0,
-                        "counts": {state: int(n) for state, n in zip(DAMAGE_STATES, counts)},
+                        "counts": undamaged,
+                        "counts_reported": undamaged,
                     }
                 )
                 continue
@@ -280,10 +314,16 @@ def _string_array(values: pa.Array | pa.ChunkedArray) -> pa.Array:
     return values.cast(pa.string())
 
 
+def _is_affected(sums: np.ndarray) -> bool:
+    """See AFFECTED_MIN_EXPECTED_BUILDINGS."""
+    return bool(sums[0, 1:].sum() >= AFFECTED_MIN_EXPECTED_BUILDINGS or sums[3, 1:].any())
+
+
 def _section_figures(sums: np.ndarray, static: dict) -> dict[str, float]:
     """Additive figures for one section (or no-section municipality bucket),
-    so a municipality's are the sum of its sections'."""
-    buildings, dwellings, area = sums
+    so a municipality's are the sum of its sections'. Expected values: see
+    the module docstring."""
+    buildings, dwellings, area = sums[:3]
     damaged = slice(1, None)
     population = float(static.get("population") or 0)
     vulnerable = float((static.get("pop_under_15") or 0) + (static.get("pop_65_plus") or 0))
@@ -318,9 +358,10 @@ def _section_figures(sums: np.ndarray, static: dict) -> dict[str, float]:
 def _report(ident: dict, sums: np.ndarray, figures: dict[str, float], static: dict) -> dict:
     """The JSON row for one area. `static` holds the area's own census
     totals (population, buildings) -- the denominators for percentages."""
-    counts = sums[0].astype(np.int64)
-    n_evaluated = int(counts.sum())
-    n_damaged = int(counts[1:].sum())
+    expected = sums[0]
+    reported = sums[3].astype(np.int64)
+    n_evaluated = int(reported.sum())
+    n_damaged = round(float(expected[1:].sum()), 2)
     n_buildings = int(static.get("n_buildings") or 0) or n_evaluated
     population = int(static.get("population") or 0)
     vulnerable = int((static.get("pop_under_15") or 0) + (static.get("pop_65_plus") or 0))
@@ -328,7 +369,10 @@ def _report(ident: dict, sums: np.ndarray, figures: dict[str, float], static: di
         **ident,
         "n_evaluated": n_evaluated,
         "n_damaged": n_damaged,
-        "counts": {state: int(n) for state, n in zip(DAMAGE_STATES, counts)},
+        # Expected buildings per state (summed probabilities, ADR-0034).
+        "counts": {state: round(float(n), 2) for state, n in zip(DAMAGE_STATES, expected)},
+        # Buildings per reported state, as the map colours them.
+        "counts_reported": {state: int(n) for state, n in zip(DAMAGE_STATES, reported)},
         "n_buildings": n_buildings,
         "pct_buildings_affected": _pct(n_damaged, n_buildings),
         "population": population,
@@ -362,7 +406,7 @@ def _section_label(code: str, static: dict) -> str:
     return f"{name} {code[5:7]}-{code[7:10]}"
 
 
-def mean_severity(counts: dict[str, int]) -> float:
+def mean_severity(counts: dict[str, float]) -> float:
     """Average damage-state index (0 None .. 4 Complete) -- the map
     choropleth's colour input, same scale as a single building's colour."""
     total = sum(counts.values())

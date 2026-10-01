@@ -44,7 +44,18 @@ gives:
 See [DATA-SOURCES.md](../DATA-SOURCES.md).
 
 As a scenario's buildings stream through, the backend sums three things
-per section and damage state: buildings, dwellings and built area.
+per section and damage state: buildings, dwellings and built area. Since
+ADR-0034 these are **expected values**: each building adds its
+*probability* of being in each state (a 60% Slight / 40% Moderate
+building adds 0.6 and 0.4, with its dwellings and area split alike), not 1
+to its reported state. The reported-state counts are kept as
+`counts_reported`. Consequences:
+
+- "low" and "very low" give identical area figures (same ground motion).
+- An area counts as affected (listed, full figures, coloured) at 0.5
+  expected damaged buildings or any reported-damaged building
+  (`impact.AFFECTED_MIN_EXPECTED_BUILDINGS`).
+
 Everything below is derived from those sums. A municipality's figures are
 the sums of its sections' figures; percentages are recomputed from the
 sums, never averaged.
@@ -175,17 +186,17 @@ Replace these values with figures from Spanish emergency-response practice
 ## Reference run
 
 Both runs are manual scenarios at Lorca's 2011 epicentre (37.699, -1.673),
-computed locally on the national dataset on 2026-10-01, after ADR-0032's
-taxonomy corrections (the 2026-09-29 figures used the stale classes).
+computed locally on the national dataset on 2026-10-01, with ADR-0032's
+taxonomy and ADR-0034's expected values. "Very low" now gives the same
+area figures as "low".
 
-- **Mw 5.2, "very_low":** Lorca has 14,461 of 27,884 buildings affected
-  (51.9%). That's 73,931 of 98,613 residents (75.0%), including 23,054
-  vulnerable residents, and 2,863 displaced (1,077 buildings reach
-  Extensive). Material cost €399.2M, debris 421,220 t, 21,061 truck
-  rotations, 123,873 props.
-- **Mw 6.5, "low":** Lorca has 19,589 buildings affected (70.3%). That's
-  86,722 residents, with 19,007 displaced (6,340 buildings at Complete).
-  Material cost €2,215M, debris 2,436,568 t.
+- **Mw 5.2, "very_low":** Lorca has 9,562 of 27,884 buildings affected,
+  in expectation (34.3%). That's 41,434 of 98,613 residents (42.0%),
+  including 13,033 vulnerable residents, and 2,564 displaced. Material
+  cost €315.5M, debris 338,508 t, 16,926 truck rotations, 60,675 props.
+- **Mw 6.5, "low":** Lorca has 19,345 buildings affected (69.4%). That's
+  86,209 residents, with 32,932 displaced (4,304 expected buildings at
+  Complete). Material cost €2,958M, debris 3,179,885 t.
 
 These figures haven't been compared with Lorca 2011's recorded losses,
 displacement or debris-removal volumes. That comparison (records

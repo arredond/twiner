@@ -155,5 +155,64 @@ def test_undamaged_municipalities_are_slimmed_to_counts():
             "n_evaluated": 1,
             "n_damaged": 0,
             "counts": {"None": 1, "Slight": 0, "Moderate": 0, "Extensive": 0, "Complete": 0},
+            "counts_reported": {
+                "None": 1,
+                "Slight": 0,
+                "Moderate": 0,
+                "Extensive": 0,
+                "Complete": 0,
+            },
         }
     ]
+
+
+# --- expected values (ADR-0034) --------------------------------------------
+
+
+def _one_building(probs: list[float], reported: int) -> ImpactCounter:
+    counter = ImpactCounter()
+    counter.add(
+        pa.array(["30024"]),
+        pa.array(["3002401001"]),
+        np.array([reported]),
+        np.array([40.0]),
+        np.array([1000.0]),
+        probs=np.array(probs)[:, None],
+    )
+    return counter
+
+
+def test_area_figures_sum_probabilities_not_the_reported_state():
+    # Reported None (its most likely state), but 30% Slight and 20% Moderate.
+    row = _one_building([0.5, 0.3, 0.2, 0.0, 0.0], reported=0).section_stats(META)[0]
+    assert row["counts"] == {
+        "None": 0.5,
+        "Slight": 0.3,
+        "Moderate": 0.2,
+        "Extensive": 0.0,
+        "Complete": 0.0,
+    }
+    assert row["counts_reported"]["None"] == 1
+    assert row["n_damaged"] == 0.5
+    # Half its 40 dwellings are expected damaged: 20 of the section's 400.
+    assert row["affected_population"] == 50
+    # Cost: 1000 m2 x (30% x 2% + 20% x 10%) of replacement.
+    assert row["cost_meur"] == pytest.approx(
+        1000 * (0.3 * 0.02 + 0.2 * 0.10) * REPLACEMENT_COST_EUR_PER_M2 / 1e6, abs=0.01
+    )
+
+
+def test_areas_below_half_an_expected_damaged_building_count_as_undamaged():
+    counter = _one_building([0.8, 0.15, 0.05, 0.0, 0.0], reported=0)
+    assert counter.section_stats(META) == []
+    assert counter.municipality_stats(META)[0]["n_damaged"] == 0
+    # ... but the scenario-wide expected total still includes it.
+    assert counter.n_damaged == 0.2
+
+
+def test_a_reported_damaged_building_always_makes_its_area_affected():
+    # Very low probability's 85th percentile can report Slight even when
+    # the expected damage is small.
+    row = _one_building([0.7, 0.3, 0.0, 0.0, 0.0], reported=1).section_stats(META)[0]
+    assert row["counts_reported"]["Slight"] == 1
+    assert row["n_damaged"] == 0.3

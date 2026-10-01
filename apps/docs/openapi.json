@@ -3,7 +3,7 @@
   "info": {
     "title": "TWIN-ER API",
     "description": "The HTTP API behind the TWIN-ER web app: run earthquake and flood scenarios,\nthen read their results by area, as map tiles, or as GeoJSON.\n\n## How it fits together\n\n1. **Run a scenario.** `GET /scenarios/fault` (a fault's maximum-magnitude\n   earthquake), `POST /scenarios/manual` (an earthquake you define) or\n   `POST /scenarios/flood`. The response has a `scenario_id` and one row of\n   figures per affected municipality.\n2. **Read the details** with that id: per-census-section figures, affected\n   critical infrastructure, intensity bands (`/results/{scenario_id}/...`),\n   and building/debris vector tiles (`/tiles/{scenario_id}/...`).\n\nScenario ids are content-addressed: the same inputs on the same data and\ncode version give the same id, so results can be cached and shared.\n\n## Deployments\n\n- **Local** (`bin/twiner start`): every route below, on one server.\n- **Cloud** (AWS Lambda function URLs): the scenario function serves every\n  route except `/tiles/...`, which a separate tiles function serves, and the\n  two local-only routes `/results/{scenario_id}/status` and\n  `/results/{scenario_id}/municipality_stats`.\n\nThere is no authentication, versioning guarantee or rate limit yet: this\nreference describes the API the web app uses, not a stable public contract.\n\n## Errors\n\nThe local server answers errors as `{\"detail\": \"...\"}`; the Lambda as\n`{\"error\": \"...\"}`.\n\nSee the [twinQUAKE](/docs/hazards/earthquake/) and\n[twinFLOOD](/docs/hazards/flood/) pages for what the numbers mean.\n",
-    "version": "7"
+    "version": "8"
   },
   "servers": [
     {
@@ -1148,19 +1148,19 @@
       "DamageCounts": {
         "properties": {
           "None": {
-            "type": "integer"
+            "type": "number"
           },
           "Slight": {
-            "type": "integer"
+            "type": "number"
           },
           "Moderate": {
-            "type": "integer"
+            "type": "number"
           },
           "Extensive": {
-            "type": "integer"
+            "type": "number"
           },
           "Complete": {
-            "type": "integer"
+            "type": "number"
           }
         },
         "additionalProperties": true,
@@ -1173,7 +1173,7 @@
           "Complete"
         ],
         "title": "DamageCounts",
-        "description": "Buildings per damage state (the state reported at the chosen probability level)."
+        "description": "Expected buildings per damage state: each building's probability of\nbeing in each state, summed over the area."
       },
       "DamageMethodParams": {
         "properties": {
@@ -1264,7 +1264,19 @@
             "type": "integer"
           },
           "n_damaged": {
-            "type": "integer"
+            "type": "number",
+            "description": "Expected damaged buildings (summed probabilities)."
+          },
+          "n_damaged_reported": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Buildings whose reported state isn't None."
           },
           "municipality_stats": {
             "items": {
@@ -2227,6 +2239,36 @@
         ],
         "title": "MethodsResponse"
       },
+      "ReportedDamageCounts": {
+        "properties": {
+          "None": {
+            "type": "integer"
+          },
+          "Slight": {
+            "type": "integer"
+          },
+          "Moderate": {
+            "type": "integer"
+          },
+          "Extensive": {
+            "type": "integer"
+          },
+          "Complete": {
+            "type": "integer"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "None",
+          "Slight",
+          "Moderate",
+          "Extensive",
+          "Complete"
+        ],
+        "title": "ReportedDamageCounts",
+        "description": "Buildings per reported damage state: the single state each building\ngets at the chosen probability level, as the map colours it."
+      },
       "Rupture": {
         "properties": {
           "lat": {
@@ -2329,11 +2371,21 @@
             "description": "Buildings the scenario evaluated."
           },
           "n_damaged": {
-            "type": "integer",
-            "description": "Evaluated buildings in any state other than None."
+            "type": "number",
+            "description": "Expected buildings in any state other than None (summed probabilities)."
           },
           "counts": {
             "$ref": "#/components/schemas/DamageCounts"
+          },
+          "counts_reported": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReportedDamageCounts"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "n_buildings": {
             "anyOf": [
@@ -2355,7 +2407,7 @@
                 "type": "null"
               }
             ],
-            "description": "n_damaged / n_buildings, in %."
+            "description": "n_damaged / n_buildings, in % (expected)."
           },
           "population": {
             "anyOf": [
@@ -2523,11 +2575,21 @@
             "description": "Buildings the scenario evaluated."
           },
           "n_damaged": {
-            "type": "integer",
-            "description": "Evaluated buildings in any state other than None."
+            "type": "number",
+            "description": "Expected buildings in any state other than None (summed probabilities)."
           },
           "counts": {
             "$ref": "#/components/schemas/DamageCounts"
+          },
+          "counts_reported": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReportedDamageCounts"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "n_buildings": {
             "anyOf": [
@@ -2549,7 +2611,7 @@
                 "type": "null"
               }
             ],
-            "description": "n_damaged / n_buildings, in %."
+            "description": "n_damaged / n_buildings, in % (expected)."
           },
           "population": {
             "anyOf": [

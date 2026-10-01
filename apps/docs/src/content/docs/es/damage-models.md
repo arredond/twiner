@@ -182,36 +182,40 @@ son parecidas a las de GEM.
 
 ## Comparación: Lorca 2011
 
-El terremoto de Lorca de 2011 (Mw 5,2, modo manual) con cada método.
-Edificios en cada grado de daño en el municipio de Lorca (27.884
-edificios):
+El terremoto de Lorca de 2011 (Mw 5,2, modo manual) con cada método, en la
+ciudad de Lorca (distrito censal 01 del INE, 7.001 edificios), la zona que
+cubrió la inspección posterior al terremoto. Las cifras son recuentos
+esperados (suma de probabilidades). Las probabilidades "baja" y "muy baja"
+dan los mismos recuentos esperados.
 
-| Nivel | Método | Leve | Moderado | Extenso | Completo |
-|---|---|---|---|---|---|
-| Alta | Fragilidad (GEM) | 565 | 0 | 0 | 0 |
-| | Espectro de capacidad (GEM) | 1.883 | 3.132 | 0 | 0 |
-| | Espectro de capacidad (RISK-UE) | 1.254 | 4.825 | 5 | 0 |
-| Baja | Fragilidad (GEM) | 10.554 | 0 | 0 | 0 |
-| | Espectro de capacidad (GEM) | 852 | 11.047 | 1.229 | 0 |
-| | Espectro de capacidad (RISK-UE) | 2.799 | 8.491 | 2.673 | 222 |
-| Muy baja | Fragilidad (GEM) | 8.641 | 4.745 | 1.075 | 0 |
-| | Espectro de capacidad (GEM) | 1.684 | 5.328 | 6.991 | 4.571 |
-| | Espectro de capacidad (RISK-UE) | 2.944 | 4.208 | 7.229 | 5.799 |
+| Nivel | Método | Leve | Moderado | Extenso | Completo | Algún daño | Moderado o superior |
+|---|---|---|---|---|---|---|---|
+| | **Observado** (de 7.890) | 4.035 | 1.328 | 689 *(moderado–grave)* | 329 *(demolidos)* | 81 % | 30 % |
+| Alta | Fragilidad (GEM) | 1.670 | 142 | 25 | 11 | 26 % | 3 % |
+| | Espectro de capacidad (GEM) | 1.537 | 1.582 | 572 | 216 | 56 % | 34 % |
+| | Espectro de capacidad (RISK-UE) | 1.047 | 1.557 | 794 | 332 | 53 % | 38 % |
+| Baja / muy baja | Fragilidad (GEM) | 3.263 | 868 | 283 | 241 | 67 % | 20 % |
+| | Espectro de capacidad (GEM) | 1.061 | 2.689 | 1.689 | 888 | 90 % | 75 % |
+| | Espectro de capacidad (RISK-UE) | 859 | 1.707 | 1.689 | 1.124 | 77 % | 65 % |
 
-Como referencia, la inspección posterior al terremoto encontró 2.346 de los
-7.890 edificios de la ciudad con daño moderado o superior (ver
+- **La probabilidad "baja" es la que tiene un movimiento del suelo igual al
+  registrado en Lorca.** Con ella, el modelo de fragilidad se queda algo
+  corto respecto al daño observado. Las dos variantes del espectro de
+  capacidad lo superan: entre dos y tres veces la proporción observada con
+  daño moderado o superior.
+- **Con probabilidad "alta", las variantes del espectro de capacidad
+  coinciden con la proporción observada con daño moderado o superior**
+  (34–38 % frente a 30 %), pero encuentran menos edificios dañados en
+  total.
+- **La mayor parte de la diferencia entre métodos procede de la definición
+  de los grados de daño.** RISK-UE hace empezar el daño moderado en el
+  desplazamiento de plastificación, mientras que las funciones de
+  fragilidad de GEM usan umbrales más suaves.
+
+Estos métodos son alternativas para comparar, no predicciones calibradas.
+Las categorías de la inspección abarcan varios grados de la EMS-98, así que
+no se corresponden una a una con los grados del modelo (ver
 [twinQUAKE](/docs/es/hazards/earthquake/#validación-lorca-2011)).
-
-Los resultados del espectro de capacidad son mucho más severos, incluso
-con los mismos datos de GEM. La mayor parte de la diferencia procede de la
-definición de los grados de daño: RISK-UE hace empezar el daño moderado en
-el desplazamiento de plastificación, mientras que las funciones de
-fragilidad de GEM usan umbrales más suaves. Con los umbrales de RISK-UE, el
-modelo de espectro de capacidad ya supera el daño observado con
-probabilidad "baja", el nivel cuyo movimiento del suelo coincide con el
-registrado en Lorca. Con probabilidad "alta" da el orden de magnitud
-correcto. Estos métodos son alternativas para comparar, no predicciones
-calibradas.
 
 ## Limitaciones
 

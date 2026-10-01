@@ -442,6 +442,7 @@ def _run_and_respond(
         "evaluated_region": evaluated_region(rupture, radius_km),
         "n_evaluated": summary.n_evaluated,
         "n_damaged": summary.n_damaged,
+        "n_damaged_reported": summary.n_damaged_reported,
         "municipality_stats": municipality_stats,
         "infrastructure_summary": (
             summarize_assets(infrastructure) if infrastructure is not None else None

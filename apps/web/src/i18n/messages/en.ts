@@ -243,7 +243,7 @@ export const en = {
 
   "impact.buildingsAffected": "Buildings affected",
   "impact.buildingsAffectedHint":
-    "Buildings with any predicted damage (Slight or worse), out of every building in the area.",
+    "Expected buildings with any damage (Slight or worse), out of every building in the area: each building counts by its probability of being damaged, so the total can differ from the buildings coloured on the map.",
   "impact.population": "Population",
   "impact.populationHint": "Residents, INE Censo Anual de Población, 1 Jan 2025.",
   "impact.populationAffected": "Population affected",

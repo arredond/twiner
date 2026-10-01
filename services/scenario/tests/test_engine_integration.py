@@ -62,7 +62,9 @@ def test_streamed_summary_matches_the_full_result():
     summary = summarize_scenario(*args, max_distance_km=15.0, batch_rows=4_000)
 
     assert summary.n_evaluated == len(full)
-    assert summary.n_damaged == count_damaged(full)
+    assert summary.n_damaged_reported == count_damaged(full)
+    # Expected damaged buildings (ADR-0034): 1 - P(None), summed.
+    assert summary.n_damaged == pytest.approx((1 - full["prob_none"]).sum(), abs=0.1)
     assert summary.areas.municipality_stats(AreaMeta()) == compute_municipality_stats(full)
     shipped = prepare_response_buildings(full)
     assert sorted(summary.shipped.column("building_id").to_pylist()) == sorted(

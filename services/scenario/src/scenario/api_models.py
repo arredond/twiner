@@ -137,7 +137,19 @@ class EvaluatedRegion(_Model):
 
 
 class DamageCounts(_Model):
-    """Buildings per damage state (the state reported at the chosen probability level)."""
+    """Expected buildings per damage state: each building's probability of
+    being in each state, summed over the area."""
+
+    None_: float = Field(alias="None")
+    Slight: float
+    Moderate: float
+    Extensive: float
+    Complete: float
+
+
+class ReportedDamageCounts(_Model):
+    """Buildings per reported damage state: the single state each building
+    gets at the chosen probability level, as the map colours it."""
 
     None_: int = Field(alias="None")
     Slight: int
@@ -150,21 +162,28 @@ class SeismicImpact(_Model):
     """Impact figures for one area (municipality or census section) after an
     earthquake. See /docs/impact-estimates/ for how each is computed.
 
-    Municipalities with no damaged building carry only `municipality_code`,
-    `n_evaluated`, `n_damaged` and `counts`, to keep large responses small."""
+    Damage counts and every figure derived from them are expected values:
+    each building's probability of being in each state, summed. Areas with
+    less than half an expected damaged building and no building reported
+    damaged count as undamaged; such municipalities carry only
+    `municipality_code`, `n_evaluated`, `n_damaged`, `counts` and
+    `counts_reported`, to keep large responses small."""
 
     name: str | None = None
     bbox: list[float] | None = Field(
         default=None, description="[west, south, east, north], degrees."
     )
     n_evaluated: int = Field(description="Buildings the scenario evaluated.")
-    n_damaged: int = Field(description="Evaluated buildings in any state other than None.")
+    n_damaged: float = Field(
+        description="Expected buildings in any state other than None (summed probabilities)."
+    )
     counts: DamageCounts
+    counts_reported: ReportedDamageCounts | None = None
     n_buildings: int | None = Field(
         default=None, description="All buildings in the area, evaluated or not."
     )
     pct_buildings_affected: float | None = Field(
-        default=None, description="n_damaged / n_buildings, in %."
+        default=None, description="n_damaged / n_buildings, in % (expected)."
     )
     population: int | None = Field(default=None, description="Residents, INE 1 January 2025.")
     vulnerable_population: int | None = Field(
@@ -257,7 +276,10 @@ class EarthquakeScenarioResponse(_Model):
     damage_method: DamageMethodParams
     evaluated_region: EvaluatedRegion
     n_evaluated: int
-    n_damaged: int
+    n_damaged: float = Field(description="Expected damaged buildings (summed probabilities).")
+    n_damaged_reported: int | None = Field(
+        default=None, description="Buildings whose reported state isn't None."
+    )
     municipality_stats: list[SeismicMunicipalityStats] = Field(
         description="Every municipality with at least one evaluated building."
     )

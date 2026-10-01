@@ -179,8 +179,18 @@ def compute_municipality_stats(result: pd.DataFrame, meta: AreaMeta | None = Non
             result["damage_state"].map(DAMAGE_STATE_CODES).to_numpy(dtype=np.int64),
             column("num_dwellings", 0).to_numpy(dtype=np.float64),
             column("built_area_m2", 0.0).to_numpy(dtype=np.float64),
+            # Expected values (ADR-0034), when the result carries the
+            # per-state probabilities run_scenario returns.
+            probs=_probabilities(result),
         )
     return counter.municipality_stats(meta if meta is not None else AreaMeta())
+
+
+def _probabilities(result: pd.DataFrame) -> np.ndarray | None:
+    columns = [f"prob_{state.lower()}" for state in DAMAGE_STATE_CODES]
+    if not all(c in result.columns for c in columns):
+        return None
+    return result[columns].to_numpy(dtype=np.float64).T
 
 
 def count_damaged(result: pd.DataFrame) -> int:

@@ -337,6 +337,7 @@ def _run_and_serialize(
         "evaluated_region": evaluated_region(rupture, radius_km),
         "n_evaluated": n_evaluated,
         "n_damaged": n_damaged,
+        "n_damaged_reported": summary.n_damaged_reported,
         "municipality_stats": municipality_stats,
         # Affected assets by category; null when no infrastructure data is
         # deployed (the rows: /results/{id}/infrastructure).

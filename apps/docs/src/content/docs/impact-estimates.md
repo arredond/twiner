@@ -17,9 +17,9 @@ observed Spanish losses.
 
 ## Inputs
 
-For every building it evaluates, an earthquake scenario knows the reported
-damage state: None, Slight, Moderate, Extensive or Complete (see
-[twinQUAKE](/docs/hazards/earthquake/)). Three more attributes of each
+For every building it evaluates, an earthquake scenario knows the
+probability of each damage state: None, Slight, Moderate, Extensive and
+Complete (see [twinQUAKE](/docs/hazards/earthquake/)). Three more attributes of each
 building come from the exposure model:
 
 | Attribute | Source |
@@ -36,13 +36,32 @@ each census section [2]:
 - residents aged 65 and over.
 
 As a scenario runs, TWIN-ER sums buildings, dwellings and built area per
-census section and damage state. Every figure below is derived from those
-sums. A municipality's figures are the sums of its sections'. Percentages
-are recomputed from the sums, never averaged.
+census section and damage state. Each building counts in every state
+**weighted by its probability** of being in it. A building that is 60%
+Slight and 40% Moderate adds 0.6 buildings to Slight and 0.4 to Moderate,
+and splits its dwellings and floor area the same way. The results are
+**expected values**: what the area would see on average, over the full
+range of damage each building might suffer.
 
-**Definitions.** A building is **affected** when its damage state is
-anything other than None. Its residents are **displaced** when the state is
-Extensive or Complete.
+- **Every figure below is derived from those sums.** A municipality's
+  figures are the sums of its sections'. Percentages are recomputed from
+  the sums, never averaged.
+- **Buildings on the map are different.** Each building still shows a
+  single damage state, chosen by the probability level: the most likely
+  state, or the 85th-percentile one at "very low". The API also returns
+  area counts by that shown state (`counts_reported`).
+- **"Low" and "very low" give the same area figures.** Both use the same
+  ground motion (median + 1σ) and differ only in which single state each
+  building shows.
+
+**Definitions.**
+
+- A building is **affected** when its damage state is anything other than
+  None. Its residents are **displaced** when the state is Extensive or
+  Complete. Both are counted by probability, as above.
+- An area is listed as affected when it has at least half an expected
+  damaged building, or any building shown damaged on the map. Below that,
+  it is reported as undamaged.
 
 ## Earthquake figures
 
@@ -189,8 +208,9 @@ for what the flood maps cover.
   weigh and cost far less per m² than housing. Splitting by class and use
   is the obvious next refinement.
 - **Night-time population only.** There is no daytime or occupancy model.
-- **No uncertainty bands.** Every figure uses the damage state reported at
-  the chosen probability level, not the full damage distribution.
+- **No uncertainty bands.** Figures are expected values, averages over
+  each building's damage distribution, with no range around them.
+  Damage is also treated as independent from building to building.
 
 ## References
 

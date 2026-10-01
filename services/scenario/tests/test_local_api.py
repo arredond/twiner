@@ -260,11 +260,14 @@ def test_scenario_response_carries_no_per_building_list(client):
         "/scenarios/manual", json={"lat": NEAR_LAT, "lon": NEAR_LON, "mag": 6.5, "rake": 20.0}
     ).json()
     assert "buildings" not in body
-    # n_damaged counts non-None buildings over the full evaluated set --
-    # the same definition as the municipality stats.
-    assert body["n_damaged"] == sum(
-        s["n_evaluated"] - s["counts"]["None"] for s in body["municipality_stats"]
+    # n_damaged_reported counts non-None buildings over the full evaluated
+    # set -- the same definition as the municipality stats' counts_reported.
+    assert body["n_damaged_reported"] == sum(
+        s["n_evaluated"] - s["counts_reported"]["None"] for s in body["municipality_stats"]
     )
+    # n_damaged is the expected value (ADR-0034); municipalities below the
+    # affected threshold report 0, so the listed rows can only sum to less.
+    assert body["n_damaged"] >= sum(s["n_damaged"] for s in body["municipality_stats"]) - 0.05
 
 
 def test_health(client):
@@ -609,7 +612,9 @@ def test_municipality_stats_agree_with_which_buildings_are_shipped_individually(
     # damage, exercising the non-trivial "some affected" branch, not just
     # an all-None municipality.
     thirty024 = stats_by_code["30024"]
-    n_affected = thirty024["n_evaluated"] - thirty024["counts"]["None"]
+    # Shipped buildings carry their reported state, so compare against the
+    # reported counts (the expected `counts` are fractional, ADR-0034).
+    n_affected = thirty024["n_evaluated"] - thirty024["counts_reported"]["None"]
     assert n_affected > 0
     n_affected_and_shipped = sum(
         1

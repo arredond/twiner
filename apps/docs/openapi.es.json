@@ -3,7 +3,7 @@
   "info": {
     "title": "TWIN-ER API",
     "description": "La API HTTP de la aplicación web de TWIN-ER: simula escenarios sísmicos y\nde inundación y consulta sus resultados por zona, como teselas de mapa o en\nGeoJSON.\n\n## Cómo encaja todo\n\n1. **Simula un escenario.** `GET /scenarios/fault` (el terremoto de magnitud\n   máxima de una falla), `POST /scenarios/manual` (un terremoto definido por\n   ti) o `POST /scenarios/flood`. La respuesta incluye un `scenario_id` y una\n   fila de cifras por municipio afectado.\n2. **Consulta los detalles** con ese identificador: cifras por sección\n   censal, infraestructuras críticas afectadas, bandas de intensidad\n   (`/results/{scenario_id}/...`) y teselas vectoriales de edificios y\n   escombros (`/tiles/{scenario_id}/...`).\n\nLos identificadores de escenario se derivan de su contenido: las mismas\nentradas, con la misma versión de datos y de código, dan el mismo\nidentificador, así que los resultados pueden cachearse y compartirse.\n\n## Despliegues\n\n- **Local** (`bin/twiner start`): todas las rutas, en un solo servidor.\n- **Nube** (URL de funciones AWS Lambda): la función de escenarios sirve\n  todas las rutas salvo `/tiles/...`, que sirve una función de teselas\n  aparte, y las dos rutas solo locales `/results/{scenario_id}/status` y\n  `/results/{scenario_id}/municipality_stats`.\n\nTodavía no hay autenticación, garantía de versiones ni límite de\npeticiones: esta referencia describe la API que usa la aplicación web, no un\ncontrato público estable.\n\n## Errores\n\nEl servidor local responde a los errores con `{\"detail\": \"...\"}`; la\nLambda, con `{\"error\": \"...\"}`.\n\nConsulta las páginas de [twinQUAKE](/docs/es/hazards/earthquake/) y\n[twinFLOOD](/docs/es/hazards/flood/) para saber qué significan las cifras.\n",
-    "version": "7"
+    "version": "8"
   },
   "servers": [
     {
@@ -1148,19 +1148,19 @@
       "DamageCounts": {
         "properties": {
           "None": {
-            "type": "integer"
+            "type": "number"
           },
           "Slight": {
-            "type": "integer"
+            "type": "number"
           },
           "Moderate": {
-            "type": "integer"
+            "type": "number"
           },
           "Extensive": {
-            "type": "integer"
+            "type": "number"
           },
           "Complete": {
-            "type": "integer"
+            "type": "number"
           }
         },
         "additionalProperties": true,
@@ -1173,7 +1173,7 @@
           "Complete"
         ],
         "title": "DamageCounts",
-        "description": "Edificios por grado de daño (el grado presentado con el nivel de probabilidad elegido)."
+        "description": "Número esperado de edificios por grado de daño: la probabilidad de cada\nedificio de estar en cada grado, sumada en la zona."
       },
       "DamageMethodParams": {
         "properties": {
@@ -1264,7 +1264,19 @@
             "type": "integer"
           },
           "n_damaged": {
-            "type": "integer"
+            "type": "number",
+            "description": "Número esperado de edificios dañados (suma de probabilidades)."
+          },
+          "n_damaged_reported": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Edificios cuyo grado presentado no es \"sin daño\"."
           },
           "municipality_stats": {
             "items": {
@@ -2227,6 +2239,36 @@
         ],
         "title": "MethodsResponse"
       },
+      "ReportedDamageCounts": {
+        "properties": {
+          "None": {
+            "type": "integer"
+          },
+          "Slight": {
+            "type": "integer"
+          },
+          "Moderate": {
+            "type": "integer"
+          },
+          "Extensive": {
+            "type": "integer"
+          },
+          "Complete": {
+            "type": "integer"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "None",
+          "Slight",
+          "Moderate",
+          "Extensive",
+          "Complete"
+        ],
+        "title": "ReportedDamageCounts",
+        "description": "Edificios por grado de daño presentado: el único grado que recibe cada\nedificio con el nivel de probabilidad elegido, el que muestra el mapa."
+      },
       "Rupture": {
         "properties": {
           "lat": {
@@ -2329,11 +2371,21 @@
             "description": "Edificios evaluados por el escenario."
           },
           "n_damaged": {
-            "type": "integer",
-            "description": "Edificios evaluados en cualquier grado salvo sin daño."
+            "type": "number",
+            "description": "Número esperado de edificios en cualquier grado salvo sin daño (suma de probabilidades)."
           },
           "counts": {
             "$ref": "#/components/schemas/DamageCounts"
+          },
+          "counts_reported": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReportedDamageCounts"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "n_buildings": {
             "anyOf": [
@@ -2355,7 +2407,7 @@
                 "type": "null"
               }
             ],
-            "description": "n_damaged / n_buildings, en %."
+            "description": "n_damaged / n_buildings, en % (valor esperado)."
           },
           "population": {
             "anyOf": [
@@ -2523,11 +2575,21 @@
             "description": "Edificios evaluados por el escenario."
           },
           "n_damaged": {
-            "type": "integer",
-            "description": "Edificios evaluados en cualquier grado salvo sin daño."
+            "type": "number",
+            "description": "Número esperado de edificios en cualquier grado salvo sin daño (suma de probabilidades)."
           },
           "counts": {
             "$ref": "#/components/schemas/DamageCounts"
+          },
+          "counts_reported": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReportedDamageCounts"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "n_buildings": {
             "anyOf": [
@@ -2549,7 +2611,7 @@
                 "type": "null"
               }
             ],
-            "description": "n_damaged / n_buildings, en %."
+            "description": "n_damaged / n_buildings, en % (valor esperado)."
           },
           "population": {
             "anyOf": [

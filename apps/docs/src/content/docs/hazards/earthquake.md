@@ -358,26 +358,34 @@ Re-running it in manual mode on the national data shows:
   few percent of it.
 - **Intensity.** The estimate for the town is VI at median and between VI
   and VII at +1σ. IGN observed VII.
-- **Damage.** TWIN-ER's figures cover the whole municipality of Lorca,
-  27,884 buildings, about 3.5 times the town's 7,890: Lorca is one of
-  Spain's largest municipalities, and mostly rural. They give:
+- **Damage.** The inspection covered the town, not the whole
+  municipality: Lorca is one of Spain's largest municipalities, and
+  mostly rural. For a comparable area, TWIN-ER's figures are taken over
+  the town's census sections (INE district 01, 7,001 buildings). They are
+  expected counts, summed probabilities
+  (see [impact estimates](/docs/impact-estimates/#inputs)):
 
-  | Level | Slight | Moderate | Extensive | Complete |
-  |---|---|---|---|---|
-  | High | 565 | 0 | 0 | 0 |
-  | Low | 10,554 | 0 | 0 | 0 |
-  | Very low | 8,641 | 4,745 | 1,075 | 0 |
+  | | Slight | Moderate | Extensive | Complete | Any damage | Moderate or worse |
+  |---|---|---|---|---|---|---|
+  | Observed (of 7,890) | 4,035 | 1,328 | 689 *(mod.–severe)* | 329 *(demolished)* | 81% | 30% |
+  | High probability | 1,670 | 142 | 25 | 11 | 26% | 3% |
+  | Low / very low probability | 3,263 | 868 | 283 | 241 | 67% | 20% |
 
-  At "low" probability no building reaches Moderate, against 2,346 at
-  moderate or worse in the town alone. At "very low", about 5,800 do,
-  across the whole municipality. "Low" clearly under-predicts. "Very low"
-  is of the right order, but the two counts cover different areas.
+  At "low" probability, whose ground motion matches the recordings, the
+  model is somewhat short of what was observed: two-thirds of buildings
+  damaged against four-fifths, and a fifth at moderate or worse against
+  nearly a third. The [damage models](/docs/damage-models/#comparison-lorca-2011)
+  page compares the other methods.
 
-The comparison is indicative, not a calibration. The observed counts cover
-the town and the model's the municipality. The inspection's categories
-were set by the town's building-safety forms and span EMS-98 grades
-(moderate is grades 2–3), so they don't map exactly onto the fragility
-model's damage states either.
+The comparison is indicative, not a calibration:
+
+- **The town is approximated** by its census district, which leaves out
+  some of its built-up fringe.
+- **The categories don't match one-to-one.** The inspection's categories
+  were set by the town's building-safety forms and span EMS-98 grades
+  (moderate is grades 2–3), so they don't map exactly onto the fragility
+  model's damage states.
+
 Site amplification is unlikely to be a major source of error: ESRM20's
 $V_{S30}$ in Lorca matches local surveys. The fragility model is the larger
 uncertainty. Martins & Silva's functions are analytical and global, and

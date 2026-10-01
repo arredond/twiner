@@ -236,7 +236,7 @@ export const es: Messages = {
 
   "impact.buildingsAffected": "Edificios afectados",
   "impact.buildingsAffectedHint":
-    "Edificios con algún daño previsto (Leve o superior), sobre el total de edificios de la zona.",
+    "Número esperado de edificios con algún daño (Leve o superior), sobre el total de edificios de la zona: cada edificio cuenta según su probabilidad de sufrir daño, así que el total puede diferir de los edificios coloreados en el mapa.",
   "impact.population": "Población",
   "impact.populationHint": "Residentes, INE Censo Anual de Población, 1 de enero de 2025.",
   "impact.populationAffected": "Población afectada",

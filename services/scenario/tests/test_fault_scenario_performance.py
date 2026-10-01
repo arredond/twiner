@@ -139,7 +139,11 @@ def test_municipality_stats_stay_consistent_with_shipped_buildings_at_national_s
     shipped_ids = set(shipped["building_id"])
 
     affected_codes = [
-        s["municipality_code"] for s in stats if s["n_evaluated"] - s["counts"]["None"] > 0
+        # Reported states (what ships per building), not the expected
+        # `counts` (ADR-0034), which are fractional.
+        s["municipality_code"]
+        for s in stats
+        if s["n_evaluated"] - s["counts_reported"]["None"] > 0
     ]
     assert affected_codes, "expected at least one municipality with real damage for this fault"
 

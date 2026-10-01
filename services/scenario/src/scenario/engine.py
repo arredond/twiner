@@ -351,8 +351,14 @@ class ScenarioSummary:
     seconds_to_first_batch: float = 0.0
 
     @property
-    def n_damaged(self) -> int:
+    def n_damaged(self) -> float:
+        """Expected damaged buildings (summed probabilities, ADR-0034)."""
         return self.areas.n_damaged
+
+    @property
+    def n_damaged_reported(self) -> int:
+        """Buildings whose reported state isn't None."""
+        return self.areas.n_damaged_reported
 
 
 def summarize_scenario(
@@ -402,6 +408,7 @@ def summarize_scenario(
             damage.damage_state_code,
             batch.column("num_dwellings").to_numpy(zero_copy_only=False).astype(np.float64),
             batch.column("built_area_m2").to_numpy(zero_copy_only=False).astype(np.float64),
+            probs=damage.probs,
         )
         shipped.append(
             shipped_buildings_table(

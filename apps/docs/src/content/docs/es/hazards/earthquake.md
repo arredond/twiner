@@ -381,28 +381,36 @@ Al reproducirlo en modo manual con los datos nacionales:
   "muy baja") queda a pocos puntos porcentuales.
 - **Intensidad.** La estimación para la ciudad es VI con la mediana y entre
   VI y VII con +1σ. El IGN observó VII.
-- **Daño.** Las cifras de TWIN-ER cubren todo el municipio de Lorca,
-  27.884 edificios, unas 3,5 veces los 7.890 de la ciudad: Lorca es uno de
-  los municipios más extensos de España, y mayoritariamente rural. Dan:
+- **Daño.** La inspección cubrió la ciudad, no todo el municipio: Lorca es
+  uno de los municipios más extensos de España, y mayoritariamente rural.
+  Para comparar la misma zona, las cifras de TWIN-ER se toman en las
+  secciones censales de la ciudad (distrito 01 del INE, 7.001 edificios).
+  Son recuentos esperados, suma de probabilidades
+  (ver [estimaciones de impacto](/docs/es/impact-estimates/#datos-de-partida)):
 
-  | Nivel | Leve | Moderado | Extenso | Completo |
-  |---|---|---|---|---|
-  | Alta | 565 | 0 | 0 | 0 |
-  | Baja | 10.554 | 0 | 0 | 0 |
-  | Muy baja | 8.641 | 4.745 | 1.075 | 0 |
+  | | Leve | Moderado | Extenso | Completo | Algún daño | Moderado o superior |
+  |---|---|---|---|---|---|---|
+  | Observado (de 7.890) | 4.035 | 1.328 | 689 *(moderado–grave)* | 329 *(demolidos)* | 81 % | 30 % |
+  | Probabilidad alta | 1.670 | 142 | 25 | 11 | 26 % | 3 % |
+  | Probabilidad baja / muy baja | 3.263 | 868 | 283 | 241 | 67 % | 20 % |
 
-  Con probabilidad "baja" ningún edificio llega a Moderado, frente a 2.346
-  con daño moderado o superior solo en la ciudad. Con "muy baja" llegan
-  unos 5.800, en todo el municipio. La "baja" subestima claramente; la "muy
-  baja" da el orden de magnitud correcto, pero los dos recuentos cubren
-  zonas distintas.
+  Con probabilidad "baja", cuyo movimiento del suelo coincide con el
+  registrado, el modelo se queda algo corto respecto a lo observado: dos
+  tercios de los edificios dañados frente a cuatro quintos, y una quinta
+  parte con daño moderado o superior frente a casi un tercio. La página de
+  [modelos de daño](/docs/es/damage-models/#comparación-lorca-2011) compara
+  los demás métodos.
 
-La comparación es orientativa, no una calibración. Los recuentos
-observados cubren la ciudad y los del modelo, el municipio. Además, las
-categorías de la inspección proceden de las fichas de seguridad de los
-edificios y abarcan varios grados de la EMS-98 (moderado son los grados
-2–3), así que tampoco se corresponden exactamente con los grados del
-modelo de fragilidad. Es poco probable que la amplificación
+La comparación es orientativa, no una calibración:
+
+- **La ciudad se aproxima** por su distrito censal, que deja fuera parte de
+  su periferia edificada.
+- **Las categorías no se corresponden una a una.** Las categorías de la
+  inspección proceden de las fichas de seguridad de los edificios y abarcan
+  varios grados de la EMS-98 (moderado son los grados 2–3), así que no se
+  corresponden exactamente con los grados del modelo de fragilidad.
+
+Es poco probable que la amplificación
 local sea una fuente de error importante: la $V_{S30}$ del ESRM20 en Lorca
 coincide con los estudios locales. La mayor incertidumbre está en el
 modelo de fragilidad. Las funciones de Martins y Silva son analíticas y
