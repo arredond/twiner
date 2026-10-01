@@ -46,7 +46,7 @@ FRONTEND_ORIGINS = ["https://twiner.arredon.do"] + [
 # fragility/faults parquet. Any string works; a date keeps it readable.
 # (Calculation-code changes are covered separately, by scenario_id.py's
 # API_VERSION.) See docs/decisions/0018-scenario-result-cache.md.
-DATA_VERSION = "2026-09-29-infra"  # + critical infrastructure (ADR-0025)
+DATA_VERSION = "2026-10-01-taxonomy-v2"  # taxonomy v2: unreinforced masonry classes (ADR-0032)
 
 
 class TwinerStack(Stack):
