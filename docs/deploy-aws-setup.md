@@ -192,6 +192,22 @@ aws s3 cp data/exposure/municipalities.pmtiles \
 aws s3 cp data/census/sections.pmtiles \
     s3://<DataBucketName>/tiles/sections.pmtiles --profile twiner-admin
 
+# Flood scenarios (ADR-0029): the scenario Lambda's inputs under flood/
+# (TWINER_FLOOD_DIR), the map's static archives under tiles/, plus the
+# province/CCAA outlines and area search index (exposure.admin_areas).
+for f in building_flood zone_areas zones infrastructure_flood; do
+  aws s3 cp data/flood/$f.parquet s3://<DataBucketName>/flood/$f.parquet --profile twiner-admin
+done
+aws s3 cp data/flood/flood_zones.pmtiles \
+    s3://<DataBucketName>/tiles/flood_zones.pmtiles --profile twiner-admin
+aws s3 cp data/flood/flood_buildings.pmtiles \
+    s3://<DataBucketName>/tiles/flood_buildings.pmtiles --profile twiner-admin
+aws s3 cp data/exposure/admin_areas.pmtiles \
+    s3://<DataBucketName>/tiles/admin_areas.pmtiles --profile twiner-admin
+gzip -9c data/exposure/admin_index.json | aws s3 cp - \
+    s3://<DataBucketName>/tiles/admin_index.json --profile twiner-admin \
+    --content-type application/json --content-encoding gzip
+
 # The self-hosted basemap (ADR-0028): the Protomaps extract plus its
 # fonts/sprites, under tiles/basemap/ (apps/web/src/basemaps.ts). The ETL
 # syncs it itself; rerun it to refresh the OSM data (it skips the ~21GB

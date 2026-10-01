@@ -217,6 +217,10 @@ class TwinerStack(Stack):
                 # has no infrastructure results (and bands on DEFAULT_VS30).
                 "TWINER_INFRA_SITES_PATH": f"s3://{data_bucket.bucket_name}/infrastructure/infrastructure_sites.parquet",
                 "TWINER_VS30_SITES_PATH": f"s3://{data_bucket.bucket_name}/infrastructure/vs30_sites.parquet",
+                # Flood scenarios (ADR-0029): building_flood.parquet,
+                # zone_areas.parquet, zones.parquet (circles cut by zones)
+                # and infrastructure_flood.parquet, from pipelines/flood.
+                "TWINER_FLOOD_DIR": f"s3://{data_bucket.bucket_name}/flood",
                 "TWINER_RESULTS_BUCKET": results_bucket.bucket_name,
                 # Content-addressed scenario cache (ADR-0018): a repeat of
                 # an already-computed scenario returns the stored result

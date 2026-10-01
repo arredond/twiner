@@ -23,8 +23,16 @@ from pydantic import BaseModel
 from .building_lookup import get_building
 from .engine import summarize_scenario
 from .faults import faults_payload, get_fault, round_near_point, rupture_anchor
+from .flood import (
+    FloodRequestError,
+    flood_payload,
+    parse_region,
+    region_params,
+    summarize_flood,
+    validate_return_period,
+)
 from .ground_motion import estimate_significant_distance_km
-from .impact import mean_severity
+from .impact import section_severity
 from .infrastructure import facility_building_ids, summarize_assets, summarize_infrastructure
 from .probability_level import ProbabilityLevel, resolve_probability_level
 from .realtime import RealtimeUnavailable, aemet_observations, aemet_warnings, dgt_incidents
@@ -45,7 +53,7 @@ from .results_store import (
     write_section_stats,
 )
 from .rupture import Rupture, from_fault, from_manual_input
-from .scenario_id import cache_enabled, fault_scenario_id, manual_scenario_id
+from .scenario_id import cache_enabled, fault_scenario_id, flood_scenario_id, manual_scenario_id
 from .tile_join import join_tile, warm_cache
 from .warmup import warm_up
 
@@ -283,6 +291,46 @@ def run_manual_scenario(req: ManualRuptureRequest) -> dict:
     return _run_and_serialize(rupture, req.probability_level, scenario_id)
 
 
+class FloodScenarioRequest(BaseModel):
+    return_period: int
+    # {"type": "circle", lat, lon, radius_km} or {"type": "admin", level, code}
+    region: dict
+
+
+@app.post("/scenarios/flood")
+def flood_scenario(req: FloodScenarioRequest) -> dict:
+    """Flood mode (ADR-0029): buildings, people and infrastructure in
+    MITECO's flood zone for a return period, in a circle or admin area.
+    Stored like a seismic scenario, so the sidebar's section drill-down and
+    infrastructure list use the same /results/{id}/... routes."""
+    try:
+        return_period = validate_return_period(req.return_period)
+        region = parse_region(req.region)
+    except FloodRequestError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    scenario_id = flood_scenario_id(return_period, region_params(region))
+    t0 = time.monotonic()
+    if cache_enabled() and (payload := read_response(scenario_id)) is not None:
+        return {**payload, "cached": True, "elapsed_ms": round((time.monotonic() - t0) * 1000, 1)}
+    try:
+        summary = summarize_flood(region, return_period)
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=500, detail=f"missing pipeline output: {e}") from e
+    init_scenario(scenario_id)
+    write_municipality_stats(scenario_id, summary.municipality_stats)
+    write_section_stats(scenario_id, summary.section_stats)
+    if summary.infrastructure is not None:
+        write_artifact(scenario_id, INFRASTRUCTURE_FILE, summary.infrastructure)
+    payload = flood_payload(scenario_id, region, return_period, summary)
+    write_response(scenario_id, payload)
+    elapsed_ms = round((time.monotonic() - t0) * 1000, 1)
+    print(
+        f"scenario: flood T={return_period} {region_params(region)} -> "
+        f"{summary.n_flooded} buildings flooded, in {elapsed_ms}ms"
+    )
+    return {**payload, "cached": False, "elapsed_ms": elapsed_ms}
+
+
 @app.get("/faults")
 def list_faults() -> dict:
     """Every fault in the dataset (QAFI v4 today: 201 nationwide), sorted by
@@ -403,13 +451,13 @@ def scenario_section_stats(scenario_id: str, municipality_code: str | None = Non
 
 @app.get("/results/{scenario_id}/section_severity")
 def scenario_section_severity(scenario_id: str) -> dict[str, float]:
-    """section_code -> mean damage severity (0-4) for every damaged
-    section: all the map's section choropleth needs, a small fraction of
-    the full rows' size."""
+    """section_code -> the choropleth value (impact.section_severity) for
+    every affected section: all the map's section choropleth needs, a
+    small fraction of the full rows' size."""
     stats = read_section_stats(scenario_id)
     if stats is None:
         raise HTTPException(status_code=404, detail=f"scenario_id {scenario_id!r} not found")
-    return {s["section_code"]: round(mean_severity(s["counts"]), 3) for s in stats}
+    return section_severity(stats)
 
 
 @app.get("/results/{scenario_id}/infrastructure")

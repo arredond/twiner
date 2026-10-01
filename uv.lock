@@ -16,6 +16,7 @@ members = [
     "twiner-basemap",
     "twiner-exposure",
     "twiner-faults",
+    "twiner-flood",
     "twiner-fragility",
     "twiner-infra",
     "twiner-scenario",
@@ -2197,6 +2198,29 @@ requires-dist = [
     { name = "geopandas", specifier = ">=1.0" },
     { name = "pyarrow", specifier = ">=17.0" },
     { name = "requests", specifier = ">=2.32" },
+    { name = "shapely", specifier = ">=2.0" },
+]
+
+[[package]]
+name = "twiner-flood"
+version = "0.1.0"
+source = { editable = "pipelines/flood" }
+dependencies = [
+    { name = "duckdb" },
+    { name = "geopandas" },
+    { name = "pyarrow" },
+    { name = "pyogrio" },
+    { name = "pyproj" },
+    { name = "shapely" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "duckdb", specifier = ">=1.1" },
+    { name = "geopandas", specifier = ">=1.0" },
+    { name = "pyarrow", specifier = ">=17.0" },
+    { name = "pyogrio", specifier = ">=0.9" },
+    { name = "pyproj", specifier = ">=3.6" },
     { name = "shapely", specifier = ">=2.0" },
 ]
 

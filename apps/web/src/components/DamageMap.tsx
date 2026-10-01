@@ -38,6 +38,29 @@ import {
   setIntensityBands,
 } from "./infrastructureLayers";
 import {
+  FLOOD_BUILDINGS_LAYER_ID,
+  FLOOD_MUNICIPALITIES_LAYER_ID,
+  FLOOD_SECTIONS_LAYER_ID,
+  PICK_FILL_LAYER_IDS,
+  addFloodBuildingLayers,
+  addFloodLayers,
+  distanceKm,
+  pickedArea,
+  renderFloodAreaPopupHtml,
+  renderFloodBuildingPopupHtml,
+  selectFloodBuilding,
+  setAdminHover,
+  setAdminPicker,
+  setFloodLayersVisible,
+  setFloodPaint,
+  setFloodScenario,
+  setRegionCircle,
+  type FloodLayerToggles,
+  type FloodMapScenario,
+  type FloodStateCodes,
+} from "./floodLayers";
+import type { AdminLevel, FloodCircle, FloodMunicipalityStats, FloodSectionStats } from "../floodApi";
+import {
   AEMET_LAYER_ID,
   DGT_LAYER_ID,
   DGT_LINE_LAYER_ID,
@@ -281,9 +304,10 @@ interface Props {
   sectionSeverity: Record<string, number>;
   // Sidebar drill-down: framed on the map when it changes, its sections
   // shown at any zoom, and its own choropleth fill hidden underneath them.
-  selectedMunicipality: MunicipalityStats | null;
+  // Only its code and bbox are read, so a flood row fits too.
+  selectedMunicipality: Pick<MunicipalityStats, "municipality_code" | "bbox"> | null;
   // Sidebar section click: outlined, and centered at SECTION_FOCUS_ZOOM.
-  selectedSection: SectionStats | null;
+  selectedSection: Pick<SectionStats, "section_code" | "bbox"> | null;
   // A clicked section's figures, for its popup (App.tsx caches per
   // municipality).
   loadSectionStats: (municipalityCode: string) => Promise<SectionStats[]>;
@@ -294,7 +318,14 @@ interface Props {
   // hoverable (name + Mmax tooltip) and clickable (onFaultClick), other
   // clicks do nothing new. Manual: faults are display-only and every click
   // that doesn't hit a result layer goes to onMapClick.
-  mode: "automatic" | "manual";
+  // Flood: neither -- clicks go to the flood picker (`flood`). None: no
+  // hazard card open (App.tsx), clicks only open popups.
+  mode: "automatic" | "manual" | "flood" | "none";
+  // Flood mode (ADR-0029); null otherwise.
+  flood: FloodMapProps | null;
+  // Which area level the choropleths show at the current zoom (municipalities
+  // below SECTIONS_MINZOOM, census sections from it): the legend's title.
+  onAreaLevelChange?: (level: "municipality" | "section") => void;
   // lat/lon here is the actual point clicked on the fault trace -- only
   // used as the rupture's reference point for a fault without full rupture
   // geometry (see scenarioApi.ts's runFaultScenario); every other fault's
@@ -317,6 +348,9 @@ interface Props {
   // The legend's damage toggle: off hides the municipality/section
   // choropleths and debris and draws buildings uncoloured.
   showDamage: boolean;
+  // The legend's "Zonas afectadas" toggle: the seismic municipality/section
+  // choropleths (flood mode's own are in `flood.show.areas`).
+  showAreas: boolean;
   // ADR-0025. The scenario's intensity bands (null before a run or while
   // loading), drawn only while `showIntensity` (the legend's toggle).
   intensityBands: IntensityBands | null;
@@ -553,6 +587,22 @@ function renderAreaPopupHtml(title: string, stats: AreaImpact | null | "loading"
 // between a PMTiles archive and an XYZ tile endpoint, so this always
 // removes+re-adds both the source and its layers rather than mutating one
 // in place.
+// Flood mode's map state and callbacks (App.tsx owns the state).
+export interface FloodMapProps {
+  // Before a run: a circle to draw (click the centre, then the edge), or
+  // one admin level's outlines to click. null once a result shows.
+  picker: { kind: "circle" } | { kind: "admin"; level: AdminLevel } | null;
+  scenario: FloodMapScenario | null;
+  // Fitted to when a new scenario shows.
+  bbox: [number, number, number, number] | null;
+  // The legend's flood layer toggles.
+  show: FloodLayerToggles;
+  municipalityStats: FloodMunicipalityStats[];
+  loadSectionStats: (municipalityCode: string) => Promise<FloodSectionStats[]>;
+  onCircle: (circle: FloodCircle) => void;
+  onAdminPick: (level: AdminLevel, code: string) => void;
+}
+
 function addBuildingsSourceAndLayers(
   map: MapLibreMap,
   scenarioId: string | null,
@@ -707,12 +757,15 @@ export function DamageMap({
   faults,
   selectedFaultId,
   mode,
+  flood,
+  onAreaLevelChange,
   onFaultClick,
   onMapClick,
   runPopup,
   onRunPopupClose,
   showFaults,
   showDamage,
+  showAreas,
   intensityBands,
   showIntensity,
   infrastructureCategories,
@@ -807,6 +860,18 @@ export function DamageMap({
   onMapClickRef.current = onMapClick;
   const modeRef = useRef(mode);
   modeRef.current = mode;
+  const onAreaLevelChangeRef = useRef(onAreaLevelChange);
+  onAreaLevelChangeRef.current = onAreaLevelChange;
+  const areaLevelRef = useRef<"municipality" | "section" | null>(null);
+  const floodRef = useRef(flood);
+  floodRef.current = flood;
+  // Flood circle being drawn: its centre once the first click set it.
+  const draftCenterRef = useRef<{ lat: number; lon: number } | null>(null);
+  const floodStateCodesRef = useRef<FloodStateCodes>({ municipalities: [], sections: [] });
+  const floodScenarioKeyRef = useRef<string | null>(null);
+  // Picking an area or drawing a circle: every other click behaviour
+  // (popups, selection) steps aside.
+  const isFloodPicking = () => modeRef.current === "flood" && floodRef.current?.picker != null;
   const onRunPopupCloseRef = useRef(onRunPopupClose);
   onRunPopupCloseRef.current = onRunPopupClose;
   // The run popup's MapLibre shell and the DOM node its React content is
@@ -821,6 +886,8 @@ export function DamageMap({
   evaluatedRegionRef.current = evaluatedRegion;
   const showDamageRef = useRef(showDamage);
   showDamageRef.current = showDamage;
+  const showAreasRef = useRef(showAreas);
+  showAreasRef.current = showAreas;
   const rightInsetRemRef = useRef(rightInsetRem);
   rightInsetRemRef.current = rightInsetRem;
   // Camera helpers for the right inset: fitBounds padding (more on the
@@ -1006,10 +1073,16 @@ export function DamageMap({
         paint: { "line-color": SELECTED_OUTLINE_COLOR, "line-width": 2.5 },
       });
 
+      // Flood mode (ADR-0029): choropleths, zones and the area picker sit
+      // above the seismic choropleths, below buildings.
+      addFloodLayers(map, { municipalities: MUNICIPALITIES_SOURCE_ID, sections: SECTIONS_SOURCE_ID }, themeRef.current);
+
       addBuildingsSourceAndLayers(map, null);
       buildingsSourceScenarioIdRef.current = null;
 
       addDebrisSourceAndLayers(map, null, palette.debris);
+      // Flooded buildings: above every building and debris layer.
+      addFloodBuildingLayers(map, themeRef.current);
 
       // Critical infrastructure (ADR-0025): above buildings and debris,
       // below the fault lines. Hidden until a category is toggled on.
@@ -1110,6 +1183,7 @@ export function DamageMap({
         clearDebrisSelection();
         selectInfraAsset(null);
         selectArea(null);
+        selectFloodBuilding(map, null);
       };
       clearSelectionRef.current = clearSelection;
 
@@ -1122,6 +1196,9 @@ export function DamageMap({
       // handler checks queryRenderedFeatures itself and skips when this
       // layer was hit, but ordering here keeps the popup responsive first).
       map.on("click", BUILDINGS_LAYER_ID, (e: MapLayerMouseEvent) => {
+        // Flood mode: its own flooded-buildings popup (below), none for
+        // the rest.
+        if (modeRef.current === "flood") return;
         const feature = e.features?.[0];
         if (!feature) return;
         const tileProps = (feature.properties ?? {}) as Record<string, unknown>;
@@ -1262,6 +1339,7 @@ export function DamageMap({
       // scenario's intensity (and building damage) when it flagged the asset.
       for (const layerId of INFRA_CLICKABLE_LAYER_IDS) {
         map.on("click", layerId, (e: MapLayerMouseEvent) => {
+          if (isFloodPicking()) return;
           const feature = e.features?.[0];
           if (!feature) return;
           const tileProps = (feature.properties ?? {}) as Record<string, unknown>;
@@ -1299,6 +1377,7 @@ export function DamageMap({
       ];
       for (const [layerId, render] of realtimePopups) {
         map.on("click", layerId, (e: MapLayerMouseEvent) => {
+          if (isFloodPicking()) return;
           const feature = e.features?.[0];
           if (!feature) return;
           clearSelection();
@@ -1320,6 +1399,95 @@ export function DamageMap({
         });
       }
 
+      // Flood mode (ADR-0029). A flooded building's popup: which return
+      // periods' zones it's in.
+      map.on("click", FLOOD_BUILDINGS_LAYER_ID, (e: MapLayerMouseEvent) => {
+        if (isFloodPicking()) return;
+        const props = (e.features?.[0]?.properties ?? {}) as Record<string, unknown>;
+        if (!props.building_id) return;
+        clearSelection();
+        selectFloodBuilding(map, String(props.building_id));
+        new maplibregl.Popup({ closeButton: true, maxWidth: "18rem" })
+          .setLngLat(e.lngLat)
+          .setHTML(renderFloodBuildingPopupHtml(props, i18nRef.current))
+          .addTo(map);
+      });
+      map.on("click", FLOOD_MUNICIPALITIES_LAYER_ID, (e: MapLayerMouseEvent) => {
+        if (isFloodPicking()) return;
+        const props = (e.features?.[0]?.properties ?? {}) as Record<string, unknown>;
+        const code = props.ine_code as string | undefined;
+        if (!code) return;
+        clearSelection();
+        selectArea({ kind: "municipality", code });
+        const stats = floodRef.current?.municipalityStats.find((m) => m.municipality_code === code) ?? null;
+        new maplibregl.Popup({ closeButton: true, maxWidth: "20rem" })
+          .setLngLat(e.lngLat)
+          .setHTML(renderFloodAreaPopupHtml(String(props.name ?? code), stats, i18nRef.current))
+          .addTo(map);
+      });
+      map.on("click", FLOOD_SECTIONS_LAYER_ID, (e: MapLayerMouseEvent) => {
+        if (isFloodPicking()) return;
+        const props = (e.features?.[0]?.properties ?? {}) as Record<string, unknown>;
+        const code = props.code as string | undefined;
+        const current = floodRef.current;
+        if (!code || !current) return;
+        clearSelection();
+        selectArea({ kind: "section", code });
+        const i18n = i18nRef.current;
+        const title = i18n.t("popup.sectionTitle", {
+          municipality: String(props.municipality_name ?? code.slice(0, 5)),
+          label: `${code.slice(5, 7)}-${code.slice(7)}`,
+        });
+        const popup = new maplibregl.Popup({ closeButton: true, maxWidth: "20rem" })
+          .setLngLat(e.lngLat)
+          .setHTML(renderFloodAreaPopupHtml(title, "loading", i18n))
+          .addTo(map);
+        current
+          .loadSectionStats(code.slice(0, 5))
+          .then((rows) => {
+            if (popup.isOpen())
+              popup.setHTML(renderFloodAreaPopupHtml(title, rows.find((r) => r.section_code === code) ?? null, i18n));
+          })
+          .catch(() => {
+            if (popup.isOpen()) popup.setHTML(renderFloodAreaPopupHtml(title, null, i18n));
+          });
+      });
+      for (const layerId of [FLOOD_BUILDINGS_LAYER_ID, FLOOD_MUNICIPALITIES_LAYER_ID, FLOOD_SECTIONS_LAYER_ID]) {
+        map.on("mouseenter", layerId, () => {
+          if (!isFloodPicking()) map.getCanvas().style.cursor = "pointer";
+        });
+        map.on("mouseleave", layerId, () => {
+          if (!isFloodPicking()) map.getCanvas().style.cursor = "";
+        });
+      }
+      // The area picker: hover outlines an area, a click runs it.
+      for (const level of ["ccaa", "province", "municipality"] as AdminLevel[]) {
+        const layerId = PICK_FILL_LAYER_IDS[level];
+        map.on("mousemove", layerId, (e: MapLayerMouseEvent) => {
+          const picked = pickedArea(level, (e.features?.[0]?.properties ?? {}) as Record<string, unknown>);
+          setAdminHover(map, level, picked?.code ?? null);
+          map.getCanvas().style.cursor = picked ? "pointer" : "";
+        });
+        map.on("mouseleave", layerId, () => {
+          setAdminHover(map, level, null);
+          map.getCanvas().style.cursor = "";
+        });
+        map.on("click", layerId, (e: MapLayerMouseEvent) => {
+          const picker = floodRef.current?.picker;
+          if (modeRef.current !== "flood" || picker?.kind !== "admin" || picker.level !== level) return;
+          const picked = pickedArea(level, (e.features?.[0]?.properties ?? {}) as Record<string, unknown>);
+          if (picked) floodRef.current?.onAdminPick(level, picked.code);
+        });
+      }
+      // Drawing a circle: the first click sets the centre, moving sizes it,
+      // the second click runs it.
+      map.on("mousemove", (e) => {
+        const center = draftCenterRef.current;
+        if (!center || floodRef.current?.picker?.kind !== "circle") return;
+        const radius = distanceKm(center.lat, center.lon, e.lngLat.lat, e.lngLat.lng);
+        setRegionCircle(map, { type: "circle", ...center, radius_km: radius }, true);
+      });
+
       // General map click (manual mode's rupture popup) -- skips clicks
       // that landed on a building, debris ring, municipality or section
       // (handled by their own popup click handlers above), and on a fault
@@ -1328,6 +1496,21 @@ export function DamageMap({
       // of them. Never switches mode itself: onMapClick only fires in
       // manual mode; in automatic mode the click can open AEMET warnings.
       map.on("click", (e: MapLayerMouseEvent) => {
+        if (modeRef.current === "flood" && floodRef.current?.picker?.kind === "circle") {
+          const center = draftCenterRef.current;
+          if (!center) {
+            draftCenterRef.current = { lat: e.lngLat.lat, lon: e.lngLat.lng };
+            setRegionCircle(map, { type: "circle", ...draftCenterRef.current, radius_km: 0.01 }, true);
+            return;
+          }
+          const radius = distanceKm(center.lat, center.lon, e.lngLat.lat, e.lngLat.lng);
+          // A second click on (almost) the same spot is a slip, not a circle.
+          if (radius < 0.05) return;
+          draftCenterRef.current = null;
+          floodRef.current.onCircle({ type: "circle", ...center, radius_km: radius });
+          return;
+        }
+        if (isFloodPicking()) return;
         const hits = map.queryRenderedFeatures(e.point, {
           layers: [
             ...(modeRef.current === "automatic" ? [FAULTS_LAYER_ID] : []),
@@ -1336,6 +1519,9 @@ export function DamageMap({
             MUNICIPALITIES_LAYER_ID,
             SECTIONS_LAYER_ID,
             SECTIONS_FOCUS_LAYER_ID,
+            FLOOD_BUILDINGS_LAYER_ID,
+            FLOOD_MUNICIPALITIES_LAYER_ID,
+            FLOOD_SECTIONS_LAYER_ID,
             ...[...INFRA_CLICKABLE_LAYER_IDS, ...REALTIME_CLICKABLE_LAYER_IDS].filter(
               (id) => map.getLayoutProperty(id, "visibility") !== "none"
             ),
@@ -1365,7 +1551,15 @@ export function DamageMap({
         }
       });
 
-      const reportZoom = () => setZoom(map.getZoom());
+      const reportZoom = () => {
+        const z = map.getZoom();
+        setZoom(z);
+        const level = z < SECTIONS_MINZOOM ? "municipality" : "section";
+        if (level !== areaLevelRef.current) {
+          areaLevelRef.current = level;
+          onAreaLevelChangeRef.current?.(level);
+        }
+      };
       map.on("zoom", reportZoom);
       reportZoom();
 
@@ -1407,21 +1601,24 @@ export function DamageMap({
   // uniformly "not evaluated" grey, choropleths and debris shown or hidden.
   // Re-applied after every buildings/debris source swap, which re-adds
   // those layers with their default paint and visibility.
+  // The choropleths also follow the "Zonas afectadas" toggle (showAreas).
   function applyDamageLayers(map: MapLibreMap) {
     const show = showDamageRef.current;
+    const showAreas = show && showAreasRef.current;
     map.setPaintProperty(
       BUILDINGS_LAYER_ID,
       "fill-color",
       show ? buildingsFillColor(evaluatedRegionRef.current) : DAMAGE_COLORS.Unknown
     );
-    for (const layerId of [
-      MUNICIPALITIES_LAYER_ID,
-      SECTIONS_LAYER_ID,
-      SECTIONS_FOCUS_LAYER_ID,
-      DEBRIS_LAYER_ID,
-      DEBRIS_OUTLINE_LAYER_ID,
-    ]) {
-      if (map.getLayer(layerId)) map.setLayoutProperty(layerId, "visibility", show ? "visible" : "none");
+    const visibility: Array<[string, boolean]> = [
+      [MUNICIPALITIES_LAYER_ID, showAreas],
+      [SECTIONS_LAYER_ID, showAreas],
+      [SECTIONS_FOCUS_LAYER_ID, showAreas],
+      [DEBRIS_LAYER_ID, show],
+      [DEBRIS_OUTLINE_LAYER_ID, show],
+    ];
+    for (const [layerId, visible] of visibility) {
+      if (map.getLayer(layerId)) map.setLayoutProperty(layerId, "visibility", visible ? "visible" : "none");
     }
   }
 
@@ -1516,6 +1713,7 @@ export function DamageMap({
         : undefined;
     addBuildingsSourceAndLayers(map, scenarioId, beforeId);
     addDebrisSourceAndLayers(map, scenarioId, MAP_PALETTE[themeRef.current].debris, beforeId);
+    addFloodBuildingLayers(map, themeRef.current, beforeId);
     // A source swap drops any feature-state the removed source held --
     // the previous selection highlight (if any) no longer refers to a
     // feature that still exists, so forget it rather than leaving a
@@ -1700,7 +1898,7 @@ export function DamageMap({
     const map = mapRef.current;
     if (!map || !mapLoadedRef.current) return;
     applyDamageLayers(map);
-  }, [showDamage]);
+  }, [showDamage, showAreas]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -1814,10 +2012,106 @@ export function DamageMap({
       if (map.getLayer(DEBRIS_LAYER_ID)) map.setPaintProperty(DEBRIS_LAYER_ID, "fill-color", palette.debris);
       setInfrastructurePaint(map, infrastructureResultsRef.current !== null, theme);
       setRealtimePaint(map, theme);
+      setFloodPaint(map, theme);
     };
     if (mapLoadedRef.current) apply();
     else map.once("load", apply);
   }, [theme]);
+
+  // Flood picker (ADR-0029): a level's outlines to click, or the circle
+  // cursor; any half-drawn circle is dropped when it changes.
+  const floodPicker = mode === "flood" ? (flood?.picker ?? null) : null;
+  const floodPickerKey = floodPicker ? (floodPicker.kind === "admin" ? floodPicker.level : "circle") : null;
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    const apply = () => {
+      draftCenterRef.current = null;
+      setAdminPicker(map, floodPicker?.kind === "admin" ? floodPicker.level : null);
+      if (floodPicker?.kind === "circle") {
+        setRegionCircle(map, null, true);
+        map.getCanvas().style.cursor = "crosshair";
+        // The second click of a circle would otherwise zoom in.
+        map.doubleClickZoom.disable();
+      } else {
+        map.getCanvas().style.cursor = "";
+        map.doubleClickZoom.enable();
+      }
+    };
+    if (mapLoadedRef.current) apply();
+    else map.once("load", apply);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed on the picker's identity
+  }, [floodPickerKey]);
+
+  // Esc drops a half-drawn circle.
+  useEffect(() => {
+    if (floodPickerKey !== "circle") return;
+    const onKey = (e: KeyboardEvent) => {
+      const map = mapRef.current;
+      if (e.key !== "Escape" || !map) return;
+      draftCenterRef.current = null;
+      setRegionCircle(map, null, true);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [floodPickerKey]);
+
+  // The flood scenario: filters, choropleth and outline, and the view
+  // fitted to its area when it's a new one.
+  const floodScenario = mode === "flood" ? (flood?.scenario ?? null) : null;
+  const floodBbox = flood?.bbox ?? null;
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    const apply = () => {
+      floodStateCodesRef.current = setFloodScenario(
+        map,
+        floodScenario,
+        { municipalities: MUNICIPALITIES_SOURCE_ID, sections: SECTIONS_SOURCE_ID },
+        floodStateCodesRef.current
+      );
+      const key = floodScenario ? JSON.stringify([floodScenario.returnPeriod, floodScenario.region]) : null;
+      if (key && key !== floodScenarioKeyRef.current && floodBbox) {
+        const [west, south, east, north] = floodBbox;
+        map.fitBounds(
+          [
+            [west, south],
+            [east, north],
+          ],
+          { padding: insetPadding(48), maxZoom: 15, duration: 600 }
+        );
+      }
+      floodScenarioKeyRef.current = key;
+    };
+    if (mapLoadedRef.current) apply();
+    else map.once("load", apply);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- bbox arrives with the scenario
+  }, [floodScenario]);
+
+  // Flood mode's buildings toggle also hides the plain (grey) buildings,
+  // which would otherwise cover the whole territory.
+  const staticBuildingsVisible = mode !== "flood" || (flood?.show.buildings ?? true);
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    const apply = () => {
+      for (const id of [BUILDINGS_LAYER_ID, BUILDINGS_OUTLINE_LAYER_ID])
+        if (map.getLayer(id)) map.setLayoutProperty(id, "visibility", staticBuildingsVisible ? "visible" : "none");
+    };
+    if (mapLoadedRef.current) apply();
+    else map.once("load", apply);
+  }, [staticBuildingsVisible]);
+
+  const floodShow = mode === "flood" ? (flood?.show ?? null) : null;
+  const floodShowKey = floodShow ? `${floodShow.zones}${floodShow.buildings}${floodShow.areas}` : "";
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    const apply = () => setFloodLayersVisible(map, floodShow);
+    if (mapLoadedRef.current) apply();
+    else map.once("load", apply);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed on the toggles' values
+  }, [floodShowKey]);
 
   // Basemap switch (the picker, the theme while it follows the theme, or
   // the language for Protomaps' labels): swap it in place under the

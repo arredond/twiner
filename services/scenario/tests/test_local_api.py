@@ -697,3 +697,82 @@ def test_no_infrastructure_data_leaves_buildings_untouched(client, data_dir):
     assert client.get(f"/results/{body['scenario_id']}/infrastructure").status_code == 404
     # Bands don't depend on the asset data.
     assert client.get(f"/results/{body['scenario_id']}/intensity").status_code == 200
+
+
+# --- flood scenarios (ADR-0029) -------------------------------------------
+
+
+@pytest.fixture
+def flood_data(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    import pyarrow as pa
+    import pyarrow.parquet as pq
+    from scenario import flood
+
+    d = tmp_path / "flood"
+    d.mkdir()
+    pq.write_table(
+        pa.table(
+            {
+                "building_id": ["f1", "f2"],
+                "centroid_lon": [-0.3763, -3.7038],
+                "centroid_lat": [39.4699, 40.4168],
+                "municipality_code": ["46250", "28079"],
+                "census_section_code": ["4625001001", "2807901001"],
+                "num_dwellings": pa.array([10, 4], pa.int32()),
+                "built_area_m2": pa.array([500.0, 200.0], pa.float32()),
+                "flood_t10": [False, True],
+                "flood_t50": [True, True],
+                "flood_t100": [True, True],
+                "flood_t500": [True, True],
+            }
+        ),
+        d / "building_flood.parquet",
+    )
+    pq.write_table(
+        pa.table(
+            {
+                "return_period": pa.array([100], pa.int16()),
+                "section_code": ["4625001001"],
+                "municipality_code": ["46250"],
+                "rivers": ["Turia"],
+                "n_zones": pa.array([1], pa.int32()),
+                "area_m2": [1.5e6],
+                "bbox_xmin": [-0.38],
+                "bbox_ymin": [39.46],
+                "bbox_xmax": [-0.37],
+                "bbox_ymax": [39.48],
+            }
+        ),
+        d / "zone_areas.parquet",
+    )
+    monkeypatch.setattr(flood, "FLOOD_DIR", str(d))
+    monkeypatch.setattr(flood, "_DATA", None)
+    return d
+
+
+def test_flood_circle_scenario_and_section_drill_down(client, flood_data):
+    body = {
+        "return_period": 10,
+        "region": {"type": "circle", "lat": 39.47, "lon": -0.376, "radius_km": 5},
+    }
+    resp = _timed(lambda: client.post("/scenarios/flood", json=body))
+    assert resp.status_code == 200
+    result = resp.json()
+    # f1 (Valencia) is in the T=50/100/500 zones but not T=10; f2 is in
+    # Madrid, outside the circle.
+    assert result["n_flooded"] == 0
+    body["return_period"] = 50
+    result = client.post("/scenarios/flood", json=body).json()
+    assert result["n_flooded"] == 1
+    assert result["region_bbox"][0] < -0.376 < result["region_bbox"][2]
+    sections = client.get(
+        f"/results/{result['scenario_id']}/section_stats", params={"municipality_code": "46250"}
+    ).json()
+    assert [s["section_code"] for s in sections] == ["4625001001"]
+
+
+def test_flood_rejects_bad_regions(client, flood_data):
+    resp = client.post(
+        "/scenarios/flood", json={"return_period": 100, "region": {"type": "circle", "lat": 1}}
+    )
+    assert resp.status_code == 400

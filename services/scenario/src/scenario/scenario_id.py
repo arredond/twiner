@@ -106,3 +106,9 @@ def manual_scenario_id(
             "probability_level": probability_level,
         }
     )
+
+
+def flood_scenario_id(return_period: int, region: dict) -> str:
+    """Flood mode (ADR-0029): the return period plus the region, as
+    `flood.region_params` spells it."""
+    return _hash({"mode": "flood", "return_period": int(return_period), "region": region})

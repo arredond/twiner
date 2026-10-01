@@ -183,6 +183,10 @@ export interface InfrastructureResult {
   // Its building's probability of each damage state, DAMAGE_STATES order;
   // null exactly when damage_state_code is.
   damage_probs: number[] | null;
+  // Flood mode (ADR-0029): the return period whose zone the asset is in.
+  // Set only on a flood scenario's rows, which have no intensity (0) or
+  // damage.
+  flood_return_period?: number;
 }
 
 // GeoJSON of the scenario's intensity bands: one feature per integer

@@ -21,7 +21,7 @@ import pytest
 
 # Sibling test module (pytest puts tests/ on sys.path) -- reuses its
 # synthetic data fixture rather than duplicating it.
-from test_local_api import data_dir  # noqa: F401  # pyrefly: ignore
+from test_local_api import data_dir, flood_data  # noqa: F401  # pyrefly: ignore
 from tiles import scenario_results
 
 BUCKET = "results-bucket"
@@ -253,3 +253,52 @@ def test_static_faults_json_is_the_faults_route_body(
     export_faults.main()
     _, body = _call(handler, "/faults")
     assert json.loads(out.read_text()) == body
+
+
+# --- flood scenarios (ADR-0029) ----------------------------------------------
+
+
+def _post(handler, path: str, body: dict) -> tuple[int, dict]:
+    event = {
+        "rawPath": path,
+        "requestContext": {"http": {"method": "POST"}},
+        "body": json.dumps(body),
+    }
+    resp = handler(event, None)
+    return resp["statusCode"], json.loads(gzip.decompress(base64.b64decode(resp["body"])))
+
+
+def test_flood_scenario_is_stored_then_served_from_s3(handler, s3: FakeS3, flood_data):  # noqa: F811
+    body = {"return_period": 100, "region": {"type": "admin", "level": "province", "code": "46"}}
+    status, first = _post(handler, "/scenarios/flood", body)
+    assert status == 200
+    assert first["cached"] is False
+    assert first["hazard"] == "flood"
+    assert first["n_flooded"] == 1
+    assert first["flood"]["unmapped_provinces"] == []
+    [valencia] = first["municipality_stats"]
+    assert valencia["municipality_code"] == "46250"
+    assert valencia["flooded_area_km2"] == 1.5
+    status, second = _post(handler, "/scenarios/flood", body)
+    assert status == 200
+    assert second["cached"] is True
+    assert second["scenario_id"] == first["scenario_id"]
+    # Sections and their choropleth values through the existing routes.
+    status, sections = _call(handler, f"/results/{first['scenario_id']}/section_stats")
+    assert status == 200
+    assert [s["section_code"] for s in sections] == ["4625001001"]
+    status, severity = _call(handler, f"/results/{first['scenario_id']}/section_severity")
+    assert status == 200 and set(severity) == {"4625001001"}
+
+
+def test_flood_scenario_bad_request_is_a_400(handler, flood_data):  # noqa: F811
+    status, _ = _post(
+        handler, "/scenarios/flood", {"return_period": 25, "region": {"type": "circle"}}
+    )
+    assert status == 400
+    status, _ = _post(
+        handler,
+        "/scenarios/flood",
+        {"return_period": 100, "region": {"type": "admin", "level": "ccaa", "code": "99"}},
+    )
+    assert status == 400

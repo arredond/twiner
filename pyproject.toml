@@ -38,6 +38,7 @@ search-path = [
     "pipelines/faults/src",
     "pipelines/exposure/src",
     "pipelines/fragility/src",
+    "pipelines/flood/src",
     "pipelines/basemap/src",
     "infra",
 ]

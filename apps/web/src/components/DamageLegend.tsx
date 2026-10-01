@@ -44,7 +44,7 @@ export function LayerSection({
   toggle,
   children,
 }: {
-  title: string;
+  title: React.ReactNode;
   status: LayerStatus;
   toggle?: React.ReactNode;
   children?: React.ReactNode;
@@ -89,6 +89,18 @@ export interface DamageLegendProps {
   infraCategories: InfraCategory[];
   onInfraCategoriesChange: (categories: InfraCategory[]) => void;
   infraCounts: Record<string, number> | null;
+  // Flood mode (ADR-0029): the flood layers' own section (FloodLegend)
+  // replaces the fault, damage and intensity sections.
+  flood?: React.ReactNode;
+  // "Zonas afectadas": the municipality/census-section choropleths, either
+  // hazard. `areasKey` is their colour key (flood's % ramp); none for an
+  // earthquake, whose choropleths use the damage colours above.
+  showAreas: boolean;
+  onShowAreasChange: (show: boolean) => void;
+  areasStatus?: LayerStatus;
+  areasKey?: React.ReactNode;
+  // The level the map currently shows (DamageMap's onAreaLevelChange).
+  areaLevel: "municipality" | "section";
 }
 
 export function DamageLegend({
@@ -103,6 +115,12 @@ export function DamageLegend({
   infraCategories,
   onInfraCategoriesChange,
   infraCounts,
+  flood,
+  showAreas,
+  onShowAreasChange,
+  areasStatus = "idle",
+  areasKey,
+  areaLevel,
 }: DamageLegendProps) {
   const { theme, i18n } = useSettings();
   const { t } = i18n;
@@ -112,6 +130,8 @@ export function DamageLegend({
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem", minWidth: "13.5rem" }}>
+      {flood ?? (
+      <>
       <LayerSection
         title={t("legend.faults")}
         status="idle"
@@ -166,6 +186,23 @@ export function DamageLegend({
             </div>
           ))}
         </div>
+      </LayerSection>
+      </>
+      )}
+
+      <LayerSection
+        title={
+          <>
+            {t("legend.areas")}{" "}
+            <span style={{ fontWeight: 400, fontSize: "0.75rem", color: "var(--text-muted)" }}>
+              ({t(areaLevel === "section" ? "legend.areasSections" : "legend.areasMunicipalities")})
+            </span>
+          </>
+        }
+        status={areasStatus}
+        toggle={<Switch label={t("legend.showAreas")} checked={showAreas} onChange={onShowAreasChange} />}
+      >
+        {areasKey && <div style={{ opacity: showAreas ? 1 : 0.4 }}>{areasKey}</div>}
       </LayerSection>
 
       <LayerSection

@@ -32,3 +32,13 @@ export const MAP_PALETTE = {
 // Click-to-highlight, on every selectable map feature (buildings, debris
 // rings, sections, infrastructure) and the sidebar card it came from.
 export const SELECTED_COLOR = "#ff2d95";
+
+// The hazard cards' name colours (the "QUAKE" / "FLOOD" in twinQUAKE /
+// twinFLOOD, HazardCard.tsx), each taken from its own simulation:
+// twinQUAKE a deep red from the damage scale (between Extensive and
+// Complete), twinFLOOD the flood zones' blue. Text on the panel, so each
+// theme gets a shade that reads on its background.
+export const HAZARD_COLORS = {
+  light: { seismic: "#b3261e", flood: "#1f6fa3" },
+  dark: { seismic: "#ff7b6e", flood: "#5aaee0" },
+} as const;

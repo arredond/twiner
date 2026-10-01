@@ -369,3 +369,17 @@ def mean_severity(counts: dict[str, int]) -> float:
     if total == 0:
         return 0.0
     return sum(i * counts.get(s, 0) for i, s in enumerate(DAMAGE_STATES)) / total
+
+
+def section_severity(stats: list[dict]) -> dict[str, float]:
+    """section_code -> the value the map's section choropleth colours by:
+    mean damage severity (0-4) for an earthquake, % of buildings flooded
+    for a flood (flood.py's rows carry `n_flooded`, not damage counts)."""
+    return {
+        s["section_code"]: (
+            round(s["pct_buildings_flooded"] or 0.0, 2)
+            if "n_flooded" in s
+            else round(mean_severity(s["counts"]), 3)
+        )
+        for s in stats
+    }

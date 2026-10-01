@@ -3,6 +3,26 @@ import { DamageMap } from "./components/DamageMap";
 import { ImpactSidebar, SIDEBAR_WIDTH_REM } from "./components/ImpactSidebar";
 import { ManualRunForm, type ManualParams } from "./components/RunScenarioPopup";
 import { DamageLegend } from "./components/DamageLegend";
+import { FloodLegend, FloodShareKey } from "./components/FloodLegend";
+import { FloodPanel, type RegionMode } from "./components/FloodPanel";
+import { FloodSidebar } from "./components/FloodSidebar";
+import { HazardCard } from "./components/HazardCard";
+import { HAZARD_COLORS } from "./damageColors";
+import type { FloodMapProps } from "./components/DamageMap";
+import type { FloodLayerToggles, FloodMapScenario } from "./components/floodLayers";
+import {
+  getFloodInfrastructure,
+  getFloodSectionShares,
+  getFloodSectionStats,
+  loadAdminIndex,
+  runFloodScenario,
+  type AdminArea,
+  type AdminLevel,
+  type FloodRegion,
+  type FloodResult,
+  type FloodSectionStats,
+  type ReturnPeriod,
+} from "./floodApi";
 import { RealtimePanel } from "./components/RealtimePanel";
 import { useRealtimeLayer } from "./useRealtimeLayer";
 import {
@@ -133,6 +153,7 @@ export default function App() {
   // infrastructure (ADR-0025) off until asked for. Both of the latter are
   // fetched per scenario either way.
   const [showDamage, setShowDamage] = useState(true);
+  // On with twinQUAKE (open at first); off whenever it isn't the hazard.
   const [showFaults, setShowFaults] = useState(true);
   const [intensityBands, setIntensityBands] = useState<IntensityBands | null>(null);
   const [showIntensity, setShowIntensity] = useState(false);
@@ -143,6 +164,135 @@ export default function App() {
   const [focusedAsset, setFocusedAsset] = useState<{ key: number; asset: InfrastructureResult } | null>(null);
   const nextFocusKey = useRef(0);
   const hasInfrastructure = result?.infrastructure_summary != null;
+
+  // Flood mode (ADR-0029): its own setup, result and drill-down, next to
+  // the seismic ones. `hazard` is the card in use (twinQUAKE / twinFLOOD,
+  // none at first); switching it clears both results. `cardOpen`: its setup
+  // controls are showing (a run collapses them).
+  // twinQUAKE starts open, so the map opens on something (its faults) that
+  // matches the legend.
+  const [hazard, setHazard] = useState<"seismic" | "flood" | null>("seismic");
+  const [cardOpen, setCardOpen] = useState(true);
+  // The choropleths' level at the current zoom, for the legend's title.
+  const [areaLevel, setAreaLevel] = useState<"municipality" | "section">("municipality");
+  const [returnPeriod, setReturnPeriod] = useState<ReturnPeriod>(100);
+  const [regionMode, setRegionMode] = useState<RegionMode>("circle");
+  const [floodResult, setFloodResult] = useState<FloodResult | null>(null);
+  const [floodLayers, setFloodLayers] = useState<FloodLayerToggles>({ zones: true, buildings: true, areas: true });
+  // "Zonas afectadas" (the legend): municipality/section choropleths, both hazards.
+  const showAreas = floodLayers.areas;
+  const setShowAreas = (areas: boolean) => setFloodLayers((l) => ({ ...l, areas }));
+  const [adminIndex, setAdminIndex] = useState<AdminArea[] | null>(null);
+  const [floodSectionShares, setFloodSectionShares] = useState<Record<string, number>>({});
+  const [floodInfrastructure, setFloodInfrastructure] = useState<InfrastructureResult[] | null>(null);
+  const [floodMunicipalityCode, setFloodMunicipalityCode] = useState<string | null>(null);
+  const [floodSectionCode, setFloodSectionCode] = useState<string | null>(null);
+  const [floodSections, setFloodSections] = useState<FloodSectionStats[] | null>(null);
+  const [floodSectionsError, setFloodSectionsError] = useState<string | null>(null);
+  const floodSectionCacheRef = useRef<Map<string, Promise<FloodSectionStats[]>>>(new Map());
+  const floodScenarioId = floodResult?.scenario_id ?? null;
+
+  useEffect(() => {
+    if (hazard !== "flood" || adminIndex) return;
+    loadAdminIndex()
+      .then(setAdminIndex)
+      .catch(() => {
+        // FloodPanel shows the error; CCAA outlines on the map just can't
+        // be filtered to their provinces.
+      });
+  }, [hazard, adminIndex]);
+
+  const loadFloodSectionStats = useCallback(
+    (municipalityCode: string): Promise<FloodSectionStats[]> => {
+      if (!floodScenarioId) return Promise.resolve([]);
+      let pending = floodSectionCacheRef.current.get(municipalityCode);
+      if (!pending) {
+        pending = getFloodSectionStats(floodScenarioId, municipalityCode);
+        pending.catch(() => floodSectionCacheRef.current.delete(municipalityCode));
+        floodSectionCacheRef.current.set(municipalityCode, pending);
+      }
+      return pending;
+    },
+    [floodScenarioId]
+  );
+
+  useEffect(() => {
+    floodSectionCacheRef.current = new Map();
+    setFloodMunicipalityCode(null);
+    setFloodSectionCode(null);
+    setFloodSectionShares({});
+    setFloodInfrastructure(null);
+    if (!floodScenarioId) return;
+    let cancelled = false;
+    getFloodSectionShares(floodScenarioId)
+      .then((shares) => !cancelled && setFloodSectionShares(shares))
+      .catch(() => {});
+    if (floodResult?.infrastructure_summary) {
+      const rp = floodResult.flood.return_period;
+      getFloodInfrastructure(floodScenarioId)
+        .then(
+          (rows) =>
+            !cancelled &&
+            // The seismic row shape the map's asset layers read: flagged
+            // (intensity set), no damage.
+            setFloodInfrastructure(
+              rows.map((r) => ({ ...r, intensity: 0, damage_state_code: null, damage_probs: null, flood_return_period: rp }))
+            )
+        )
+        .catch(() => {});
+    }
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed on the scenario id
+  }, [floodScenarioId]);
+
+  useEffect(() => {
+    setFloodSections(null);
+    setFloodSectionsError(null);
+    setFloodSectionCode(null);
+    if (!floodMunicipalityCode) return;
+    let cancelled = false;
+    loadFloodSectionStats(floodMunicipalityCode)
+      .then((rows) => !cancelled && setFloodSections(rows))
+      .catch((e) => !cancelled && setFloodSectionsError(e instanceof Error ? e.message : String(e)));
+    return () => {
+      cancelled = true;
+    };
+  }, [floodMunicipalityCode, loadFloodSectionStats]);
+
+  const floodMunicipality = useMemo(
+    () => floodResult?.municipality_stats.find((m) => m.municipality_code === floodMunicipalityCode) ?? null,
+    [floodResult, floodMunicipalityCode]
+  );
+  const floodSection = useMemo(
+    () => floodSections?.find((s) => s.section_code === floodSectionCode) ?? null,
+    [floodSections, floodSectionCode]
+  );
+  const provinceNames = useMemo(
+    () => new Map((adminIndex ?? []).filter((a) => a.level === "province").map((a) => [a.code, a.name])),
+    [adminIndex]
+  );
+
+  const floodMapScenario = useMemo((): FloodMapScenario | null => {
+    if (!floodResult) return null;
+    const { region, return_period } = floodResult.flood;
+    const provinces =
+      region.type === "admin" && region.level === "ccaa"
+        ? (adminIndex ?? []).filter((a) => a.level === "province" && a.parent === region.code).map((a) => a.code)
+        : [];
+    return {
+      returnPeriod: return_period,
+      region,
+      provinces,
+      municipalityShares: Object.fromEntries(
+        floodResult.municipality_stats
+          .filter((m) => m.n_flooded > 0)
+          .map((m) => [m.municipality_code, m.pct_buildings_flooded ?? 0])
+      ),
+      sectionShares: floodSectionShares,
+    };
+  }, [floodResult, adminIndex, floodSectionShares]);
 
   useEffect(() => {
     setIntensityBands(null);
@@ -237,14 +387,78 @@ export default function App() {
     setLegendOpen(true);
     // The result itself: back on after a "New run" switched it off.
     setShowDamage(true);
+    // Critical infrastructure too, every category (off again on clear).
+    setInfraCategories(INFRA_CATEGORY_KEYS);
     setIsRunning(true);
     setError(null);
     try {
       setResult(await run());
+      setCardOpen(false);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
       setIsRunning(false);
+    }
+  }
+
+  async function runFlood(region: FloodRegion) {
+    setLegendOpen(true);
+    setFloodLayers({ zones: true, buildings: true, areas: true });
+    // Critical infrastructure too, every category (off again on clear).
+    setInfraCategories(INFRA_CATEGORY_KEYS);
+    setIsRunning(true);
+    setError(null);
+    try {
+      setFloodResult(await runFloodScenario(returnPeriod, region));
+      setCardOpen(false);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setIsRunning(false);
+    }
+  }
+
+  // An area picked in the search box: its level becomes the picker's, and
+  // it runs straight away, like clicking it on the map.
+  function pickFloodArea(area: AdminArea) {
+    if (isRunning) return;
+    setRegionMode(area.level);
+    void runFlood({ type: "admin", level: area.level, code: area.code });
+  }
+
+  function clearFlood() {
+    setFloodResult(null);
+    setInfraCategories([]);
+    setError(null);
+    setLegendOpen(false);
+  }
+
+  function changeHazard(next: "seismic" | "flood" | null) {
+    clearScenario();
+    clearFlood();
+    setHazard(next);
+    setPending(null);
+    // Faults are the seismic mode's own layer.
+    setShowFaults(next === "seismic");
+  }
+
+  // A card's name was clicked: open that hazard (closing the other), start
+  // a new run if its result is showing, or else open/close its setup
+  // (closing it leaves no hazard on the map).
+  function onCardClick(card: "seismic" | "flood") {
+    if (isRunning) return;
+    if (hazard !== card) {
+      changeHazard(card);
+      setCardOpen(true);
+    } else if (hasSidebar) {
+      if (card === "flood") clearFlood();
+      else clearScenario();
+      setCardOpen(true);
+    } else if (cardOpen) {
+      setCardOpen(false);
+      changeHazard(null);
+    } else {
+      setCardOpen(true);
     }
   }
 
@@ -326,6 +540,25 @@ export default function App() {
     setFocusedAsset({ key: nextFocusKey.current++, asset });
   }
 
+  const floodMapProps: FloodMapProps | null =
+    hazard === "flood"
+      ? {
+          picker: floodResult || isRunning ? null : regionMode === "circle" ? { kind: "circle" } : { kind: "admin", level: regionMode },
+          scenario: floodMapScenario,
+          bbox: floodResult?.region_bbox ?? null,
+          show: floodLayers,
+          municipalityStats: floodResult?.municipality_stats ?? [],
+          loadSectionStats: loadFloodSectionStats,
+          onCircle: (circle) => {
+            if (!isRunning) void runFlood(circle);
+          },
+          onAdminPick: (level: AdminLevel, code: string) => {
+            if (!isRunning) void runFlood({ type: "admin", level, code });
+          },
+        }
+      : null;
+  const hasSidebar = hazard === "flood" ? floodResult !== null : result !== null;
+
   const runPopup =
     pending === null
       ? null
@@ -348,23 +581,26 @@ export default function App() {
           scenarioId={scenarioId}
           municipalityStats={result?.municipality_stats ?? []}
           sectionSeverity={sectionSeverity}
-          selectedMunicipality={selectedMunicipality}
-          selectedSection={selectedSection}
+          selectedMunicipality={hazard === "flood" ? floodMunicipality : selectedMunicipality}
+          selectedSection={hazard === "flood" ? floodSection : selectedSection}
           loadSectionStats={loadSectionStats}
           evaluatedRegion={result?.evaluated_region ?? null}
           faults={faults}
           selectedFaultId={selectedFaultId}
-          mode={mode}
+          mode={hazard === "flood" ? "flood" : hazard === "seismic" ? mode : "none"}
+          flood={floodMapProps}
+          onAreaLevelChange={setAreaLevel}
           onFaultClick={handleFaultClick}
           onMapClick={handleMapClick}
           runPopup={runPopup}
           onRunPopupClose={(key) => setPending((p) => (p?.key === key ? null : p))}
           showFaults={showFaults}
           showDamage={showDamage}
+          showAreas={showAreas}
           intensityBands={intensityBands}
           showIntensity={showIntensity}
           infrastructureCategories={infraCategories}
-          infrastructureResults={infrastructure}
+          infrastructureResults={hazard === "flood" ? floodInfrastructure : infrastructure}
           focusedAsset={focusedAsset}
           dgtIncidents={showDgt ? dgt.data : null}
           dgtCategories={dgtCategories}
@@ -372,84 +608,113 @@ export default function App() {
           aemetMetric={aemetMetric}
           aemetWarnings={showWarnings ? warnings.data : null}
           warningWindow={warningWindowRange}
-          rightInsetRem={result ? SIDEBAR_WIDTH_REM : 0}
+          rightInsetRem={hasSidebar ? SIDEBAR_WIDTH_REM : 0}
           basemap={basemap}
           theme={theme}
           i18n={i18n}
           showZoom={settings.showZoom}
         />
 
-        <SettingsMenu style={{ top: "0.75rem", right: `${(result ? SIDEBAR_WIDTH_REM : 0) + 0.75}rem` }} />
+        <SettingsMenu style={{ top: "0.75rem", right: `${(hasSidebar ? SIDEBAR_WIDTH_REM : 0) + 0.75}rem` }} />
         {/* Clear of MapLibre's attribution ("i") control in the corner. */}
-        <BasemapPicker style={{ bottom: "3rem", right: `${(result ? SIDEBAR_WIDTH_REM : 0) + 0.75}rem` }} />
+        <BasemapPicker style={{ bottom: "3rem", right: `${(hasSidebar ? SIDEBAR_WIDTH_REM : 0) + 0.75}rem` }} />
 
-        <div style={{ ...overlayPanel, top: "0.75rem", left: "0.75rem", maxWidth: "17rem" }}>
-          {result ? (
-            // With a scenario showing, the setup controls step aside: one
-            // way back to them (clearScenario).
-            <button
-              type="button"
-              onClick={clearScenario}
-              style={{
-                padding: "0.35rem 0.8rem",
-                fontSize: "0.85rem",
-                fontWeight: 600,
-                border: "1px solid var(--accent-bg)",
-                borderRadius: 4,
-                background: "var(--accent-bg)",
-                color: "var(--accent-fg)",
-                cursor: "pointer",
-              }}
-            >
-              {t("app.newRun")}
-            </button>
-          ) : (
-            <>
-              <div style={{ display: "flex", alignItems: "baseline", gap: "0.4rem" }}>
-                <strong>twiner</strong>
-                <span style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>{t("app.tagline")}</span>
-              </div>
-              <div style={{ marginTop: "0.5rem" }}>
-                <Segmented
-                  label={t("mode.label")}
-                  value={mode}
-                  options={[
-                    { value: "automatic", label: t("mode.automatic") },
-                    { value: "manual", label: t("mode.manual") },
-                  ]}
-                  onChange={changeMode}
-                />
-              </div>
-              <label style={{ marginTop: "0.5rem", fontSize: "0.8rem" }}>
-                {t("probability.label")}
-                <select
-                  value={probabilityLevel}
-                  onChange={(e) => setProbabilityLevel(e.target.value as ProbabilityLevel)}
-                  style={{ fontSize: "0.8rem" }}
-                >
-                  {PROBABILITY_LEVELS.map((level) => (
-                    <option key={level} value={level}>
-                      {t(`probability.${level}`)}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <p style={{ fontSize: "0.75rem", color: "var(--text-muted)", margin: "0.4rem 0 0" }}>
-                {mode === "automatic"
-                  ? showFaults
-                    ? t("mode.hintAutomatic")
-                    : t("mode.hintFaultsOff")
-                  : t("mode.hintManual")}
-              </p>
-            </>
-          )}
-          {isRunning && <p style={{ fontSize: "0.8rem", margin: "0.4rem 0 0" }}>{t("app.running")}</p>}
-          {error && <p style={{ fontSize: "0.8rem", color: "var(--danger)", margin: "0.4rem 0 0" }}>{error}</p>}
-          {faultsError && (
-            <p style={{ fontSize: "0.8rem", color: "var(--danger)", margin: "0.4rem 0 0" }}>
-              {t("app.faultsError", { message: faultsError })}
-            </p>
-          )}
+        {/* The two hazard cards (twinQUAKE, twinFLOOD), collapsed at first;
+            a card's name opens it (see onCardClick). */}
+        <div
+          style={{
+            position: "absolute",
+            zIndex: 1,
+            top: "0.75rem",
+            left: "0.75rem",
+            width: LEFT_COLUMN_WIDTH,
+            display: "flex",
+            flexDirection: "column",
+            gap: "0.5rem",
+          }}
+        >
+          {(["seismic", "flood"] as const).map((card) => {
+            const active = hazard === card;
+            const open = active && cardOpen;
+            const errorStyle: React.CSSProperties = {
+              fontSize: "0.8rem",
+              margin: "0.4rem 0 0",
+              color: "var(--danger)",
+            };
+            const errors = [error, card === "seismic" && faultsError ? t("app.faultsError", { message: faultsError }) : null]
+              .filter((e): e is string => !!e);
+            const status = active && (isRunning || errors.length > 0) && (
+              <>
+                {isRunning && <p style={{ fontSize: "0.8rem", margin: "0.4rem 0 0" }}>{t("app.running")}</p>}
+                {errors.map((e) => (
+                  <p key={e} style={errorStyle}>
+                    {e}
+                  </p>
+                ))}
+              </>
+            );
+            return (
+              <HazardCard
+                key={card}
+                name={card === "seismic" ? "QUAKE" : "FLOOD"}
+                color={HAZARD_COLORS[theme][card]}
+                open={open}
+                title={
+                  active && hasSidebar
+                    ? t("app.newRun")
+                    : t(card === "seismic" ? "card.quakeTitle" : "card.floodTitle")
+                }
+                onHeaderClick={() => onCardClick(card)}
+                status={status}
+              >
+                {card === "flood" ? (
+                  <FloodPanel
+                    returnPeriod={returnPeriod}
+                    onReturnPeriodChange={setReturnPeriod}
+                    regionMode={regionMode}
+                    onRegionModeChange={setRegionMode}
+                    onPickArea={pickFloodArea}
+                    disabled={isRunning}
+                  />
+                ) : (
+                  <div style={{ display: "flex", flexDirection: "column" }}>
+                    <div style={{ marginTop: "0.5rem" }}>
+                      <Segmented
+                        label={t("mode.label")}
+                        value={mode}
+                        options={[
+                          { value: "automatic", label: t("mode.automatic") },
+                          { value: "manual", label: t("mode.manual") },
+                        ]}
+                        onChange={changeMode}
+                      />
+                    </div>
+                    <label style={{ marginTop: "0.5rem", fontSize: "0.8rem" }}>
+                      {t("probability.label")}
+                      <select
+                        value={probabilityLevel}
+                        onChange={(e) => setProbabilityLevel(e.target.value as ProbabilityLevel)}
+                        style={{ fontSize: "0.8rem" }}
+                      >
+                        {PROBABILITY_LEVELS.map((level) => (
+                          <option key={level} value={level}>
+                            {t(`probability.${level}`)}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <p style={{ fontSize: "0.75rem", color: "var(--text-muted)", margin: "0.4rem 0 0" }}>
+                      {mode === "automatic"
+                        ? showFaults
+                          ? t("mode.hintAutomatic")
+                          : t("mode.hintFaultsOff")
+                        : t("mode.hintManual")}
+                    </p>
+                  </div>
+                )}
+              </HazardCard>
+            );
+          })}
         </div>
 
         {/* Bottom-left stack: Real time above the Legend, both collapsible,
@@ -467,7 +732,11 @@ export default function App() {
             gap: "0.5rem",
           }}
         >
-          <details open={realtimeOpen} onToggle={(e) => setRealtimeOpen(e.currentTarget.open)} style={stackedPanel}>
+          <details
+            open={realtimeOpen}
+            onToggle={(e) => setRealtimeOpen(e.currentTarget.open)}
+            style={stackedPanel(realtimeOpen)}
+          >
             <summary style={{ cursor: "pointer", fontWeight: 600 }}>{t("realtime.title")}</summary>
             <div style={{ marginTop: "0.5rem" }}>
               <RealtimePanel
@@ -491,7 +760,7 @@ export default function App() {
           <details
             open={legendOpen}
             onToggle={(e) => setLegendOpen(e.currentTarget.open)}
-            style={stackedPanel}
+            style={stackedPanel(legendOpen)}
           >
             <summary style={{ cursor: "pointer", fontWeight: 600 }}>{t("legend.title")}</summary>
             <div style={{ marginTop: "0.5rem" }}>
@@ -506,12 +775,46 @@ export default function App() {
                 onShowIntensityChange={setShowIntensity}
                 infraCategories={infraCategories}
                 onInfraCategoriesChange={setInfraCategories}
-                infraCounts={result?.infrastructure_summary ?? null}
+                infraCounts={
+                  hazard === "flood" ? (floodResult?.infrastructure_summary ?? null) : (result?.infrastructure_summary ?? null)
+                }
+                flood={
+                  hazard === "flood" ? (
+                    <FloodLegend
+                      status={isRunning ? "loading" : floodResult ? "ready" : "idle"}
+                      show={floodLayers}
+                      onShowChange={setFloodLayers}
+                      returnPeriod={floodResult?.flood.return_period ?? returnPeriod}
+                    />
+                  ) : undefined
+                }
+                showAreas={showAreas}
+                onShowAreasChange={setShowAreas}
+                areasStatus={isRunning ? "loading" : (hazard === "flood" ? floodResult : result) ? "ready" : "idle"}
+                areasKey={hazard === "flood" ? <FloodShareKey /> : undefined}
+                areaLevel={areaLevel}
               />
             </div>
           </details>
         </div>
-        {result && (
+        {hazard === "flood" && floodResult && (
+          <FloodSidebar
+            title={floodTitle(floodResult, adminIndex, i18n)}
+            result={floodResult}
+            selectedMunicipality={floodMunicipality}
+            sections={floodSections}
+            sectionsError={floodSectionsError}
+            selectedSectionCode={floodSectionCode}
+            onSelectMunicipality={setFloodMunicipalityCode}
+            onSelectSection={setFloodSectionCode}
+            infrastructure={floodInfrastructure}
+            focusedAssetId={focusedAsset?.asset.asset_id ?? null}
+            onSelectAsset={focusAsset}
+            provinceNames={provinceNames}
+            onClose={clearFlood}
+          />
+        )}
+        {hazard === "seismic" && result && (
           <ImpactSidebar
             title={scenarioTitle(result, faults, i18n)}
             subtitle={[
@@ -552,9 +855,26 @@ const overlayPanel: React.CSSProperties = {
 
 // One of the bottom-left collapsible panels: in the stack's flow (not
 // absolutely placed), scrolling on its own when the two don't fit.
-const stackedPanel: React.CSSProperties = {
+// Everything in the left column (hazard cards, Real time, Legend) shares one
+// fixed width, so no panel resizes with its content: switching hazard,
+// language, or the legend's municipality/section title as the map zooms.
+// Sized for the longest single-line rows ("Estaciones meteorológicas
+// (AEMET)" and "Zonas afectadas (secciones censales)", each beside a
+// toggle); anything longer wraps.
+const LEFT_COLUMN_WIDTH = "19rem";
+// Real time and Legend collapsed: just their title, both the same width.
+const COLLAPSED_PANEL_WIDTH = "8rem";
+
+// One of the bottom-left collapsible panels, at the column width when open
+// and the (shared) collapsed width when not.
+function stackedPanel(open: boolean): React.CSSProperties {
+  return { ...stackedPanelBase, width: open ? LEFT_COLUMN_WIDTH : COLLAPSED_PANEL_WIDTH };
+}
+
+const stackedPanelBase: React.CSSProperties = {
   ...overlayPanel,
   position: "static",
+  boxSizing: "border-box",
   fontSize: "0.8rem",
   minHeight: 0,
   overflowY: "auto",
@@ -586,4 +906,14 @@ function scenarioTitle(result: ScenarioResult, faults: Fault[] | null, { t }: I1
 
 function roundMagnitude(mag: number): number {
   return Number(mag.toFixed(1));
+}
+
+// "Flood T=100 · Comunitat Valenciana" or "Flood T=100 · 12 km circle".
+function floodTitle(result: FloodResult, index: AdminArea[] | null, { t, fmtDecimal }: I18n): string {
+  const { region, return_period } = result.flood;
+  const area =
+    region.type === "circle"
+      ? t("flood.circleTitle", { radius: fmtDecimal(region.radius_km, 1) })
+      : (index?.find((a) => a.level === region.level && a.code === region.code)?.name ?? region.code);
+  return t("flood.title", { period: return_period, area });
 }

@@ -3,8 +3,8 @@
 Thin adapter only (see docs/decisions/0001-compute-and-iac.md) -- all
 domain logic lives in engine.py/rupture.py/ground_motion.py/damage.py/
 faults.py/building_lookup.py, shared with the local dev server in
-local.py. Mirrors local.py's five routes (`/scenarios/manual`, `/faults`,
-`/scenarios/fault`, `/buildings/{id}`, `/warmup`) plus `/health`, the
+local.py. Mirrors local.py's routes (`/scenarios/manual`, `/scenarios/flood`,
+`/faults`, `/scenarios/fault`, `/buildings/{id}`, `/warmup`) plus `/health`, the
 `/results/{id}/...` reads and the `/realtime/...` layers.
 
 A Lambda Function URL has no *routing rules* the way API Gateway does (no
@@ -88,6 +88,9 @@ def handler(event: dict, context) -> dict:
             body = json.loads(event.get("body") or "{}")
             return _manual_scenario(body)
 
+        if method == "POST" and path == "/scenarios/flood":
+            return _flood_scenario(json.loads(event.get("body") or "{}"))
+
         artifact_route = _ARTIFACT_ROUTE.fullmatch(path)
         if method == "GET" and artifact_route:
             return _artifact_results(artifact_route["scenario_id"], artifact_route["kind"], query)
@@ -146,15 +149,13 @@ def _section_results(scenario_id: str, kind: str, query: dict) -> dict:
         return _response(404, {"error": "no results bucket configured"})
     from tiles.results_store import read_section_stats
 
-    from .impact import mean_severity
+    from .impact import section_severity
 
     stats = read_section_stats(RESULTS_BUCKET, scenario_id)
     if stats is None:
         return _response(404, {"error": f"scenario_id {scenario_id!r} not found"})
     if kind == "section_severity":
-        return _response(
-            200, {s["section_code"]: round(mean_severity(s["counts"]), 3) for s in stats}
-        )
+        return _response(200, section_severity(stats))
     municipality_code = query.get("municipality_code")
     if municipality_code is not None:
         stats = [s for s in stats if s["municipality_code"] == municipality_code]
@@ -243,6 +244,59 @@ def _manual_scenario(body: dict) -> dict:
     return _run_and_respond(
         rupture, probability_level, scenario_id, time.monotonic() - t_rupture, hazardlib_seconds
     )
+
+
+def _flood_scenario(body: dict) -> dict:
+    """Mirrors local.py's POST /scenarios/flood (ADR-0029). No physics:
+    flood.py only filters precomputed flags, so none of hazardlib's import
+    weight is paid here (flood.py imports numpy/pyarrow, and shapely only
+    for circles cutting through zones)."""
+    from .flood import (
+        FloodRequestError,
+        flood_payload,
+        parse_region,
+        region_params,
+        summarize_flood,
+        validate_return_period,
+    )
+    from .scenario_id import flood_scenario_id
+
+    try:
+        return_period = validate_return_period(body.get("return_period"))
+        region = parse_region(body.get("region") or {})
+    except FloodRequestError as e:
+        return _response(400, {"error": str(e)})
+    scenario_id = flood_scenario_id(return_period, region_params(region))
+    if (cached := _cached_response(scenario_id)) is not None:
+        return cached
+    t0 = time.monotonic()
+    try:
+        summary = summarize_flood(region, return_period)
+    except FileNotFoundError as e:
+        return _response(500, {"error": f"missing pipeline output: {e}"})
+    payload = flood_payload(scenario_id, region, return_period, summary)
+    if RESULTS_BUCKET is not None:
+        from tiles.results_store import (
+            init_scenario,
+            write_artifact,
+            write_municipality_stats,
+            write_response,
+            write_section_stats,
+        )
+
+        from .results_store import INFRASTRUCTURE_FILE
+
+        init_scenario(RESULTS_BUCKET, scenario_id)
+        write_municipality_stats(RESULTS_BUCKET, scenario_id, summary.municipality_stats)
+        write_section_stats(RESULTS_BUCKET, scenario_id, summary.section_stats)
+        if summary.infrastructure is not None:
+            write_artifact(RESULTS_BUCKET, scenario_id, INFRASTRUCTURE_FILE, summary.infrastructure)
+        write_response(RESULTS_BUCKET, scenario_id, payload)
+    print(
+        f"scenario: flood {scenario_id} T={return_period} {region_params(region)}: "
+        f"{summary.n_flooded} flooded, {time.monotonic() - t0:.2f}s"
+    )
+    return _response(200, {**payload, "cached": False})
 
 
 def _import_hazardlib() -> float:

@@ -402,7 +402,9 @@ export function renderInfrastructurePopupHtml(
   if (props.building_id) rows.push([t("infra.popup.catastroBuilding"), String(props.building_id)]);
 
   let impact = "";
-  if (result) {
+  if (result?.flood_return_period) {
+    rows.push([t("flood.popup.infraInZone"), `T=${result.flood_return_period}`]);
+  } else if (result) {
     rows.push([t("infra.popup.estimatedIntensity"), `${fmtIntensity(i18n, result.intensity)} EMS-98`]);
     if (result.damage_state_code !== null) {
       // Its building's own result: the state it's labelled with and the

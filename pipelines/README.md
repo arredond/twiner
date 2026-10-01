@@ -15,6 +15,8 @@ pipelines/exposure     Catastro (INSPIRE) ----> buildings.parquet (partitioned)
                         IGN/CNIG (ADR-0013) ---> municipalities.parquet
                                             \--> municipalities.pmtiles
 pipelines/fragility    Martins & Silva (2020) -> fragility.parquet
+pipelines/flood        MITECO SNCZI (ADR-0029) -> building_flood.parquet, zone_areas.parquet
+                                            \--> flood_zones.pmtiles, flood_buildings.pmtiles
                                                         |
                                                         v
                                           services/scenario reads all five
@@ -173,6 +175,57 @@ grid, for the intensity bands) and `infrastructure.pmtiles` (two layers,
 them under `$TWINER_DATA_DIR/infrastructure/` (or `TWINER_INFRA_SITES_PATH`
 / `TWINER_VS30_SITES_PATH`); without them a scenario simply has no
 infrastructure results.
+
+### Province/CCAA outlines + area search (`exposure.admin_areas`)
+
+The flood mode's area picker (ADR-0029): provinces and CCAA dissolved from
+`municipalities.parquet` (so all three levels share edges), plus a compact
+search index of every CCAA, province and municipality. ~20 seconds:
+
+```bash
+uv run python -m exposure.admin_areas data/exposure/municipalities.parquet data/exposure
+cp data/exposure/admin_areas.pmtiles data/exposure/admin_index.json apps/web/public/data/
+```
+
+## `flood`: MITECO flood zones -> flood exposure + tiles
+
+Fluvial flood zones for return periods T=10/50/100/500 from MITECO's SNCZI
+([ADR-0029](../docs/decisions/0029-flood-scenarios.md), sources in
+`DATA-SOURCES.md`). **Manual download first**: MITECO serves the six zips
+behind a captcha, so get them by hand from
+<https://www.miteco.gob.es/es/cartografia-y-sig/ide/descargas/agua/zi-lamina.html>
+into `data/flood/raw/`, keeping their names (the CLI lists any missing one
+with its URL). Then, after the exposure crawl, census sections
+(`buildings-cloud-impact.parquet`, `sections.parquet`) and critical
+infrastructure:
+
+```bash
+uv run python -m flood data/flood/raw data/exposure/parts \
+    data/exposure/buildings-cloud-impact.parquet data/census/sections.parquet \
+    data/infrastructure/infrastructure.parquet data/flood
+cp data/flood/flood_zones.pmtiles data/flood/flood_buildings.pmtiles apps/web/public/data/
+```
+
+Steps, each skipped when its output exists (`--force` redoes all; the
+per-return-period zones and per-province flags are also cached under
+`data/flood/work/`, so an interrupted run resumes):
+
+1. **Zones** (`zones.py`): each zone polygon is repaired, simplified with a
+   1m tolerance, reprojected to EPSG:4326, cut by INE census section, and
+   merged per (section, return period) -> `zones.parquet` (+
+   `zone_areas.parquet` without geometry, what the scenario service loads).
+2. **Buildings** (`exposure.py`): a building is flagged at a return period
+   when its *footprint* intersects that period's zone. One worker per
+   province, loading only nearby zone pieces -> `building_flood.parquet`,
+   the flooded buildings only, one nullable boolean per return period
+   (NULL = not mapped there: Canarias at T=10/T=50).
+3. **Infrastructure**: the same test on each asset's geometry ->
+   `infrastructure_flood.parquet`.
+4. **Tiles** (`tiles.py`): `flood_zones.pmtiles` (layer `flood_zones`: `rp`,
+   `sec`) and `flood_buildings.pmtiles` (layer `flood_buildings`:
+   `building_id`, `sec`, `t10`..`t500`).
+
+The scenario service reads `$TWINER_FLOOD_DIR` (default `data/flood`).
 
 ## `fragility`: Martins & Silva (2020) fragility functions
 
