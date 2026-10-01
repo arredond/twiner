@@ -22,10 +22,11 @@
 # stack runs alongside main's instead of refusing to start. The frontend is
 # pointed at its own API port. `twiner status` prints the URLs.
 #
-# Docs (apps/docs, Starlight): the frontend's Vite dev server proxies /docs
-# to the docs dev server (TWINER_DOCS_PORT, apps/web/vite.config.ts), so
-# http://localhost:5173/docs/ works like https://twiner.arredon.do/docs/
-# and the hazard cards' info links work locally unchanged.
+# Docs (apps/docs, Starlight): the frontend's Vite dev server redirects
+# /docs to the docs dev server (TWINER_DOCS_PORT, apps/web/vite.config.ts),
+# so http://localhost:5173/docs/ lands on the docs like
+# https://twiner.arredon.do/docs/ and the hazard cards' info links work
+# locally unchanged.
 
 set -euo pipefail
 

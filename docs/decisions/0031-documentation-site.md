@@ -55,9 +55,12 @@ domain, and no Pages settings change. Astro is configured with
 
 **Local development.** `bin/twiner start` adds a `docs` tmux window running
 the Astro dev server (first free port from 4321). The app's Vite dev
-server proxies `/docs` to it (`TWINER_DOCS_PORT`), so
-`http://localhost:5173/docs/` behaves like production. The hazard cards'
-info icons then work unchanged. `npm run dev` inside `apps/docs` also
+server redirects `/docs/...` to it (`TWINER_DOCS_PORT`), so the same links
+work locally as in production and the hazard cards' info icons work
+unchanged. It redirects rather than proxies: Astro's dev pages load their
+scripts from root paths (`/@vite/client`, `/@id/...`, `/node_modules/...`)
+that collide with the app's own dev server, so behind a proxy the docs'
+client-side controls (language picker, theme switch) broke. `npm run dev` inside `apps/docs` also
 works on its own for writing.
 
 **Hazard cards** get an info icon. It opens

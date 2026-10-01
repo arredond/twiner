@@ -16,7 +16,8 @@ openapi.json             API reference source, generated: bin/export-openapi
 ## Develop
 
 `bin/twiner start` runs this site alongside the app. Open
-<http://localhost:5173/docs/>: the app's dev server proxies `/docs` here.
+<http://localhost:5173/docs/>: the app's dev server redirects `/docs` to this
+one (port 4321, or the next free one in a worktree).
 To work on the docs alone:
 
 ```bash
