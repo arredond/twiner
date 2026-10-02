@@ -42,7 +42,7 @@ import { Segmented } from "./components/Segmented";
 import { SettingsMenu } from "./components/SettingsMenu";
 import { BasemapPicker } from "./components/BasemapPicker";
 import { resolveBasemap } from "./basemaps";
-import type { I18n, Language } from "./i18n";
+import type { I18n, Language, TranslationKey } from "./i18n";
 import { useSettings } from "./settings";
 import { INFRA_CATEGORY_KEYS, type InfraCategory } from "./infrastructure";
 import {
@@ -54,9 +54,14 @@ import {
   listFaults,
   warmUpScenarioApi,
   runFaultScenario,
-  DAMAGE_METHODS,
+  DEFAULT_DAMAGE_METHOD,
+  FALLBACK_METHODS,
   damageMethodParams,
+  listMethods,
+  methodKey,
   type DamageMethod,
+  type DamageMethodParams,
+  type MethodsCatalog,
   runManualScenario,
   type Fault,
   type InfrastructureResult,
@@ -371,7 +376,12 @@ export default function App() {
   // MERISUR's probability-level selector (docs/merisur.md §4.7), in the
   // mode panel: applies to both modes.
   const [probabilityLevel, setProbabilityLevel] = useState<ProbabilityLevel>("high");
-  const [damageMethod, setDamageMethod] = useState<DamageMethod>("fragility:gem");
+  const [damageMethod, setDamageMethod] = useState<DamageMethod>(DEFAULT_DAMAGE_METHOD);
+  // GET /methods (ADR-0033/0035): the valid damage model / database /
+  // classification combinations. FALLBACK_METHODS until it answers.
+  const [methodsCatalog, setMethodsCatalog] = useState<MethodsCatalog | null>(null);
+  const methodOptions = methodsCatalog?.compatible ?? FALLBACK_METHODS;
+  const defaultMethod = methodsCatalog ? methodKey(methodsCatalog.default) : DEFAULT_DAMAGE_METHOD;
   const [manualParams, setManualParams] = useState<ManualParams>({
     lat: 40.4168,
     lon: -3.7038,
@@ -396,6 +406,9 @@ export default function App() {
       .then(setFaults)
       .catch((e) => setFaultsError(e instanceof Error ? e.message : String(e)));
     warmUpScenarioApi();
+    listMethods()
+      .then(setMethodsCatalog)
+      .catch(() => {}); // keep FALLBACK_METHODS
   }, []);
 
   async function runScenario(run: () => Promise<ScenarioResult>) {
@@ -492,7 +505,7 @@ export default function App() {
         // is what tells the backend to stay a point source.
         ...(advancedEnabled ? { strike, dip, ztor_km: ztorKm } : {}),
         probability_level: probabilityLevel,
-        ...(damageMethod === "fragility:gem" ? {} : damageMethodParams(damageMethod)),
+        ...damageMethodParams(damageMethod, defaultMethod),
       })
     );
   }
@@ -501,7 +514,7 @@ export default function App() {
   // fault without full rupture geometry (see runFaultScenario).
   function runFault(fault: Pick<Fault, "fault_id" | "has_rupture_geometry">, near: { lat: number; lon: number }) {
     setSelectedFaultId(fault.fault_id);
-    return runScenario(() => runFaultScenario(fault, probabilityLevel, near, damageMethod));
+    return runScenario(() => runFaultScenario(fault, probabilityLevel, near, damageMethodParams(damageMethod, defaultMethod)));
   }
 
   // Automatic mode: clicking a fault runs it at the selected probability
@@ -729,9 +742,9 @@ export default function App() {
                         onChange={(e) => setDamageMethod(e.target.value as DamageMethod)}
                         style={{ fontSize: "0.8rem" }}
                       >
-                        {DAMAGE_METHODS.map((method) => (
-                          <option key={method} value={method}>
-                            {t(`method.${method}`)}
+                        {methodOptions.map((method) => (
+                          <option key={methodKey(method)} value={methodKey(method)}>
+                            {methodLabel(method, methodOptions, methodsCatalog, i18n)}
                           </option>
                         ))}
                       </select>
@@ -902,6 +915,34 @@ const COLLAPSED_PANEL_WIDTH = "8rem";
 // and the (shared) collapsed width when not.
 // The hazard's docs page (apps/docs, served under /docs), in the app's
 // language: English pages sit at the root, Spanish ones under /docs/es/.
+// A damage-method option's label: the translated "model (database)" name,
+// plus the classification scheme when that model + database pair offers
+// more than one. Unknown ids (a method added server-side before the
+// frontend knows it) fall back to GET /methods' own English names.
+function methodLabel(
+  method: DamageMethodParams,
+  options: DamageMethodParams[],
+  catalog: MethodsCatalog | null,
+  { t, has }: I18n
+): string {
+  const translated = (key: string, fallback: string) => (has(key) ? t(key as TranslationKey) : fallback);
+  const apiName = (list: { id: string; name: string }[] | undefined, id: string) =>
+    list?.find((item) => item.id === id)?.name ?? id;
+  const pair = `${method.damage_model}:${method.vulnerability_db}`;
+  let label = translated(
+    `method.${pair}`,
+    `${apiName(catalog?.damage_models, method.damage_model)} (${apiName(catalog?.vulnerability_databases, method.vulnerability_db)})`
+  );
+  const schemes = options.filter((o) => `${o.damage_model}:${o.vulnerability_db}` === pair);
+  if (schemes.length > 1) {
+    label += ` · ${translated(
+      `method.classification.${method.classification}`,
+      apiName(catalog?.classifications, method.classification)
+    )}`;
+  }
+  return label;
+}
+
 function hazardDocsHref(card: "seismic" | "flood", language: Language): string {
   const page = card === "seismic" ? "earthquake" : "flood";
   return `/docs/${language === "es" ? "es/" : ""}hazards/${page}/`;

@@ -8,10 +8,11 @@ A scenario_id is a hash of everything that determines a scenario's result:
 - `API_VERSION`: the calculation code's version. **Bump it whenever a
   change to rupture/ground-motion/damage/response logic could change any
   result or the response shape** -- that's what invalidates every cached
-  result computed by older code.
+  result computed by older code. CalVer, logged in CHANGELOG-API.md.
 - `data_version()`: which pipeline outputs were read (`TWINER_DATA_VERSION`,
   set per deployment -- infra/stacks/twiner_stack.py). **Bump it whenever
-  exposure/fragility/faults/buildings data is re-uploaded.**
+  exposure/fragility/faults/buildings data is re-uploaded.** CalVer,
+  logged in CHANGELOG-DATA.md.
 
 Identical requests land on the same id, which means the results already
 stored under it (results_store.py locally, the results bucket in the cloud)
@@ -26,27 +27,14 @@ import hashlib
 import json
 import os
 
+from .methods import DEFAULT_METHOD
+
 # Bump on any change that could alter a scenario's result or response
-# shape (see module docstring). A plain counter, not a git sha: a sha
-# would bust the cache on every unrelated commit (docs, frontend, infra).
-API_VERSION = "9"
-# History: 2 -- response drops `buildings`, adds `n_damaged` (ADR-0019).
-#          3 -- streamed evaluation on one fixed ground-motion grid per
-#               scenario (ADR-0020); cell values shift slightly.
-#          4 -- per-building results stored column-oriented
-#               (tiles.scenario_results v1, ADR-0023); same values.
-#          5 -- municipality_stats gain census-section impact figures
-#               (population, cost, debris...), plus section_stats.json.gz
-#               (ADR-0024).
-#          6 -- response gains `infrastructure_summary`; per-scenario
-#               infrastructure.json.gz + intensity.geojson.gz (ADR-0025).
-#          7 -- response gains `damage_method`; selectable damage model and
-#               vulnerability database (ADR-0033).
-#          8 -- area figures are expected values (summed probabilities);
-#               `counts_reported`, `n_damaged_reported` added (ADR-0034).
-#          9 -- precomputed classification schemes; `damage_method` gains
-#               `classification`; RISK-UE runs use Feriche et al.'s
-#               types, not a translation of the GEM classes (ADR-0035).
+# shape (see module docstring), with an entry in CHANGELOG-API.md. CalVer,
+# YYYY.0M.0D.N: the date plus that day's counter from 1. Not a git sha,
+# which would bust the cache on every unrelated commit (docs, frontend,
+# infra).
+API_VERSION = "2026.10.02.1"
 
 _TRUTHY = {"1", "true", "yes", "on"}
 
@@ -84,14 +72,15 @@ def fault_scenario_id(
     """Pass near_lat/near_lon only when the rupture actually used them
     (faults.py's `rupture_anchor` says so) -- including an ignored point
     would split one result across as many ids as there are map views.
-    Likewise `method` (methods.DamageMethod.params()) only when it isn't
-    the default, so default-method ids didn't change when it was added."""
+
+    `method` (methods.DamageMethod.params()) is always hashed, the default
+    included, so every damage model / database / classification
+    combination is cached under its own id. None means the default."""
     params: dict = {"mode": "fault", "fault_id": fault_id, "probability_level": probability_level}
     if near_lat is not None and near_lon is not None:
         params["near_lat"] = near_lat
         params["near_lon"] = near_lon
-    if method:
-        params["method"] = method
+    params["method"] = method or DEFAULT_METHOD.params()
     return _hash(params)
 
 
@@ -106,10 +95,10 @@ def manual_scenario_id(
     probability_level: str,
     method: dict | None = None,
 ) -> str:
-    """`method`: as in `fault_scenario_id`, only when not the default."""
+    """`method`: as in `fault_scenario_id` (None means the default)."""
     return _hash(
         {
-            **({"method": method} if method else {}),
+            "method": method or DEFAULT_METHOD.params(),
             "mode": "manual",
             "lat": float(lat),
             "lon": float(lon),

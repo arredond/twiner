@@ -82,6 +82,8 @@ export const en = {
   "method.fragility:gem": "Fragility curves (GEM)",
   "method.capacity_spectrum:gem": "Capacity spectrum (GEM curves)",
   "method.capacity_spectrum:risk_ue": "Capacity spectrum (RISK-UE)",
+  "method.classification.gem_heuristic": "GEM classes by year and storeys",
+  "method.classification.risk_ue_feriche2012": "RISK-UE types (Feriche et al. 2012)",
 
   "scenario.titleFault": "{name} - Mmax. {mag} - {probability}",
   "scenario.titleManual": "Manual - Mag. {mag} - {probability}",

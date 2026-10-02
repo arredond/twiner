@@ -206,11 +206,6 @@ def _resolve_method(
         raise HTTPException(status_code=400, detail=str(e)) from e
 
 
-def _method_id_params(method: DamageMethod) -> dict | None:
-    """What scenario ids hash for the method: nothing for the default."""
-    return None if method.is_default else method.params()
-
-
 def _validate_probability_level(probability_level: str) -> None:
     try:
         resolve_probability_level(probability_level)
@@ -381,7 +376,7 @@ def run_manual_scenario(req: ManualRuptureRequest) -> dict:
         req.dip,
         req.ztor_km,
         req.probability_level,
-        method=_method_id_params(method),
+        method=method.params(),
     )
     if (cached := _cached_response(scenario_id)) is not None:
         return cached
@@ -550,7 +545,7 @@ def run_fault_scenario(
         probability_level,
         near_lat if near_used else None,
         near_lon if near_used else None,
-        method=_method_id_params(method),
+        method=method.params(),
     )
     if (cached := _cached_response(scenario_id)) is not None:
         return cached

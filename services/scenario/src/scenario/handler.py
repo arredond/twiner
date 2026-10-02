@@ -207,7 +207,7 @@ def _fault_scenario(query: dict) -> dict:
         probability_level,
         near_lat if near_used else None,
         near_lon if near_used else None,
-        method=_method_id_params(damage_method),
+        method=damage_method.params(),
     )
     if (cached := _cached_response(scenario_id)) is not None:
         return cached
@@ -236,12 +236,6 @@ def _fault_scenario(query: dict) -> dict:
     )
 
 
-def _method_id_params(damage_method: DamageMethod) -> dict | None:
-    """Mirrors local.py's: scenario ids hash the method only when it isn't
-    the default."""
-    return None if damage_method.is_default else damage_method.params()
-
-
 def _manual_scenario(body: dict) -> dict:
     probability_level = body.get("probability_level", "high")
     resolve_probability_level(probability_level)
@@ -263,7 +257,7 @@ def _manual_scenario(body: dict) -> dict:
         dip,
         ztor_km,
         probability_level,
-        method=_method_id_params(damage_method),
+        method=damage_method.params(),
     )
     if (cached := _cached_response(scenario_id)) is not None:
         return cached

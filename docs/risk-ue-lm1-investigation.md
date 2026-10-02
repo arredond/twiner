@@ -1,56 +1,125 @@
 # Investigation: applying RISK-UE LM1, and multi-methodology vulnerability classes
 
-Status: research only, no code changes. Written in response to
+Status: **implementation planned** (see the plan below; originally research only). Written in response to
 `docs/validation-lorca-2011.md` §11.2 flagging RISK-UE LM1 as the more
 likely explanation for the remaining twiner/MERISUR gap at Lorca, and a
 request to scope (a) what implementing it would take and (b) whether
 buildings could carry multiple vulnerability classifications (one per
 methodology) so a scenario can pick which one to run against.
 
-## Update, 2026-10-01: what has changed since this was written
+## Implementation plan (2026-10-02), for the next session
 
-Still not implemented (out of scope of ADR-0033, which added Level II).
-But most of this doc's blockers have moved:
+Status: **ready to implement.** Everything below "Background" is the
+original scoping pass (2026-09/10-01), kept for its reasoning; where it
+disagrees with this plan, this plan wins. Two of its blockers are gone:
 
-- **§2's missing Vi\* table is now available.** RISK-UE's own WP4 report
-  (Milutinovic & Trendafiloski 2003, *WP4: Vulnerability of current
-  buildings*) is readable at
-  `http://www.civil.ist.utl.pt/~mlopes/conteudos/DamageStates/Risk%20UE%20WP04_Vulnerability.pdf`.
-  Table 2.2 gives Vmin, V−, V\*, V+ and Vmax per RISK-UE type. Examples
-  of V\*: M1.1 0.873, M1.2 0.74, M3.4 0.616, RC1 0.442. Tables 2.4–2.6
-  give the behaviour modifiers ΔVm and the regional factor ΔVf. Chapter
-  2 gives the μD formula and the beta damage distribution (Eqs. 2-1 to
-  2-12; with t = 8 it notes the beta looks very similar to the binomial). The report is © European Commission with a
-  no-reproduction notice: cite and copy only the rows used, as
-  ADR-0033 did for the capacity curves.
-- **§3's blocker (no intensity per site) is solved in principle.**
-  ADR-0025 computes EMS-98 intensity per site (Worden et al. 2012, from
-  PGV) on the scenario grid. But it **under-estimates Lorca 2011**: 5.7 at
-  median and 6.6 at +1σ, against IGN's observed VII. LM1 is very
-  sensitive to I: μD rises 1.5–2.5x per intensity degree in the VI–VIII
-  range, depending on V. Validating the PGV→intensity conversion against IGN's
-  intensity data comes **first**.
-- **A Lorca-specific LM1 application exists**: Feriche, Vidal, Alguacil,
-  Navarro & Aranda (2012), *Vulnerabilidad y daño en el terremoto de
-  Lorca de 2011*, Física de la Tierra 24, 255–287. It assigns
-  vulnerability indices to Lorca's building types (from Catastro year and
-  height plus inspections) and compares expected against observed EMS-98
-  damage. It is the natural calibration reference, and readable at the
-  Instituto Andaluz de Geofísica's site.
-- **§5's architecture now exists** (ADR-0033, `services/scenario/methods.py`).
-  LM1 would be a third damage model, `macroseismic`, which needs a new
-  vulnerability data kind (`vulnerability_index`), plus a database
-  providing it (`risk_ue`, from WP4 Table 2.2, keyed by the precomputed
-  `risk_ue_feriche2012` classes of ADR-0035, which already follow Feriche
-  et al.'s Lorca matrix), and an `EMS-98 intensity` hazard input. §4's
-  five-grade (D0–D5) to five-state mapping is still a decision to make.
-  One option: D1→Slight, D2→Moderate, D3→Extensive, D4+D5→Complete.
+- **Classes (§5):** done by ADR-0035. Every building already carries
+  `risk_ue_class` (M3.1, M3.4, RC1, RC3.1, RC3.2), `risk_ue_code_level`
+  and `risk_ue_height`, from Feriche et al. (2012)'s Lorca matrix, the
+  same paper that applied LM1 to Lorca.
+- **Intensity (§3):** settled as option (a), a GMICE on what we already
+  compute: Worden et al. (2012) PGV → intensity
+  (`infrastructure.mmi_from_pgv`, ADR-0025). Its under-estimate at Lorca
+  (6.6 at +1σ against VII observed) is **accepted for now**; validation
+  and calibration come later. Swapping in an IPE or another GMICE later
+  only changes the hazard input, not the model.
 
-Remaining order: (1) validate intensity against IGN data; (2) vendor WP4
-Table 2.2 rows for the five types the ADR-0035 scheme assigns (M3.1,
-M3.4, RC1, RC3.1, RC3.2); (3) decide the grade mapping;
-(4) implement the `macroseismic` model against Feriche et al.'s Lorca
-results.
+### The model, as WP4 specifies it (verified against the report)
+
+Milutinovic & Trendafiloski (2003), *RISK-UE WP4*, chapter 2:
+
+- **Vulnerability index** (Eq. 2-8): $V_I = V_I^* + \Delta V_R + \Delta V_m$.
+- **Mean damage grade** (Eq. 2-4), with $Q = 2.3$:
+  $\mu_D = 2.5\,[1 + \tanh((I + 6.25\,V_I - 13.1)/2.3)]$.
+- **Damage distribution** (Eqs. 2-1 to 2-3, 2-11): beta with $a = 0$,
+  $b = 6$, $t = 8$, $r = t\,(0.007\mu_D^3 - 0.052\mu_D^2 + 0.2875\mu_D)$;
+  grade $k$'s probability is $p_k = P_\beta(k+1) - P_\beta(k)$ for
+  $k = 0..5$ (D0 = no damage to D5 = destruction).
+
+$V_I^*$ for the five types we assign (WP4 Table 2.2; also $V^-$, $V^+$,
+$V_{min}$, $V_{max}$, to vendor with them):
+
+| Type | $V_{min}$ | $V^-$ | $V^*$ | $V^+$ | $V_{max}$ |
+|---|---|---|---|---|---|
+| M3.1 Wooden slabs | 0.46 | 0.65 | 0.74 | 0.83 | 1.02 |
+| M3.4 RC slabs | 0.30 | 0.49 | 0.616 | 0.793 | 0.86 |
+| RC1 Moment frames | −0.02 | 0.047 | 0.442 | 0.80 | 1.02 |
+| RC3.1 Regularly infilled | −0.02 | 0.007 | 0.402 | 0.76 | 0.98 |
+| RC3.2 Irregular frames | 0.06 | 0.127 | 0.522 | 0.88 | 1.02 |
+
+Unlike the capacity curves (ADR-0035), LM1 has a value for **every** type
+we assign, M3.1 included: no substitutions.
+
+**Behaviour modifiers we can compute from stored attributes** (WP4
+Tables 2.4 and 2.5; everything else needs a survey and defaults to 0):
+
+| | Low (1–2) | Mid (3–5) | High (6+) | Code level |
+|---|---|---|---|---|
+| Masonry | −0.02 | +0.02 | +0.06 | — |
+| RC, pre or low code | −0.04 | 0 | +0.08 | +0.16 |
+| RC, moderate ("medium") code | −0.04 | 0 | +0.06 | 0 |
+
+$\Delta V_R$ (regional factor, expert judgement) is 0 by default.
+
+### Decisions to confirm at the start of the session
+
+1. **Modifiers.** Recommended default: WP4's floors and code-level
+   modifiers above (computable for every building). Alternatives: $V^*$
+   only, or additionally Feriche et al.'s Lorca-calibrated values (their
+   Tables 3 and 4, e.g. vertical irregularity +0.06, short column +0.08
+   for Lorca RC). The Lorca set would be a second, explicitly
+   Lorca-calibrated option, never the national default.
+2. **Grade → state mapping** (§4). Recommended: D0 → None, D1 → Slight,
+   D2 → Moderate, D3 → Extensive, D4 + D5 → Complete, documented as a
+   modelling choice. The response keeps our five states; the six-grade
+   distribution is also kept where it's cheap (validate_lorca), because
+   Lorca's inspection categories are themselves EMS-98 grade ranges.
+3. **Uncertainty range** ($V^-$/$V^+$, $\Delta V_f$). Recommended: not
+   used at first ($V^*$ only); the probability levels keep doing what
+   they do for every model (+1σ ground motion; 85th-percentile state).
+
+### Work, in order
+
+1. **Data.** Vendor `vulnerability_data/risk_ue_2003_vulnerability_index.csv`
+   (the five Table 2.2 rows above, cited by table) and
+   `risk_ue_2003_behaviour_modifiers.csv` (the modifier rows used), with
+   their README entries.
+2. **Registry** (`methods.py`). A third data kind `vulnerability_index`;
+   `risk_ue` provides it alongside capacity curves. A third model,
+   `macroseismic` ("Macroseismic (RISK-UE Level I)"): needs
+   `vulnerability_index`; hazard input EMS-98 intensity from PGV (Worden
+   et al. 2012); exposure input the `risk_ue_feriche2012` class (type,
+   code level, height band, already in `class_sql`). Valid combinations
+   become four: `macroseismic` + `risk_ue` + `risk_ue_feriche2012` is new.
+3. **Model** (new `macroseismic.py`, the counterpart of
+   `capacity_spectrum.py`): parse the class key, compute $V_I$, $\mu_D$
+   and the beta grade probabilities per (class, intensity) group, map
+   grades to states, return `DamageArrays` with `im_value` = intensity and
+   `im_type` "EMS-98 intensity". Move `mmi_from_pgv` somewhere both
+   `infrastructure.py` and the model import (e.g. `ground_motion.py`).
+4. **Engine** (`engine._evaluate_batches`): a `macroseismic` branch that
+   asks the grid for PGV only and calls the new model.
+5. **Tests.** μD against hand-computed values of Eq. 2-4; probabilities
+   sum to 1 and rise with $I$ and $V$; modifiers per class key; the
+   registry's four combinations; the API runs it on both routes (local and
+   handler); scenario ids differ per method (already guaranteed).
+6. **Validation.** `validate_lorca` gains the new method's rows, plus a
+   six-grade table for LM1 next to the inspection's grade ranges. Record
+   the numbers, with the intensity caveat, in
+   `validation-lorca-2011.md` §16. No calibration yet.
+7. **API and frontend.** Bump `API_VERSION` (CHANGELOG-API.md), re-export
+   the OpenAPI spec and its Spanish catalog. The dropdown picks the method
+   up from `GET /methods` on its own; add the `method.macroseismic:risk_ue`
+   label (en/es).
+8. **Docs.** ADR-0036; the Damage models page (en/es) gains a
+   "Macroseismic model" section (formulas, $V^*$ table, modifiers, grade
+   mapping, intensity source and its known under-estimate) and the new
+   comparison rows; twinQUAKE §6 mentions the third model.
+
+No data rebuild is needed: LM1 only reads classes already in
+`exposure.parquet`.
+
+## Background: the original scoping pass
 
 **Confidence key**, matching `merisur.md`'s convention: 🟢 stated
 explicitly in a primary source · 🟡 inferred with reasonable confidence ·

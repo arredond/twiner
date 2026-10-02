@@ -146,7 +146,10 @@ and bump `TWINER_DATA_VERSION` after rebuilding local data while it's on.
 The deployed stack has it on. Bump `API_VERSION` in
 `services/scenario/src/scenario/scenario_id.py` whenever a change could
 alter scenario results, and `DATA_VERSION` in
-`infra/stacks/twiner_stack.py` whenever you upload new data.
+`infra/stacks/twiner_stack.py` whenever you upload new data. Both are
+CalVer, `YYYY.0M.0D.N` (date plus that day's counter from 1), and each
+bump gets a short entry in [`CHANGELOG-API.md`](CHANGELOG-API.md) or
+[`CHANGELOG-DATA.md`](CHANGELOG-DATA.md).
 After either bump and a deploy, `bin/warm-scenario-cache` pre-computes every
 fault x probability level against the deployed API.
 

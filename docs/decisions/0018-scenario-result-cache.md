@@ -73,13 +73,18 @@ hex characters of a SHA-256 over canonical JSON of:
 
 - the request inputs: `fault_id` + `probability_level`, plus the rounded
   `near_lat`/`near_lon` only when `rupture_anchor` actually used them. For
-  manual mode, every rupture field.
-- `API_VERSION`, a counter in `scenario_id.py`. **Bump it whenever
+  manual mode, every rupture field. Since 2026-10-02, always the damage
+  method too (model, database, classification; ADR-0033, ADR-0035).
+- `API_VERSION`, in `scenario_id.py`. **Bump it whenever
   calculation or response code changes in a way that could change a
   result.**
 - `TWINER_DATA_VERSION`, set per deployment (`DATA_VERSION` in
   `infra/stacks/twiner_stack.py`). **Bump it and `cdk deploy` whenever
   data the scenario function reads is re-uploaded.**
+
+Both started as a counter and a date label; since 2026-10-02 both are
+CalVer, `YYYY.0M.0D.N`, with every bump logged in `CHANGELOG-API.md` or
+`CHANGELOG-DATA.md`.
 
 A version bump changes every id, so older results are never looked up
 again. They age out under the results bucket's lifecycle rule (30 days

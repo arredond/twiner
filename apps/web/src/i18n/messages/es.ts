@@ -75,6 +75,8 @@ export const es: Messages = {
   "method.fragility:gem": "Curvas de fragilidad (GEM)",
   "method.capacity_spectrum:gem": "Espectro de capacidad (curvas GEM)",
   "method.capacity_spectrum:risk_ue": "Espectro de capacidad (RISK-UE)",
+  "method.classification.gem_heuristic": "Clases GEM por año y plantas",
+  "method.classification.risk_ue_feriche2012": "Tipologías RISK-UE (Feriche et al. 2012)",
 
   "scenario.titleFault": "{name} - Mmax. {mag} - {probability}",
   "scenario.titleManual": "Manual - Mag. {mag} - {probability}",

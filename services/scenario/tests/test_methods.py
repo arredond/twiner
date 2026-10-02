@@ -58,10 +58,15 @@ def test_compatible_combinations():
     assert len(methods_payload()["compatible"]) == 3
 
 
-def test_default_method_leaves_scenario_ids_unchanged():
-    # Ids for the default method must not change (cached results stay valid).
+def test_scenario_ids_always_hash_the_method():
+    # None means the default method, hashed explicitly like any other.
+    default = DEFAULT_METHOD.params()
     assert manual_scenario_id(37.7, -1.7, 5.2, 0, None, None, None, "high") == manual_scenario_id(
-        37.7, -1.7, 5.2, 0, None, None, None, "high", method=None
+        37.7, -1.7, 5.2, 0, None, None, None, "high", method=default
     )
+    assert fault_scenario_id("ES626", "high") == fault_scenario_id("ES626", "high", method=default)
+    # Every combination, classification included, gets its own id.
+    ids = {fault_scenario_id("ES626", "high", method=m.params()) for m in compatible_methods()}
+    assert len(ids) == len(compatible_methods())
     other = DamageMethod("capacity_spectrum", "risk_ue").params()
     assert fault_scenario_id("ES626", "high") != fault_scenario_id("ES626", "high", method=other)

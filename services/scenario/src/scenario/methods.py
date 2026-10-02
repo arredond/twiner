@@ -194,10 +194,6 @@ class DamageMethod:
             object.__setattr__(self, "classification", DEFAULT_CLASSIFICATION[taxonomy])
 
     @property
-    def is_default(self) -> bool:
-        return self == DEFAULT_METHOD
-
-    @property
     def scheme(self) -> ClassificationScheme:
         return CLASSIFICATION_SCHEMES[self.classification]
 

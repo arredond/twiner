@@ -43,10 +43,12 @@ FRONTEND_ORIGINS = ["https://twiner.arredon.do"] + [
 # so it's what invalidates the scenario result cache after a data change:
 # **bump it (and `cdk deploy`) whenever anything the scenario function reads
 # from the data bucket is re-uploaded** -- exposure/buildings-cloud/
-# fragility/faults parquet. Any string works; a date keeps it readable.
+# fragility/faults parquet. CalVer, YYYY.0M.0D.N (the upload date plus
+# that day's counter from 1), with an entry in CHANGELOG-DATA.md.
 # (Calculation-code changes are covered separately, by scenario_id.py's
-# API_VERSION.) See docs/decisions/0018-scenario-result-cache.md.
-DATA_VERSION = "2026-10-01-taxonomy-v2"  # taxonomy v2: unreinforced masonry classes (ADR-0032)
+# API_VERSION and CHANGELOG-API.md.) See
+# docs/decisions/0018-scenario-result-cache.md.
+DATA_VERSION = "2026.10.02.1"
 
 
 class TwinerStack(Stack):
