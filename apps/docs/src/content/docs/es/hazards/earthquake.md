@@ -196,7 +196,7 @@ distribución de daño. Como MERISUR, TWIN-ER ofrece tres **niveles de
 probabilidad**. Cada uno lee un punto distinto de esas dos distribuciones
 [1]:
 
-| Nivel | Movimiento del suelo | Grado de daño presentado |
+| Nivel | Movimiento del suelo | Grado de daño mostrado por edificio |
 |---|---|---|
 | **Alta** probabilidad | Mediana: $\varepsilon = 0$ | El más probable (modal) |
 | **Baja** probabilidad | Mediana + 1σ: $\varepsilon = 1$ | El más probable (modal) |
@@ -212,6 +212,14 @@ $$
 Así, como mucho un 15 % de la probabilidad corresponde a grados más
 severos que el presentado. "Muy baja probabilidad" significa por tanto un
 resultado pesimista pero plausible, no el peor caso.
+
+La columna del grado de daño se aplica a **cada edificio**: el único grado
+con el que se colorea en el mapa. Las cifras de **secciones censales y
+municipios** son en cambio valores esperados, que suman la probabilidad de
+cada grado de daño de todos los edificios (ver el [paso 8](#8-impacto)).
+"Baja" y "muy baja" comparten el mismo movimiento del suelo, así que dan
+las mismas cifras por zona y solo difieren en el grado que muestra cada
+edificio.
 
 El nivel importa mucho. En el terremoto de Lorca de 2011, el movimiento
 mediano se queda muy por debajo de lo registrado cerca de la falla. La
@@ -309,11 +317,14 @@ los datos de edificios de GEM o de RISK-UE: ver
 [Modelos de daño](/docs/es/damage-models/).
 
 Cada edificio se evalúa con la medida de intensidad para la que está
-definida su propia curva (ver la tabla del paso 2). El grado presentado
-depende del nivel de probabilidad: el más probable o el percentil 85. La
-distribución completa se conserva también. El mapa la muestra en la
-ventana de cada edificio, y la lista de infraestructuras la indica para
-cada instalación.
+definida su propia curva (ver la tabla del paso 2). El grado con el que se
+muestra depende del nivel de probabilidad: el más probable o el percentil
+85. La distribución completa se conserva también:
+
+- el mapa la muestra en la ventana de cada edificio;
+- la lista de infraestructuras la indica para cada instalación;
+- las cifras de secciones censales y municipios se calculan a partir de
+  ella (paso 8).
 
 ## 7. Intensidad, infraestructuras y escombros
 
@@ -356,9 +367,23 @@ espacio abierto, nunca sobre los edificios vecinos.
 Los grados de daño se convierten en las cifras que necesita la gestión de
 emergencias: edificios y residentes afectados, población desplazada, coste
 de reparación, toneladas de escombros, viajes de camión y puntales. Se
-presentan por sección censal y municipio. La página de
-[estimaciones de impacto](/docs/es/impact-estimates/) recoge cada fórmula y
-sus parámetros.
+presentan por sección censal y municipio.
+
+Estas cifras son **valores esperados**. Cada edificio cuenta en todos los
+grados de daño en proporción a su probabilidad de estar en cada uno, y no
+solo en el grado único que muestra el mapa. Un edificio con un 60 % de
+probabilidad de daño Leve y un 40 % de Moderado suma 0,6 edificios a Leve y
+0,4 a Moderado, y reparte del mismo modo sus viviendas y su superficie.
+
+- **Por qué:** contar solo el grado más probable oculta el resto de la
+  distribución. Con un movimiento moderado, muchos edificios tienen como
+  grado más probable el Leve, pero una probabilidad apreciable de Moderado.
+  En el conjunto de una ciudad, esas probabilidades se acumulan.
+- **Mapa frente a cifras:** las cifras de una zona pueden diferir del
+  número de edificios coloreados como dañados dentro de ella.
+- **Detalle:** la página de
+  [estimaciones de impacto](/docs/es/impact-estimates/) recoge cada fórmula
+  y sus parámetros.
 
 ## Validación: Lorca 2011
 

@@ -182,7 +182,7 @@ fragility functions predict a distribution of damage. Like MERISUR, TWIN-ER
 offers three **probability levels**. Each reads a different point of those
 two distributions [1]:
 
-| Level | Ground motion | Damage state reported |
+| Level | Ground motion | Damage state shown per building |
 |---|---|---|
 | **High** probability | Median: $\varepsilon = 0$ | Most likely (modal) state |
 | **Low** probability | Median + 1σ: $\varepsilon = 1$ | Most likely (modal) state |
@@ -198,6 +198,13 @@ $$
 So at most 15% of the probability mass is more severe than the reported
 state. "Very low probability" therefore means a pessimistic but plausible
 outcome, not a worst case.
+
+The damage-state column applies to **individual buildings**: the single
+state each building is coloured with on the map. Figures for **census
+sections and municipalities** are instead expected values, which sum every
+building's probability of each damage state (see [step 8](#8-impact)).
+"Low" and "very low" share the same ground motion, so they give the same
+area figures and differ only in the states shown building by building.
 
 The levels matter a great deal. For the 2011 Lorca earthquake, median
 ground motion falls well short of what was recorded near the fault. Median
@@ -291,10 +298,14 @@ the capacity-spectrum method (RISK-UE Level II), with either GEM's or
 RISK-UE's building data: see [Damage models](/docs/damage-models/).
 
 Each building is evaluated against the intensity measure its own curve is
-defined for (see the table in step 2). Its reported state follows the
-probability level: the most likely state, or the 85th percentile. The full
-distribution is kept too. The map shows it in each building's popup, and
-facilities in the infrastructure list report it.
+defined for (see the table in step 2). The state it is shown with follows
+the probability level: the most likely state, or the 85th percentile. The
+full distribution is kept too:
+
+- the map shows it in each building's popup;
+- facilities in the infrastructure list report it;
+- the figures for census sections and municipalities are built from it
+  (step 8).
 
 ## 7. Intensity, infrastructure and debris
 
@@ -334,8 +345,21 @@ they only extend towards open space, never over neighbouring buildings.
 Damage states turn into the figures emergency managers ask for: buildings
 and residents affected, residents displaced, repair cost, debris tonnage,
 truck trips and shoring props. They are reported per census section and
-municipality. The [impact estimates](/docs/impact-estimates/) page gives
-each formula and its parameters.
+municipality.
+
+These figures are **expected values**. Each building counts in every
+damage state in proportion to its probability of being in it, rather than
+only in the single state the map shows. A building that is 60% Slight and
+40% Moderate adds 0.6 buildings to Slight and 0.4 to Moderate, with its
+dwellings and floor area split the same way.
+
+- **Why:** counting only the most likely state hides the rest of the
+  distribution. At moderate shaking, many buildings are most likely Slight
+  but have a sizeable chance of Moderate. Those chances add up over a town.
+- **Map vs figures:** an area's figures can differ from the number of
+  buildings coloured as damaged inside it.
+- **Detail:** the [impact estimates](/docs/impact-estimates/) page gives
+  each formula and its parameters.
 
 ## Validation: Lorca 2011
 
