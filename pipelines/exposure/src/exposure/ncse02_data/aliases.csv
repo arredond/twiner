@@ -1,0 +1,56 @@
+province_code,ncse02_name,ine_code,name_today,relation,note,checked
+03,ADSUBIA,03001,l'Atzúbia,renamed,,2026-10-02
+03,ALCOCER DE PLANES,03007,Alcosser,renamed,,2026-10-02
+03,FACHECA,03067,Fageca,renamed,,2026-10-02
+03,GUADALEST,03075,el Castell de Guadalest,renamed,,2026-10-02
+03,VALL DE EBO,03135,la Vall d'Ebo,renamed,,2026-10-02
+07,DEYÁ,07018,Deià,renamed,,2026-10-02
+07,MAHÓN,07032,Maó,renamed,,2026-10-02
+07,PALMA DE MALLORCA,07040,Palma,renamed,,2026-10-02
+07,SAN JOSÉ,07048,Sant Josep de sa Talaia,renamed,,2026-10-02
+07,SANTA EULALIA DEL RÍO,07054,Santa Eulària des Riu,renamed,,2026-10-02
+08,BIGUES I RIELLS,08023,Bigues i Riells del Fai,renamed,,2026-10-02
+08,CABRERA D'IGUALADA,08028,Cabrera d'Anoia,renamed,,2026-10-02
+08,SANT JOAN DE MEDIONA,08122,Mediona,merged,NCSE-02 also lists MEDIONA; the merged municipality keeps the higher ab,2026-10-02
+08,SANTA MARIA DE CORCÓ,08254,L'Esquirol,renamed,,2026-10-02
+17,BOADELLA D'EMPORDÀ,17029,Boadella i les Escaules,merged,,2026-10-02
+17,BRUNYOLA,17028,Brunyola i Sant Martí Sapresa,merged,,2026-10-02
+17,CALONGE,17034,Calonge i Sant Antoni,merged,,2026-10-02
+17,CASTELL PLATJA D'ARO,17048,"Castell d'Aro, Platja d'Aro i s'Agaró",merged,,2026-10-02
+17,MASARAC,17100,Masarac i Vilarnadal,merged,,2026-10-02
+17,MONTAGUT,17109,Montagut i Oix,merged,,2026-10-02
+17,SAUS,17187,"Saus, Camallera i Llampaies",merged,,2026-10-02
+18,OTURA,18149,Villa de Otura,renamed,,2026-10-02
+20,BIDEGOYAN,20024,Bidania-Goiatz,renamed,,2026-10-02
+22,SANTA CILIA DE JACA,22208,Santa Cilia,renamed,,2026-10-02
+22,TORLA,22230,Torla-Ordesa,renamed,,2026-10-02
+27,ALFOZ,27002,Alfoz do Castrodouro,renamed,,2026-10-02
+31,EGÜÉS,31086,Valle de Egüés/Eguesibar,renamed,,2026-10-02
+31,GOÑI,31118,Val de Goñi/Goñerri,renamed,,2026-10-02
+31,LIZOÁIN,31156,Lizoain-Arriasgoiti/Lizoainibar-Arriasgoiti,renamed,,2026-10-02
+31,NOÁIN(VALLE DE ELORZ)/ NOAIN(ELORTZIBAR),31088,Valle de Elorz/Elortzibar,renamed,,2026-10-02
+31,OITZ,31187,Oiz,renamed,,2026-10-02
+31,OLLO,31194,Valle de Ollo/Ollaran,renamed,,2026-10-02
+31,OLZA,31193,Cendea de Olza/Oltza Zendea,renamed,,2026-10-02
+31,ORCOYEN,31906,Orkoien,renamed,,2026-10-02
+31,URROZ,31243,Urroz-Villa,name_collision,"NCSE-02 also lists URROTZ, today's Urroz (31244); URROZ is today's Urroz-Villa",2026-10-02
+31,YERRI,31260,Valle de Yerri/Deierri,renamed,,2026-10-02
+32,CASTRO CALDELAS,32023,O Castro de Caldelas,renamed,,2026-10-02
+35,SAN NICOLÁS DE TOLENTINO,35020,La Aldea de San Nicolás,renamed,,2026-10-02
+36,MONDARIZ BALNEARIO O TRONCOSO,36031,Mondariz Balneario,renamed,,2026-10-02
+38,VILAFLOR,38052,Vilaflor de Chasna,renamed,,2026-10-02
+41,"LANTEJUELA, LA",41052,Lantejuela,renamed,,2026-10-02
+43,"BISBAL DE FALSET, LA",43027,La Bisbal de Montsant,renamed,INE code 43027 sorts where 'Bisbal de Falset' would,2026-10-02
+43,SANT CARLES DE LA RÀPITA,43136,La Ràpita,renamed,,2026-10-02
+43,VIMBODÍ,43176,Vimbodí i Poblet,renamed,,2026-10-02
+46,ALFARP,46026,Alfarb,renamed,,2026-10-02
+46,GENOVÉS,46132,el Genovés,renamed,,2026-10-02
+46,GUARDAMAR,46140,Guardamar de la Safor,renamed,,2026-10-02
+46,LUGAR NUEVO DE LA CORONA,46152,Llocnou de la Corona,renamed,,2026-10-02
+46,PUIG,46204,el Puig de Santa Maria,renamed,,2026-10-02
+46,REAL DE MONTROI,46212,Real,renamed,"today's Real, not Montroi/Montroy (listed separately)",2026-10-02
+46,SAN JUAN DE ÉNOVA,46222,Sant Joanet,renamed,"today's Sant Joanet, not l'Énova (listed separately)",2026-10-02
+46,VILLANUEVA DE CASTELLÓN,46257,Castelló,renamed,,2026-10-02
+22,LLERT,22243,Valle de Bardají,locality_of,Llert is a locality of the municipality of Valle de Bardají; NCSE-02's value applies to the whole municipality,2026-10-02
+36,"IGREXA, A",36038,Pontevedra,locality_of,A Igrexa appears to be a locality of the municipality of Pontevedra; NCSE-02's value applies to the whole municipality,2026-10-02
+36,"PEDREIRA, A",36038,Pontevedra,locality_of,"A Pedreira is part of the parish of Campañó, municipality of Pontevedra; NCSE-02's value applies to the whole municipality",2026-10-02
