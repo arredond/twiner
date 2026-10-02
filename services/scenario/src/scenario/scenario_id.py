@@ -29,7 +29,7 @@ import os
 # Bump on any change that could alter a scenario's result or response
 # shape (see module docstring). A plain counter, not a git sha: a sha
 # would bust the cache on every unrelated commit (docs, frontend, infra).
-API_VERSION = "8"
+API_VERSION = "9"
 # History: 2 -- response drops `buildings`, adds `n_damaged` (ADR-0019).
 #          3 -- streamed evaluation on one fixed ground-motion grid per
 #               scenario (ADR-0020); cell values shift slightly.
@@ -44,6 +44,9 @@ API_VERSION = "8"
 #               vulnerability database (ADR-0033).
 #          8 -- area figures are expected values (summed probabilities);
 #               `counts_reported`, `n_damaged_reported` added (ADR-0034).
+#          9 -- precomputed classification schemes; `damage_method` gains
+#               `classification`; RISK-UE runs use Feriche et al.'s
+#               types, not a translation of the GEM classes (ADR-0035).
 
 _TRUTHY = {"1", "true", "yes", "on"}
 

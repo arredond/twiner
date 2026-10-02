@@ -96,6 +96,11 @@ def data_dir(tmp_path: Path) -> Path:
             "taxonomy_class": ["MUR_LWAL-DNO", "CR_LDUAL-DUL", "MUR_LWAL-DNO"],
             "height_class": [2, 3, 2],
             "taxonomy_source": ["heuristic_v1"] * 3,
+            # The RISK-UE classification scheme (ADR-0035), precomputed.
+            "risk_ue_class": ["M3.4", "RC1", "M3.1"],
+            "risk_ue_code_level": ["pre", "low", "pre"],
+            "risk_ue_height": ["L", "M", "L"],
+            "risk_ue_source": ["feriche2012_v1"] * 3,
         }
     )
     # Minimal fragility curves: exceedance probability rises with IM, high
@@ -848,8 +853,17 @@ def test_manual_scenario_runs_the_capacity_spectrum_model(client, db):
         },
     ).json()
     api_models.EarthquakeScenarioResponse.model_validate(body)
-    assert body["damage_method"] == {"damage_model": "capacity_spectrum", "vulnerability_db": db}
-    assert default["damage_method"] == {"damage_model": "fragility", "vulnerability_db": "gem"}
+    scheme = {"gem": "gem_heuristic", "risk_ue": "risk_ue_feriche2012"}[db]
+    assert body["damage_method"] == {
+        "damage_model": "capacity_spectrum",
+        "vulnerability_db": db,
+        "classification": scheme,
+    }
+    assert default["damage_method"] == {
+        "damage_model": "fragility",
+        "vulnerability_db": "gem",
+        "classification": "gem_heuristic",
+    }
     assert body["scenario_id"] != default["scenario_id"]
     assert body["n_evaluated"] == default["n_evaluated"]
 
@@ -874,6 +888,22 @@ def test_incompatible_damage_method_is_a_400(client):
     )
     assert resp.status_code == 400
     assert "fragility functions" in resp.json()["detail"]
+
+
+def test_classification_must_match_the_database_taxonomy(client):
+    resp = client.post(
+        "/scenarios/manual",
+        json={
+            "lat": NEAR_LAT,
+            "lon": NEAR_LON,
+            "mag": 6.5,
+            "damage_model": "capacity_spectrum",
+            "vulnerability_db": "gem",
+            "classification": "risk_ue_feriche2012",
+        },
+    )
+    assert resp.status_code == 400
+    assert "risk_ue classes" in resp.json()["detail"]
 
 
 def test_methods_route_matches_the_documented_shape(client):

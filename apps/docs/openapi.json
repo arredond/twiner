@@ -3,7 +3,7 @@
   "info": {
     "title": "TWIN-ER API",
     "description": "The HTTP API behind the TWIN-ER web app: run earthquake and flood scenarios,\nthen read their results by area, as map tiles, or as GeoJSON.\n\n## How it fits together\n\n1. **Run a scenario.** `GET /scenarios/fault` (a fault's maximum-magnitude\n   earthquake), `POST /scenarios/manual` (an earthquake you define) or\n   `POST /scenarios/flood`. The response has a `scenario_id` and one row of\n   figures per affected municipality.\n2. **Read the details** with that id: per-census-section figures, affected\n   critical infrastructure, intensity bands (`/results/{scenario_id}/...`),\n   and building/debris vector tiles (`/tiles/{scenario_id}/...`).\n\nScenario ids are content-addressed: the same inputs on the same data and\ncode version give the same id, so results can be cached and shared.\n\n## Deployments\n\n- **Local** (`bin/twiner start`): every route below, on one server.\n- **Cloud** (AWS Lambda function URLs): the scenario function serves every\n  route except `/tiles/...`, which a separate tiles function serves, and the\n  two local-only routes `/results/{scenario_id}/status` and\n  `/results/{scenario_id}/municipality_stats`.\n\nThere is no authentication, versioning guarantee or rate limit yet: this\nreference describes the API the web app uses, not a stable public contract.\n\n## Errors\n\nThe local server answers errors as `{\"detail\": \"...\"}`; the Lambda as\n`{\"error\": \"...\"}`.\n\nSee the [twinQUAKE](/docs/hazards/earthquake/) and\n[twinFLOOD](/docs/hazards/flood/) pages for what the numbers mean.\n",
-    "version": "8"
+    "version": "9"
   },
   "servers": [
     {
@@ -141,8 +141,8 @@
         "tags": [
           "Earthquake"
         ],
-        "summary": "List the damage models and vulnerability databases",
-        "description": "Every damage model and vulnerability database a scenario can use, what each needs and provides, and the valid combinations (`damage_model` + `vulnerability_db` on the scenario routes).",
+        "summary": "List the damage models, vulnerability databases and classifications",
+        "description": "Every damage model, vulnerability database and building classification scheme a scenario can use, what each needs and provides, and the valid combinations (`damage_model` + `vulnerability_db` + `classification` on the scenario routes).",
         "operationId": "list_methods",
         "responses": {
           "200": {
@@ -277,6 +277,23 @@
               "default": "gem"
             },
             "description": "Where each building class's vulnerability data comes from: `gem` (Martins & Silva 2021) or `risk_ue` (RISK-UE 2003, capacity curves only). See GET /methods."
+          },
+          {
+            "name": "classification",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "How each building got its class in the database's taxonomy: `gem_heuristic` (for `gem`) or `risk_ue_feriche2012` (for `risk_ue`). Omit it for the database's default. See GET /methods."
+            },
+            "description": "How each building got its class in the database's taxonomy: `gem_heuristic` (for `gem`) or `risk_ue_feriche2012` (for `risk_ue`). Omit it for the database's default. See GET /methods."
           }
         ],
         "responses": {
@@ -1145,6 +1162,50 @@
         ],
         "title": "CircleRegion"
       },
+      "ClassificationInfo": {
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "taxonomy": {
+            "type": "string",
+            "description": "The taxonomy it classifies buildings into."
+          },
+          "requires": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "description": "The building and site attributes it uses."
+          },
+          "method": {
+            "type": "string",
+            "description": "How a building's class is assigned."
+          },
+          "reference": {
+            "type": "string"
+          },
+          "default_for_taxonomy": {
+            "type": "boolean",
+            "description": "Whether it's used when a scenario names the database but no classification."
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "taxonomy",
+          "requires",
+          "method",
+          "reference",
+          "default_for_taxonomy"
+        ],
+        "title": "ClassificationInfo"
+      },
       "DamageCounts": {
         "properties": {
           "None": {
@@ -1190,16 +1251,24 @@
               "gem",
               "risk_ue"
             ]
+          },
+          "classification": {
+            "type": "string",
+            "examples": [
+              "gem_heuristic",
+              "risk_ue_feriche2012"
+            ]
           }
         },
         "additionalProperties": true,
         "type": "object",
         "required": [
           "damage_model",
-          "vulnerability_db"
+          "vulnerability_db",
+          "classification"
         ],
         "title": "DamageMethodParams",
-        "description": "The damage model and vulnerability database a scenario ran with."
+        "description": "The damage model, vulnerability database and classification scheme\na scenario ran with."
       },
       "DamageModelInfo": {
         "properties": {
@@ -2185,6 +2254,17 @@
             "type": "string",
             "description": "Where each building class's vulnerability data comes from: `gem` (Martins & Silva 2021) or `risk_ue` (RISK-UE 2003, capacity curves only). See GET /methods.",
             "default": "gem"
+          },
+          "classification": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "How each building got its class in the database's taxonomy: `gem_heuristic` (for `gem`) or `risk_ue_feriche2012` (for `risk_ue`). Omit it for the database's default. See GET /methods."
           }
         },
         "type": "object",
@@ -2221,12 +2301,18 @@
             },
             "type": "array"
           },
+          "classifications": {
+            "items": {
+              "$ref": "#/components/schemas/ClassificationInfo"
+            },
+            "type": "array"
+          },
           "compatible": {
             "items": {
               "$ref": "#/components/schemas/DamageMethodParams"
             },
             "type": "array",
-            "description": "The valid combinations: a database must provide the data the model needs."
+            "description": "The valid combinations: a database must provide the data the model needs, and a classification must give classes in the database's taxonomy."
           }
         },
         "additionalProperties": true,
@@ -2235,6 +2321,7 @@
           "default",
           "damage_models",
           "vulnerability_databases",
+          "classifications",
           "compatible"
         ],
         "title": "MethodsResponse"
@@ -2833,6 +2920,10 @@
           "name": {
             "type": "string"
           },
+          "taxonomy": {
+            "type": "string",
+            "description": "The class system its data is keyed by."
+          },
           "provides": {
             "items": {
               "type": "string"
@@ -2842,7 +2933,7 @@
           },
           "classes": {
             "type": "string",
-            "description": "How a building gets one of the database's classes."
+            "description": "The classes it has vulnerability data for."
           },
           "derivation": {
             "type": "string",
@@ -2864,6 +2955,7 @@
         "required": [
           "id",
           "name",
+          "taxonomy",
           "provides",
           "classes",
           "derivation",

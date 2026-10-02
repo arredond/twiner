@@ -3,7 +3,7 @@
   "info": {
     "title": "TWIN-ER API",
     "description": "La API HTTP de la aplicación web de TWIN-ER: simula escenarios sísmicos y\nde inundación y consulta sus resultados por zona, como teselas de mapa o en\nGeoJSON.\n\n## Cómo encaja todo\n\n1. **Simula un escenario.** `GET /scenarios/fault` (el terremoto de magnitud\n   máxima de una falla), `POST /scenarios/manual` (un terremoto definido por\n   ti) o `POST /scenarios/flood`. La respuesta incluye un `scenario_id` y una\n   fila de cifras por municipio afectado.\n2. **Consulta los detalles** con ese identificador: cifras por sección\n   censal, infraestructuras críticas afectadas, bandas de intensidad\n   (`/results/{scenario_id}/...`) y teselas vectoriales de edificios y\n   escombros (`/tiles/{scenario_id}/...`).\n\nLos identificadores de escenario se derivan de su contenido: las mismas\nentradas, con la misma versión de datos y de código, dan el mismo\nidentificador, así que los resultados pueden cachearse y compartirse.\n\n## Despliegues\n\n- **Local** (`bin/twiner start`): todas las rutas, en un solo servidor.\n- **Nube** (URL de funciones AWS Lambda): la función de escenarios sirve\n  todas las rutas salvo `/tiles/...`, que sirve una función de teselas\n  aparte, y las dos rutas solo locales `/results/{scenario_id}/status` y\n  `/results/{scenario_id}/municipality_stats`.\n\nTodavía no hay autenticación, garantía de versiones ni límite de\npeticiones: esta referencia describe la API que usa la aplicación web, no un\ncontrato público estable.\n\n## Errores\n\nEl servidor local responde a los errores con `{\"detail\": \"...\"}`; la\nLambda, con `{\"error\": \"...\"}`.\n\nConsulta las páginas de [twinQUAKE](/docs/es/hazards/earthquake/) y\n[twinFLOOD](/docs/es/hazards/flood/) para saber qué significan las cifras.\n",
-    "version": "8"
+    "version": "9"
   },
   "servers": [
     {
@@ -141,8 +141,8 @@
         "tags": [
           "Earthquake"
         ],
-        "summary": "Listar los modelos de daño y las bases de datos de vulnerabilidad",
-        "description": "Todos los modelos de daño y bases de datos de vulnerabilidad que puede usar un escenario, qué necesita y aporta cada uno, y las combinaciones válidas (`damage_model` + `vulnerability_db` en las rutas de escenarios).",
+        "summary": "Listar los modelos de daño, bases de datos de vulnerabilidad y clasificaciones",
+        "description": "Todos los modelos de daño, bases de datos de vulnerabilidad y esquemas de clasificación de edificios que puede usar un escenario, qué necesita y aporta cada uno, y las combinaciones válidas (`damage_model` + `vulnerability_db` + `classification` en las rutas de escenarios).",
         "operationId": "list_methods",
         "responses": {
           "200": {
@@ -277,6 +277,23 @@
               "default": "gem"
             },
             "description": "De dónde proceden los datos de vulnerabilidad de cada clase de edificio: `gem` (Martins y Silva 2021) o `risk_ue` (RISK-UE 2003, solo curvas de capacidad). Ver GET /methods."
+          },
+          {
+            "name": "classification",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Cómo se ha asignado a cada edificio su clase en la taxonomía de la base de datos: `gem_heuristic` (para `gem`) o `risk_ue_feriche2012` (para `risk_ue`). Omítelo para usar el de la base de datos por defecto. Ver GET /methods."
+            },
+            "description": "Cómo se ha asignado a cada edificio su clase en la taxonomía de la base de datos: `gem_heuristic` (para `gem`) o `risk_ue_feriche2012` (para `risk_ue`). Omítelo para usar el de la base de datos por defecto. Ver GET /methods."
           }
         ],
         "responses": {
@@ -1145,6 +1162,50 @@
         ],
         "title": "CircleRegion"
       },
+      "ClassificationInfo": {
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "taxonomy": {
+            "type": "string",
+            "description": "La taxonomía en la que clasifica los edificios."
+          },
+          "requires": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "description": "Los atributos del edificio y del emplazamiento que usa."
+          },
+          "method": {
+            "type": "string",
+            "description": "Cómo se asigna la clase de un edificio."
+          },
+          "reference": {
+            "type": "string"
+          },
+          "default_for_taxonomy": {
+            "type": "boolean",
+            "description": "Si se usa cuando un escenario indica la base de datos pero no la clasificación."
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "taxonomy",
+          "requires",
+          "method",
+          "reference",
+          "default_for_taxonomy"
+        ],
+        "title": "ClassificationInfo"
+      },
       "DamageCounts": {
         "properties": {
           "None": {
@@ -1190,16 +1251,24 @@
               "gem",
               "risk_ue"
             ]
+          },
+          "classification": {
+            "type": "string",
+            "examples": [
+              "gem_heuristic",
+              "risk_ue_feriche2012"
+            ]
           }
         },
         "additionalProperties": true,
         "type": "object",
         "required": [
           "damage_model",
-          "vulnerability_db"
+          "vulnerability_db",
+          "classification"
         ],
         "title": "DamageMethodParams",
-        "description": "El modelo de daño y la base de datos de vulnerabilidad con los que se simuló un escenario."
+        "description": "El modelo de daño, la base de datos de vulnerabilidad y el esquema de clasificación\ncon los que se ejecutó un escenario."
       },
       "DamageModelInfo": {
         "properties": {
@@ -2185,6 +2254,17 @@
             "type": "string",
             "description": "De dónde proceden los datos de vulnerabilidad de cada clase de edificio: `gem` (Martins y Silva 2021) o `risk_ue` (RISK-UE 2003, solo curvas de capacidad). Ver GET /methods.",
             "default": "gem"
+          },
+          "classification": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Cómo se ha asignado a cada edificio su clase en la taxonomía de la base de datos: `gem_heuristic` (para `gem`) o `risk_ue_feriche2012` (para `risk_ue`). Omítelo para usar el de la base de datos por defecto. Ver GET /methods."
           }
         },
         "type": "object",
@@ -2221,12 +2301,18 @@
             },
             "type": "array"
           },
+          "classifications": {
+            "items": {
+              "$ref": "#/components/schemas/ClassificationInfo"
+            },
+            "type": "array"
+          },
           "compatible": {
             "items": {
               "$ref": "#/components/schemas/DamageMethodParams"
             },
             "type": "array",
-            "description": "Las combinaciones válidas: la base de datos debe aportar los datos que necesita el modelo."
+            "description": "Las combinaciones válidas: una base de datos debe aportar los datos que necesita el modelo, y una clasificación debe dar clases de la taxonomía de la base de datos."
           }
         },
         "additionalProperties": true,
@@ -2235,6 +2321,7 @@
           "default",
           "damage_models",
           "vulnerability_databases",
+          "classifications",
           "compatible"
         ],
         "title": "MethodsResponse"
@@ -2833,6 +2920,10 @@
           "name": {
             "type": "string"
           },
+          "taxonomy": {
+            "type": "string",
+            "description": "El sistema de clases por el que se indexan sus datos."
+          },
           "provides": {
             "items": {
               "type": "string"
@@ -2842,7 +2933,7 @@
           },
           "classes": {
             "type": "string",
-            "description": "Cómo se asigna a un edificio una de las clases de la base de datos."
+            "description": "Las clases para las que tiene datos de vulnerabilidad."
           },
           "derivation": {
             "type": "string",
@@ -2864,6 +2955,7 @@
         "required": [
           "id",
           "name",
+          "taxonomy",
           "provides",
           "classes",
           "derivation",

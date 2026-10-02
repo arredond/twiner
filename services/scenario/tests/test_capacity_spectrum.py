@@ -14,7 +14,6 @@ from scenario.capacity_spectrum import (
     evaluate_capacity_spectrum,
     load_capacity_table,
     performance_point_m,
-    risk_ue_height_band,
     sa_key,
 )
 from scenario.damage import DAMAGE_STATES
@@ -76,12 +75,26 @@ def _fields(c: BilinearCapacity) -> list[float]:
     return [c.dy_m, c.ay_g, c.du_m]
 
 
-def test_risk_ue_mapping_and_height_bands():
+def test_risk_ue_lookup_by_precomputed_class():
+    """RISK-UE classes come precomputed as type:code level:height band
+    (ADR-0035); the storeys argument plays no part."""
     table = load_capacity_table("risk_ue")
-    assert [risk_ue_height_band(n) for n in (1, 2, 3, 5, 6, 12)] == list("LLMMHH")
-    assert _fields(table.get("CR_LDUAL-DUL", 1)) == pytest.approx(_fields(RC1L))
-    # Pre-1940 rubble stone -> M1.1 pre code, mid-rise.
-    assert _fields(table.get("MUR-STRUB_LWAL-DNO", 4)) == pytest.approx([0.0047, 0.115, 0.0203])
+    assert _fields(table.get("RC1:low:L", 1)) == pytest.approx(_fields(RC1L))
+    assert table.get("RC1:low:L", 9) == table.get("RC1:low:L", 1)
+    # WP4 Table 3.1-1, M3.4 pre code mid-rise (UNIGE).
+    assert _fields(table.get("M3.4:pre:M", 4)) == pytest.approx([0.0075, 0.149, 0.0347])
+
+
+def test_risk_ue_substitutes_the_nearest_tabulated_curve():
+    table = load_capacity_table("risk_ue")
+    # M3.1 has no WP4 curve: M1.2, same vulnerability index (WP4 Table 2.2).
+    assert table.get("M3.1:pre:H", 7) == table.get("M1.2:pre:H", 7)
+    # RC3.x only tabulated at low code.
+    for code in ("pre", "moderate"):
+        assert table.get(f"RC3.1:{code}:M", 4) == table.get("RC3.1:low:M", 4)
+        assert table.get(f"RC3.2:{code}:H", 8) == table.get("RC3.2:low:H", 8)
+    with pytest.raises(KeyError):
+        table.get("RC2:low:L", 1)
 
 
 def test_gem_curves_use_the_yield_and_ultimate_points_and_nearest_height():
@@ -94,7 +107,7 @@ def test_gem_curves_use_the_yield_and_ultimate_points_and_nearest_height():
 
 def test_evaluate_dispatches_each_class_to_its_own_period():
     table = load_capacity_table("risk_ue")
-    classes = np.array(["CR_LDUAL-DUL", "MUR-STRUB_LWAL-DNO", "CR_LDUAL-DUL"])
+    classes = np.array(["RC1:low:L", "M3.1:pre:L", "RC1:low:L"])
     heights = np.array([1, 2, 1])
     ims = {"PGA [g]": np.full(3, 0.3), "PGV [cm/s]": np.full(3, 25.0)}
     for period in table.periods():

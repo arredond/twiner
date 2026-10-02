@@ -81,45 +81,60 @@ def _data(name: str) -> pd.DataFrame:
         return pd.read_csv(f)
 
 
-# RISK-UE database (methods.py): TWIN-ER's GEM class -> RISK-UE building
-# type and code level; height band by storeys, per RISK-UE's typology
-# matrix (WP4 Table 1.1): L 1-2, M 3-5, H 6+.
-GEM_TO_RISK_UE = {
-    "CR_LDUAL-DUL": ("RC1", "low"),
-    "MUR_LWAL-DNO": ("M3.4", "pre"),
-    "MUR-STRUB_LWAL-DNO": ("M1.1", "pre"),
-}
-
-
-def risk_ue_height_band(storeys: int) -> str:
-    return "L" if storeys <= 2 else "M" if storeys <= 5 else "H"
+def _risk_ue_substitutions() -> dict[tuple[str, str], tuple[str, str]]:
+    """(type, code level) WP4 has no capacity curve for -> the nearest
+    available one (risk_ue_2003_substitutions.csv, with its reasons)."""
+    table = _data("risk_ue_2003_substitutions.csv").astype(str)
+    return {
+        (c, lvl): (uc, ul)
+        for c, lvl, uc, ul in zip(
+            table["risk_ue_class"],
+            table["code_level"],
+            table["uses_class"],
+            table["uses_code_level"],
+            strict=True,
+        )
+    }
 
 
 class CapacityTable:
-    """One vulnerability database's capacity curves, looked up by TWIN-ER's
-    (taxonomy_class, height_class)."""
+    """One vulnerability database's capacity curves, looked up by a
+    building's class in that database's taxonomy (precomputed per building
+    by a classification scheme, methods.py) and its storeys.
+
+    - GEM: the class is the GEM taxonomy string (`CR_LDUAL-DUL`); nearest
+      vendored height.
+    - RISK-UE: the class is `<type>:<code level>:<height band>`
+      (`RC1:low:M`), all three precomputed; a (type, code level) WP4 has
+      no curve for uses the nearest available one (substitutions)."""
 
     def __init__(self, database: str):
         self.database = database
+        self._substitutions: dict[tuple[str, str], tuple[str, str]] = {}
         if database == "gem":
             self._curves = _gem_curves()
         elif database == "risk_ue":
             self._curves = _risk_ue_curves()
+            self._substitutions = _risk_ue_substitutions()
         else:
             raise ValueError(f"no capacity curves for vulnerability_db {database!r}")
 
-    def get(self, taxonomy_class: str, height_class: int) -> BilinearCapacity:
+    def get(self, vulnerability_class: str, height_class: int) -> BilinearCapacity:
         if self.database == "risk_ue":
-            if taxonomy_class not in GEM_TO_RISK_UE:
-                raise KeyError(f"no RISK-UE mapping for taxonomy {taxonomy_class!r}")
-            risk_ue_class, code = GEM_TO_RISK_UE[taxonomy_class]
-            return self._curves[(risk_ue_class, code, risk_ue_height_band(height_class))]
+            risk_ue_class, code, band = vulnerability_class.split(":")
+            risk_ue_class, code = self._substitutions.get(
+                (risk_ue_class, code), (risk_ue_class, code)
+            )
+            key = (risk_ue_class, code, band)
+            if key not in self._curves:
+                raise KeyError(f"no RISK-UE capacity curve for {vulnerability_class!r}")
+            return self._curves[key]
         # GEM: nearest vendored height, as fragility_lookup.FragilityTable does.
-        heights = sorted(h for t, h in self._curves if t == taxonomy_class)
+        heights = sorted(h for t, h in self._curves if t == vulnerability_class)
         if not heights:
-            raise KeyError(f"no capacity curve vendored for taxonomy {taxonomy_class!r}")
+            raise KeyError(f"no capacity curve vendored for taxonomy {vulnerability_class!r}")
         nearest = min(heights, key=lambda h: abs(h - height_class))
-        return self._curves[(taxonomy_class, nearest)]
+        return self._curves[(vulnerability_class, nearest)]
 
     def periods(self) -> list[float]:
         return sorted({c.period_s for c in self._curves.values()})
@@ -206,7 +221,7 @@ def damage_probabilities(curve: BilinearCapacity, sd_m: np.ndarray) -> np.ndarra
 
 def evaluate_capacity_spectrum(
     table: CapacityTable,
-    taxonomy_classes: np.ndarray | pa.Array,
+    vulnerability_classes: np.ndarray | pa.Array,
     height_classes: np.ndarray,
     im_values_by_type: dict[str, np.ndarray],
     damage_percentile: float | None = None,
@@ -225,7 +240,7 @@ def evaluate_capacity_spectrum(
     tc = corner_period_s(
         np.asarray(im_values_by_type[PGA_KEY]), np.asarray(im_values_by_type[PGV_KEY])
     )
-    taxonomy = pa.array(taxonomy_classes, type=pa.string()).dictionary_encode()
+    taxonomy = pa.array(vulnerability_classes, type=pa.string()).dictionary_encode()
     names = taxonomy.dictionary.to_pylist()
     codes = taxonomy.indices.to_numpy(zero_copy_only=False).astype(np.int64)
     heights = np.asarray(height_classes, dtype=np.int64)

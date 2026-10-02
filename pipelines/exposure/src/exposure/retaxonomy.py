@@ -1,12 +1,13 @@
-"""Re-derive every exposure part's vulnerability class from its buildings
-part, without re-crawling.
+"""Re-derive every exposure part's vulnerability classes from its
+buildings part, without re-crawling.
 
 The region crawl resumes by skipping municipalities whose parts already
-exist (region.py), so a change to `taxonomy.assign_taxonomy` never reaches
-parts crawled before it. This applies the current rules to every part whose
-`taxonomy_source` isn't `TAXONOMY_SOURCE`, from the `construction_year` and
-`floors` already in its `<code>.buildings.parquet`, then recombines
-exposure.parquet. CLI: retaxonomy_cli.
+exist (region.py), so a change to a classification scheme
+(classification.py) never reaches parts crawled before it. This applies
+the current schemes to every part where any scheme's version column is
+missing or out of date, from the attributes already in its
+`<code>.buildings.parquet`, then recombines exposure.parquet. CLI:
+retaxonomy_cli.
 """
 
 from __future__ import annotations
@@ -16,29 +17,18 @@ from pathlib import Path
 
 import pandas as pd
 
+from .classification import classify
+from .classification import is_current as _classes_current
 from .region import combine_exposure
-from .taxonomy import TAXONOMY_SOURCE, assign_taxonomy
 
 
 def exposure_from_buildings(buildings: pd.DataFrame) -> pd.DataFrame:
     """The exposure part for these buildings, in pipeline.py's shape."""
-    taxonomy = [
-        assign_taxonomy(year, floors)
-        for year, floors in zip(buildings["construction_year"], buildings["floors"])
-    ]
-    return pd.DataFrame(
-        {
-            "building_id": buildings["building_id"],
-            "taxonomy_class": [t[0] for t in taxonomy],
-            "height_class": [t[1] for t in taxonomy],
-            "taxonomy_source": TAXONOMY_SOURCE,
-        }
-    )
+    return classify(buildings)
 
 
 def is_current(exposure_part: Path) -> bool:
-    sources = pd.read_parquet(exposure_part, columns=["taxonomy_source"])["taxonomy_source"]
-    return bool(len(sources)) and bool((sources == TAXONOMY_SOURCE).all())
+    return _classes_current(pd.read_parquet(exposure_part))
 
 
 def retaxonomy_parts(parts_dir: str | Path, force: bool = False) -> tuple[int, int]:
@@ -54,7 +44,8 @@ def retaxonomy_parts(parts_dir: str | Path, force: bool = False) -> tuple[int, i
         if not force and exposure_part.exists() and is_current(exposure_part):
             continue
         buildings = pd.read_parquet(
-            buildings_part, columns=["building_id", "construction_year", "floors"]
+            buildings_part,
+            columns=["building_id", "construction_year", "floors", "municipality_code"],
         )
         tmp = exposure_part.with_suffix(".parquet.tmp")
         exposure_from_buildings(buildings).to_parquet(tmp, index=False)

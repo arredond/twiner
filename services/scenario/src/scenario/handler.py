@@ -190,7 +190,9 @@ def _fault_scenario(query: dict) -> dict:
     fault_id = query["fault_id"]  # missing -> KeyError -> 400, via handler()
     probability_level = query.get("probability_level", "high")
     resolve_probability_level(probability_level)  # ValueError -> 400, before anything else
-    damage_method = resolve_damage_method(query.get("damage_model"), query.get("vulnerability_db"))
+    damage_method = resolve_damage_method(
+        query.get("damage_model"), query.get("vulnerability_db"), query.get("classification")
+    )
     near_lat, near_lon = round_near_point(
         _optional_float(query.get("near_lat")), _optional_float(query.get("near_lon"))
     )
@@ -243,7 +245,9 @@ def _method_id_params(damage_method: DamageMethod) -> dict | None:
 def _manual_scenario(body: dict) -> dict:
     probability_level = body.get("probability_level", "high")
     resolve_probability_level(probability_level)
-    damage_method = resolve_damage_method(body.get("damage_model"), body.get("vulnerability_db"))
+    damage_method = resolve_damage_method(
+        body.get("damage_model"), body.get("vulnerability_db"), body.get("classification")
+    )
     lat, lon, mag = float(body["lat"]), float(body["lon"]), float(body["mag"])
     rake = float(body.get("rake", 0.0))
     strike = _optional_float(body.get("strike"))

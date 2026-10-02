@@ -18,9 +18,9 @@ import geopandas as gpd
 import pandas as pd
 
 from .catastro import MunicipalityRef, download_buildings
+from .classification import classify
 from .debris import compute_debris_envelopes
 from .parse import load_buildings
-from .taxonomy import TAXONOMY_SOURCE, assign_taxonomy
 from .tile import tile_buildings, tile_debris
 from .vs30 import add_vs30_column
 
@@ -55,22 +55,9 @@ def build_exposure(
     # itself. See ADR-0015.
     buildings = add_vs30_column(buildings)
 
-    # Zipping the two columns directly (rather than `buildings.apply(...,
-    # axis=1)`) avoids per-row-apply's untyped-tuple-return ambiguity for
-    # static type checkers, and is the more idiomatic pandas pattern for a
-    # two-column-in, two-column-out transform anyway.
-    taxonomy = [
-        assign_taxonomy(year, floors)
-        for year, floors in zip(buildings["construction_year"], buildings["floors"])
-    ]
-    exposure = pd.DataFrame(
-        {
-            "building_id": buildings["building_id"],
-            "taxonomy_class": [t[0] for t in taxonomy],
-            "height_class": [t[1] for t in taxonomy],
-            "taxonomy_source": TAXONOMY_SOURCE,
-        }
-    )
+    # Every vulnerability classification scheme (classification.py,
+    # ADR-0035), from the same building attributes.
+    exposure = classify(buildings)
     return buildings, exposure
 
 

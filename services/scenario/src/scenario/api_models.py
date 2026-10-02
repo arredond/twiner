@@ -228,10 +228,12 @@ class InfrastructureSummary(_Model):
 
 
 class DamageMethodParams(_Model):
-    """The damage model and vulnerability database a scenario ran with."""
+    """The damage model, vulnerability database and classification scheme
+    a scenario ran with."""
 
     damage_model: str = Field(examples=["fragility", "capacity_spectrum"])
     vulnerability_db: str = Field(examples=["gem", "risk_ue"])
+    classification: str = Field(examples=["gem_heuristic", "risk_ue_feriche2012"])
 
 
 class DamageModelInfo(_Model):
@@ -247,8 +249,9 @@ class DamageModelInfo(_Model):
 class VulnerabilityDatabaseInfo(_Model):
     id: str
     name: str
+    taxonomy: str = Field(description="The class system its data is keyed by.")
     provides: list[str] = Field(description="The kinds of vulnerability data it provides.")
-    classes: str = Field(description="How a building gets one of the database's classes.")
+    classes: str = Field(description="The classes it has vulnerability data for.")
     derivation: str = Field(description="How the database's vulnerability data was derived.")
     damage_criteria: str = Field(
         description="With the capacity-spectrum model: how damage-state thresholds are set on "
@@ -258,12 +261,26 @@ class VulnerabilityDatabaseInfo(_Model):
     licence: str
 
 
+class ClassificationInfo(_Model):
+    id: str
+    name: str
+    taxonomy: str = Field(description="The taxonomy it classifies buildings into.")
+    requires: list[str] = Field(description="The building and site attributes it uses.")
+    method: str = Field(description="How a building's class is assigned.")
+    reference: str
+    default_for_taxonomy: bool = Field(
+        description="Whether it's used when a scenario names the database but no classification."
+    )
+
+
 class MethodsResponse(_Model):
     default: DamageMethodParams
     damage_models: list[DamageModelInfo]
     vulnerability_databases: list[VulnerabilityDatabaseInfo]
+    classifications: list[ClassificationInfo]
     compatible: list[DamageMethodParams] = Field(
-        description="The valid combinations: a database must provide the data the model needs."
+        description="The valid combinations: a database must provide the data the model needs, "
+        "and a classification must give classes in the database's taxonomy."
     )
 
 

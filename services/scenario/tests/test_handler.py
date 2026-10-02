@@ -321,6 +321,7 @@ def test_methods_route_and_capacity_spectrum_fault_scenario(handler):
     assert body["damage_method"] == {
         "damage_model": "capacity_spectrum",
         "vulnerability_db": "risk_ue",
+        "classification": "risk_ue_feriche2012",
     }
     assert body["scenario_id"] != default["scenario_id"]
     status, _ = _call(

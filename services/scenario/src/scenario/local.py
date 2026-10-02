@@ -148,6 +148,11 @@ VULNERABILITY_DB_HELP = (
     "Where each building class's vulnerability data comes from: `gem` (Martins & Silva "
     "2021) or `risk_ue` (RISK-UE 2003, capacity curves only). See GET /methods."
 )
+CLASSIFICATION_HELP = (
+    "How each building got its class in the database's taxonomy: `gem_heuristic` (for `gem`) "
+    "or `risk_ue_feriche2012` (for `risk_ue`). Omit it for the database's default. "
+    "See GET /methods."
+)
 
 
 class ManualRuptureRequest(BaseModel):
@@ -189,11 +194,14 @@ class ManualRuptureRequest(BaseModel):
     vulnerability_db: str = Field(
         default=DEFAULT_VULNERABILITY_DB, description=VULNERABILITY_DB_HELP
     )
+    classification: str | None = Field(default=None, description=CLASSIFICATION_HELP)
 
 
-def _resolve_method(damage_model: str | None, vulnerability_db: str | None) -> DamageMethod:
+def _resolve_method(
+    damage_model: str | None, vulnerability_db: str | None, classification: str | None = None
+) -> DamageMethod:
     try:
-        return resolve_damage_method(damage_model, vulnerability_db)
+        return resolve_damage_method(damage_model, vulnerability_db, classification)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
 
@@ -363,7 +371,7 @@ def _run_and_serialize(
 )
 def run_manual_scenario(req: ManualRuptureRequest) -> dict:
     _validate_probability_level(req.probability_level)
-    method = _resolve_method(req.damage_model, req.vulnerability_db)
+    method = _resolve_method(req.damage_model, req.vulnerability_db, req.classification)
     scenario_id = manual_scenario_id(
         req.lat,
         req.lon,
@@ -458,10 +466,10 @@ def flood_scenario(req: FloodScenarioRequest) -> dict:
 @app.get(
     "/methods",
     tags=["Earthquake"],
-    summary="List the damage models and vulnerability databases",
-    description="Every damage model and vulnerability database a scenario can use, what "
-    "each needs and provides, and the valid combinations (`damage_model` + "
-    "`vulnerability_db` on the scenario routes).",
+    summary="List the damage models, vulnerability databases and classifications",
+    description="Every damage model, vulnerability database and building classification "
+    "scheme a scenario can use, what each needs and provides, and the valid combinations "
+    "(`damage_model` + `vulnerability_db` + `classification` on the scenario routes).",
     response_model=None,
     responses=ok(api_models.MethodsResponse),
 )
@@ -511,6 +519,7 @@ def run_fault_scenario(
     vulnerability_db: Annotated[
         str, Query(description=VULNERABILITY_DB_HELP)
     ] = DEFAULT_VULNERABILITY_DB,
+    classification: Annotated[str | None, Query(description=CLASSIFICATION_HELP)] = None,
 ) -> dict:
     """Automatic mode (docs/merisur.md §4.1): a QAFI fault's own
     maximum-magnitude earthquake. A GET, not a POST: `fault_id` and
@@ -535,7 +544,7 @@ def run_fault_scenario(
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e)) from e
 
-    method = _resolve_method(damage_model, vulnerability_db)
+    method = _resolve_method(damage_model, vulnerability_db, classification)
     scenario_id = fault_scenario_id(
         fault_id,
         probability_level,

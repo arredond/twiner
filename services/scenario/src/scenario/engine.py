@@ -78,6 +78,7 @@ def _site_batches(
     rupture: Rupture,
     max_distance_km: float,
     batch_rows: int = SITE_BATCH_ROWS,
+    class_sql: str = DEFAULT_METHOD.scheme.class_sql,
 ) -> tuple[Iterator[pa.RecordBatch], float]:
     """Every building in range, as a stream of Arrow record batches of at
     most `batch_rows` rows, plus the box's center latitude (the fixed
@@ -97,6 +98,7 @@ def _site_batches(
         exposure_path,
         (lon_lo, lon_hi, lat_lo, lat_hi),
         batch_rows,
+        class_sql,
     )
     return iter(reader), (lat_lo + lat_hi) / 2
 
@@ -146,10 +148,15 @@ def _query_sites(
     exposure_path: str,
     box: tuple[float, float, float, float],
     batch_rows: int,
+    class_sql: str = DEFAULT_METHOD.scheme.class_sql,
 ) -> pa.RecordBatchReader:
     """Every building in `box` (lon_lo, lon_hi, lat_lo, lat_hi), with the
     exposure attributes a scenario needs, as a stream of Arrow batches.
-    The one query both `_site_batches` and `warm_site_query` run."""
+    The one query both `_site_batches` and `warm_site_query` run.
+
+    `class_sql`: the chosen classification scheme's class expression
+    (methods.ClassificationScheme.class_sql, ADR-0035) -- from the fixed
+    registry, never from a request -- read as `vulnerability_class`."""
     if buildings_path.startswith("s3://") or exposure_path.startswith("s3://"):
         # httpfs + DuckDB's default AWS credential chain (picks up the
         # Lambda execution role automatically) -- no explicit credentials
@@ -173,7 +180,7 @@ def _query_sites(
             b.municipality_code,
             COALESCE(b.vs30, ?) AS vs30,
             {_impact_columns(con, buildings_path)},
-            e.taxonomy_class,
+            {class_sql} AS vulnerability_class,
             e.height_class
         FROM read_parquet(?) AS b
         JOIN read_parquet(?) AS e USING (building_id)
@@ -471,11 +478,18 @@ def _evaluate_batches(
     """Ground motion + damage for each streamed batch of sites -- the one
     chain both `run_scenario` and `summarize_scenario` are built on.
 
-    `method` picks the damage model and vulnerability database (methods.py,
-    ADR-0033); callers validate it with `resolve_damage_method` first."""
+    `method` picks the damage model, vulnerability database and
+    classification scheme (methods.py, ADR-0033, ADR-0035); callers
+    validate it with `resolve_damage_method` first."""
     con = get_connection()
     batches, ref_lat = _site_batches(
-        con, buildings_path, exposure_path, rupture, max_distance_km, batch_rows
+        con,
+        buildings_path,
+        exposure_path,
+        rupture,
+        max_distance_km,
+        batch_rows,
+        class_sql=method.scheme.class_sql,
     )
     if method.model == "capacity_spectrum":
         capacity_table = load_capacity_table(method.database)
@@ -484,7 +498,7 @@ def _evaluate_batches(
         def damage_for(batch: pa.RecordBatch, ims: dict[str, np.ndarray]) -> DamageArrays:
             return evaluate_capacity_spectrum(
                 capacity_table,
-                batch.column("taxonomy_class"),
+                batch.column("vulnerability_class"),
                 batch.column("height_class").to_numpy(),
                 ims,
                 damage_percentile=damage_percentile,
@@ -499,7 +513,7 @@ def _evaluate_batches(
         def damage_for(batch: pa.RecordBatch, ims: dict[str, np.ndarray]) -> DamageArrays:
             return evaluate_damage_arrays(
                 fragility_table,
-                batch.column("taxonomy_class"),
+                batch.column("vulnerability_class"),
                 batch.column("height_class").to_numpy(),
                 ims,
                 damage_percentile=damage_percentile,
