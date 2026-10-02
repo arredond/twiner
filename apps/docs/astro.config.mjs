@@ -14,6 +14,11 @@ export default defineConfig({
 	site: 'https://twiner.arredon.do',
 	base: '/docs',
 	trailingSlash: 'always',
+	// Pages that moved: keep old links working.
+	redirects: {
+		'/damage-models/': '/docs/hazards/earthquake/damage-models/',
+		'/es/damage-models/': '/docs/es/hazards/earthquake/damage-models/',
+	},
 	markdown: {
 		// Astro 7's Markdown processor parses $...$ / $$...$$ itself; the
 		// plugin only renders the parsed math nodes with KaTeX at build time.
@@ -31,6 +36,12 @@ export default defineConfig({
 				es: { label: 'Español', lang: 'es' },
 			},
 			customCss: ['katex/dist/katex.min.css', './src/styles/custom.css'],
+			// Show/hide toggles for the left sidebar and the table of contents
+			// (src/components/PanelToggles.astro), restored before first paint.
+			components: {
+				Head: './src/components/Head.astro',
+				PageFrame: './src/components/PageFrame.astro',
+			},
 			plugins: [
 				// Generated from the scenario API's FastAPI app by
 				// bin/export-openapi; a test fails when it goes stale.
@@ -71,7 +82,14 @@ export default defineConfig({
 					label: 'Hazards',
 					translations: { es: 'Riesgos' },
 					items: [
-						{ label: 'twinQUAKE', link: '/hazards/earthquake/' },
+						{
+							label: 'twinQUAKE',
+							collapsed: false,
+							items: [
+								{ label: 'Overview', translations: { es: 'Visión general' }, link: '/hazards/earthquake/' },
+								{ slug: 'hazards/earthquake/damage-models' },
+							],
+						},
 						{ label: 'twinFLOOD', link: '/hazards/flood/' },
 					],
 				},
@@ -79,7 +97,6 @@ export default defineConfig({
 					label: 'Reference',
 					translations: { es: 'Referencia' },
 					items: [
-						{ slug: 'damage-models' },
 						{ slug: 'impact-estimates' },
 						{ slug: 'data-sources' },
 						{ slug: 'license' },

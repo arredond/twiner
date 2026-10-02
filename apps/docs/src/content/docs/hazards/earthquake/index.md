@@ -20,8 +20,8 @@ implemented in MERISUR [1] and in tools such as the OpenQuake Engine [2]:
 4. **Probability level.** Which part of the uncertainty range to report.
 5. **Exposure and vulnerability.** Which structural class each building
    belongs to, in the classification scheme chosen.
-6. **Fragility and damage.** The probability that each building reaches
-   each damage state at its shaking.
+6. **Damage.** The probability that each building reaches each damage
+   state at its shaking, with the damage model chosen.
 7. **Impact.** What those damage states mean for people, cost, debris and
    critical infrastructure.
 
@@ -116,17 +116,15 @@ Above the hinge, $a_7$ replaces $a_2$. In these equations:
   factor of two in ground motion.
 
 **Intensity measures.** Buildings of different heights respond to
-different frequencies of shaking. Each building's fragility function
-(step 6) is defined against the intensity measure that best predicts its
-damage, so TWIN-ER computes all of the ones it needs:
+different frequencies of shaking, and each damage model (step 6) reads
+ground motion differently. TWIN-ER computes only what the chosen model
+needs:
 
-| Intensity measure | Used for |
+| Damage model | Intensity measures |
 |---|---|
-| Peak ground acceleration (PGA) | 1-storey concrete and rubble-stone buildings |
-| Spectral acceleration SA(0.3 s) | 1–3-storey masonry (2–3 for rubble stone), 2–4-storey concrete |
-| SA(0.6 s) | 4–5-storey masonry, 5–7-storey concrete |
-| SA(1.0 s) | 8–12-storey concrete |
-| Peak ground velocity (PGV) | Macroseismic intensity (step 7) |
+| Fragility functions | The one each building's curve is defined against: peak ground acceleration (PGA) for 1-storey concrete and rubble-stone buildings; spectral acceleration SA(0.3 s) for 1–3-storey masonry (2–3 for rubble stone) and 2–4-storey concrete; SA(0.6 s) for 4–5-storey masonry and 5–7-storey concrete; SA(1.0 s) for 8–12-storey concrete |
+| Capacity spectrum | SA at each building class's elastic period, plus PGA and peak ground velocity (PGV) for the spectrum's corner period |
+| All | PGV, for macroseismic intensity (step 7) |
 
 **Evaluation grid.** The GMPE varies smoothly with distance. Ground motion
 is therefore computed once per occupied 1 km grid cell rather than once per
@@ -136,9 +134,9 @@ at the 99th percentile, far below the model's own scatter.
 
 **Search radius.** A scenario only evaluates buildings close enough to
 matter. The radius is the distance at which SA(0.3 s), at the chosen
-probability level, falls below 0.02 g. That is well under the lowest
-intensity at which any fragility function in use predicts damage. The
-radius is clamped between 10 and 300 km.
+probability level, falls below 0.02 g, well under the shaking at which
+the fragility functions predict damage. The radius is clamped between 10
+and 300 km, and is the same for every damage model.
 
 ## 3. Site amplification
 
@@ -178,7 +176,7 @@ the grid doesn't reach, use $V_{S30} = 800$ m/s (rock, no amplification).
 ## 4. Probability levels
 
 A GMPE predicts a distribution of ground motion, not a single value, and
-fragility functions predict a distribution of damage. Like MERISUR, TWIN-ER
+every damage model predicts a distribution of damage. Like MERISUR, TWIN-ER
 offers three **probability levels**. Each reads a different point of those
 two distributions [1]:
 
@@ -231,7 +229,7 @@ building taxonomy [10] or RISK-UE's building types [16]. Rather than
 translating one taxonomy into another, TWIN-ER computes every
 **classification scheme** in advance and stores each building's class in
 each of them. A scenario reads the class of the scheme that matches the
-chosen database (see [Damage models](/docs/damage-models/#classification-schemes)):
+chosen database (see [Damage models](/docs/hazards/earthquake/damage-models/#classification-schemes)):
 
 | Scheme | Taxonomy | Uses | Version | Default for |
 |---|---|---|---|---|
@@ -256,9 +254,10 @@ or retrofitting.
   the historic centre of Lorca, from mid-century masonry.
 - When the year is unknown, the building gets the **more vulnerable** class.
 
-The **height class** is the number of floors, from 1 to 12. The masonry
-classes only have fragility functions up to 5 storeys, so taller masonry
-buildings use the 5-storey function.
+The **height class** is the number of floors, from 1 to 12. GEM's
+vulnerability data for the masonry classes stops at 5 storeys, so taller
+masonry buildings use the 5-storey fragility functions and capacity
+curves.
 
 ### RISK-UE classes (`risk_ue_feriche2012`)
 
@@ -302,14 +301,43 @@ classified Lorca's buildings from field surveys and remote sensing into
 six RISK-UE classes: one concrete and five masonry. Finer masonry classes
 remain the clearest route to better estimates.
 
-## 6. Fragility and damage
+## 6. Damage
+
+A **damage model** turns the shaking at a building into the probability
+of each damage state. TWIN-ER offers two, each with its own vulnerability
+data, read from the building's class in that data's taxonomy (step 5):
+
+| Damage model | Vulnerability database | Classification | |
+|---|---|---|---|
+| Fragility functions | GEM (Martins & Silva 2021) | `gem_heuristic` | Default |
+| Capacity spectrum | GEM (Martins & Silva 2021) | `gem_heuristic` | |
+| Capacity spectrum | RISK-UE (2003) | `risk_ue_feriche2012` | |
+
+The default is the one that has been in use longest, not the one shown to
+be most accurate: see [validation](#validation-lorca-2011). The
+[Damage models](/docs/hazards/earthquake/damage-models/) page gives each
+method and database in full.
+
+Every model produces the same four damage states, plus None. The
+descriptions below are indicative:
+
+| State | Typical structural damage |
+|---|---|
+| None | No damage |
+| Slight | Hairline cracks; repairable without affecting use |
+| Moderate | Noticeable cracking; repairs needed before full use |
+| Extensive | Large cracks, partial failure of elements; building likely unsafe |
+| Complete | Collapse or imminent collapse; not economically repairable |
+
+### 6.1 Fragility functions
 
 A **fragility function** gives the probability that a building of a given
-class reaches or exceeds a damage state, as a function of the intensity
+class reaches or exceeds a damage state, as a function of an intensity
 measure at its site. TWIN-ER uses the global fragility model of **Martins &
-Silva (2021)** [11]. It was derived analytically, by nonlinear dynamic
-analysis of building archetypes for each GEM taxonomy class. It is the same
-family of models used by GEM's global and European risk models.
+Silva (2021)** [11], the same family GEM's global and European risk models
+use. It was derived analytically, by nonlinear dynamic analysis of
+building archetypes for each GEM taxonomy class, and each curve is defined
+against the intensity measure that best predicts its damage (step 2).
 
 The functions follow the usual lognormal form:
 
@@ -326,19 +354,36 @@ where:
 TWIN-ER uses the published curves in tabulated form and interpolates them
 at each building's intensity.
 
-There are four damage states, plus None. The descriptions below are
-indicative:
+### 6.2 Capacity spectrum
 
-| State | Typical structural damage |
-|---|---|
-| None | No damage |
-| Slight | Hairline cracks; repairable without affecting use |
-| Moderate | Noticeable cracking; repairs needed before full use |
-| Extensive | Large cracks, partial failure of elements; building likely unsafe |
-| Complete | Collapse or imminent collapse; not economically repairable |
+The **capacity-spectrum method** is RISK-UE's Level II (LM2) [16], the
+mechanical approach MERISUR's methodology describes. It works from each
+class's **capacity curve**: the lateral acceleration $S_a$ the building
+resists as its displacement $S_d$ grows, idealised as bilinear with a
+yield point $(D_y, A_y)$ and an ultimate displacement $D_u$.
 
-The probability of being in each state is the difference between
-successive exceedance curves:
+1. **Elastic period** of the building: $T_e = 2\pi\sqrt{D_y / (A_y\,g)}$.
+2. **Demand:** the site's spectral acceleration at that period,
+   $S_{ae} = SA(T_e)$, from the same ground-motion model and site
+   amplification as every other path.
+3. **Performance point:** the displacement $S_d$ the earthquake imposes on
+   the building, in closed form (the N2 method).
+4. **Damage:** lognormal fragility on that displacement, with thresholds
+   and dispersions derived from the capacity curve itself:
+
+$$
+P(DS \ge ds_k \mid S_d) = \Phi\!\left(\frac{\ln(S_d / S_{d,k})}{\beta_k}\right),
+\qquad S_{d,k} = 0.7D_y,\ D_y,\ D_y + 0.25(D_u - D_y),\ D_u
+$$
+
+The capacity curves come from either database: GEM's, for the GEM
+classes, or RISK-UE's, for the RISK-UE classes. Both use RISK-UE's damage
+thresholds, in which Moderate damage starts at yield.
+
+### 6.3 From probabilities to the state shown
+
+Whatever the model, the probability of being in each state is the
+difference between successive exceedance curves:
 
 $$
 P(DS = ds_i) = P(DS \ge ds_i) - P(DS \ge ds_{i+1})
@@ -346,15 +391,9 @@ $$
 
 with $P(DS \ge \text{None}) = 1$ and $P(DS \ge ds_5) = 0$.
 
-This is the default **damage model**. TWIN-ER can also compute damage with
-the capacity-spectrum method (RISK-UE Level II), with either GEM's or
-RISK-UE's building data, each on its own classes: see
-[Damage models](/docs/damage-models/).
-
-Each building is evaluated against the intensity measure its own curve is
-defined for (see the table in step 2). The state it is shown with follows
-the probability level: the most likely state, or the 85th percentile. The
-full distribution is kept too:
+The state each building is shown with follows the probability level
+(step 4): the most likely state, or the 85th percentile. The full
+distribution is kept too:
 
 - the map shows it in each building's popup;
 - facilities in the infrastructure list report it;
@@ -436,24 +475,61 @@ Re-running it in manual mode on the national data shows:
   few percent of it.
 - **Intensity.** The estimate for the town is VI at median and between VI
   and VII at +1σ. IGN observed VII.
-- **Damage.** The inspection covered the town, not the whole
-  municipality: Lorca is one of Spain's largest municipalities, and
-  mostly rural. For a comparable area, TWIN-ER's figures are taken over
-  the town's census sections (INE district 01, 7,001 buildings). They are
-  expected counts, summed probabilities
-  (see [impact estimates](/docs/impact-estimates/#inputs)):
 
-  | | Slight | Moderate | Extensive | Complete | Any damage | Moderate or worse |
-  |---|---|---|---|---|---|---|
-  | Observed (of 7,890) | 4,035 | 1,328 | 689 *(mod.–severe)* | 329 *(demolished)* | 81% | 30% |
-  | High probability | 1,670 | 142 | 25 | 11 | 26% | 3% |
-  | Low / very low probability | 3,263 | 868 | 283 | 241 | 67% | 20% |
+**Damage.** The inspection covered the town, not the whole municipality:
+Lorca is one of Spain's largest municipalities, and mostly rural. For a
+comparable area, TWIN-ER's figures are taken over the town's census
+sections (INE district 01, 7,001 buildings). They are expected counts,
+summed probabilities (see [impact estimates](/docs/impact-estimates/#inputs)),
+for every damage model and probability level:
 
-  At "low" probability, whose ground motion matches the recordings, the
-  model is somewhat short of what was observed: two-thirds of buildings
-  damaged against four-fifths, and a fifth at moderate or worse against
-  nearly a third. The [damage models](/docs/damage-models/#comparison-lorca-2011)
-  page compares the other methods.
+| Level | Damage model | Slight | Moderate | Extensive | Complete | Any damage | Moderate+ |
+|---|---|--:|--:|--:|--:|--:|--:|
+| | **Observed** (of 7,890) | 4,035 | 1,328 | 689 | 329 | 81% | 30% |
+| High | Fragility (GEM) | 1,670 | 142 | 25 | 11 | 26% | 3% |
+| | Capacity spectrum (GEM) | 1,537 | 1,582 | 572 | 216 | 56% | 34% |
+| | Capacity spectrum (RISK-UE) | 787 | 1,600 | 806 | 409 | 51% | 40% |
+| Low, very low | Fragility (GEM) | 3,263 | 868 | 283 | 241 | 67% | 20% |
+| | Capacity spectrum (GEM) | 1,061 | 2,689 | 1,689 | 888 | 90% | 75% |
+| | Capacity spectrum (RISK-UE) | 1,013 | 1,849 | 1,649 | 1,130 | 81% | 66% |
+
+The inspection's categories are slight (EMS-98 grades 1–2), moderate
+(2–3), moderate to severe (3–4) and demolished (4–5); they sit in the
+Slight to Complete columns in that order. "Low" and "very low" share the
+same ground motion, so they give the same expected counts.
+
+The probability levels differ in the state each building is **shown**
+with on the map. Counting those states instead (one per building) gives:
+
+| Level | Damage model | None | Slight | Moderate | Extensive | Complete |
+|---|---|--:|--:|--:|--:|--:|
+| High | Fragility (GEM) | 6,549 | 452 | 0 | 0 | 0 |
+| | Capacity spectrum (GEM) | 3,668 | 1,222 | 2,111 | 0 | 0 |
+| | Capacity spectrum (RISK-UE) | 3,581 | 382 | 3,033 | 5 | 0 |
+| Low | Fragility (GEM) | 1,363 | 5,638 | 0 | 0 | 0 |
+| | Capacity spectrum (GEM) | 788 | 418 | 4,802 | 993 | 0 |
+| | Capacity spectrum (RISK-UE) | 1,497 | 918 | 2,441 | 1,865 | 280 |
+| Very low | Fragility (GEM) | 569 | 2,739 | 3,043 | 650 | 0 |
+| | Capacity spectrum (GEM) | 109 | 47 | 977 | 2,805 | 3,063 |
+| | Capacity spectrum (RISK-UE) | 624 | 633 | 523 | 1,982 | 3,239 |
+
+What the comparison shows:
+
+- **No model matches on both measures.** At "low" probability, whose
+  ground motion matches the recordings, the fragility model is somewhat
+  short of the observed damage (67% damaged against 81%, 20% at moderate
+  or worse against 30%). Both capacity-spectrum variants exceed it: two to
+  three times the observed share at moderate or worse, although RISK-UE's
+  share with any damage matches the observed 81%.
+- **At "high" probability, the capacity-spectrum variants come closest
+  to the share at moderate or worse** (34–40% against 30%), but find fewer
+  damaged buildings overall.
+- **Most of the difference between models comes from the damage-state
+  definitions.** The capacity-spectrum thresholds start Moderate damage
+  at yield, while GEM's fragility functions use milder ones.
+- **Reported states hide much of the distribution.** At "low", the
+  fragility model shows no building above Slight, although its expected
+  count at moderate or worse is about 1,400.
 
 The comparison is indicative, not a calibration:
 
@@ -461,15 +537,15 @@ The comparison is indicative, not a calibration:
   some of its built-up fringe.
 - **The categories don't match one-to-one.** The inspection's categories
   were set by the town's building-safety forms and span EMS-98 grades
-  (moderate is grades 2–3), so they don't map exactly onto the fragility
-  model's damage states.
+  (moderate is grades 2–3), so they don't map exactly onto the models'
+  damage states.
 
 Site amplification is unlikely to be a major source of error: ESRM20's
-$V_{S30}$ in Lorca matches local surveys. The fragility model is the larger
-uncertainty. Martins & Silva's functions are analytical and global, and
-curves calibrated empirically on Mediterranean masonry damage, such as
-Risk-UE's, differ from them. Calibrating against Lorca's building-by-building
-damage records is the next step.
+$V_{S30}$ in Lorca matches local surveys. Vulnerability is the larger
+uncertainty, in every model: GEM's data is analytical and global,
+RISK-UE's comes from Italian and Greek prototype buildings, and neither is
+calibrated on Spanish damage. Calibrating against Lorca's
+building-by-building damage records is the next step.
 
 ## Limitations
 
@@ -483,8 +559,9 @@ damage records is the next step.
   five RISK-UE types with a code level; the RISK-UE scheme is calibrated
   on Lorca. There is no information on structural system, irregularities,
   retrofitting or state of conservation.
-- **Generic fragility functions.** They are global, not calibrated on
-  Spanish damage data.
+- **Generic vulnerability data.** GEM's fragility functions and capacity
+  curves are global; RISK-UE's capacity curves come from Italian and Greek
+  prototypes. Neither is calibrated on Spanish damage data.
 - **Spatial correlation is ignored.** Every building sits at the same point
   of the ground-motion distribution (the chosen $\varepsilon$), rather than
   sampling correlated fields.

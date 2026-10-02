@@ -1,0 +1,65 @@
+---
+// Two buttons, fixed to the bottom corners on wide screens, that show or
+// hide the left sidebar and the right-hand table of contents. Hiding one
+// gives the page (and its wide tables) more room. The choice is stored in
+// localStorage and restored by Head.astro; custom.css does the layout.
+// On narrow screens Starlight already folds both into menus, so the
+// buttons are hidden there.
+const { hasSidebar, toc, lang } = Astro.locals.starlightRoute;
+const es = lang === 'es';
+const labels = {
+	sidebar: es ? 'Mostrar u ocultar el menú lateral' : 'Show or hide the sidebar',
+	toc: es ? 'Mostrar u ocultar el índice de la página' : 'Show or hide the table of contents',
+};
+---
+
+{
+	hasSidebar && (
+		<button type="button" class="panel-toggle panel-toggle--sidebar" data-panel="sidebar" title={labels.sidebar} aria-label={labels.sidebar}>
+			<svg viewBox="0 0 24 24" aria-hidden="true" width="18" height="18">
+				<rect x="3" y="4" width="18" height="16" rx="2" fill="none" stroke="currentColor" stroke-width="1.8" />
+				<line x1="9" y1="4" x2="9" y2="20" stroke="currentColor" stroke-width="1.8" />
+			</svg>
+		</button>
+	)
+}
+{
+	toc && (
+		<button type="button" class="panel-toggle panel-toggle--toc" data-panel="toc" title={labels.toc} aria-label={labels.toc}>
+			<svg viewBox="0 0 24 24" aria-hidden="true" width="18" height="18">
+				<rect x="3" y="4" width="18" height="16" rx="2" fill="none" stroke="currentColor" stroke-width="1.8" />
+				<line x1="15" y1="4" x2="15" y2="20" stroke="currentColor" stroke-width="1.8" />
+			</svg>
+		</button>
+	)
+}
+
+<script>
+	const KEY = 'twiner-docs-panels';
+	const ATTRIBUTE = { sidebar: 'data-hide-sidebar', toc: 'data-hide-toc' } as const;
+	type Panel = keyof typeof ATTRIBUTE;
+	const root = document.documentElement;
+
+	function sync() {
+		document.querySelectorAll<HTMLButtonElement>('.panel-toggle').forEach((button) => {
+			const panel = button.dataset.panel as Panel;
+			button.setAttribute('aria-pressed', String(!root.hasAttribute(ATTRIBUTE[panel])));
+		});
+	}
+
+	document.querySelectorAll<HTMLButtonElement>('.panel-toggle').forEach((button) => {
+		button.addEventListener('click', () => {
+			const panel = button.dataset.panel as Panel;
+			const hidden = root.toggleAttribute(ATTRIBUTE[panel]);
+			try {
+				const panels = JSON.parse(localStorage.getItem(KEY) || '{}');
+				panels[panel] = !hidden;
+				localStorage.setItem(KEY, JSON.stringify(panels));
+			} catch {
+				// Storage unavailable: the choice lasts for this page only.
+			}
+			sync();
+		});
+	});
+	sync();
+</script>

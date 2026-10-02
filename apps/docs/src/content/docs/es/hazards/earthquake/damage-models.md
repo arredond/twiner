@@ -82,6 +82,29 @@ recoge las dos reglas completas. Cada esquema declara los atributos que
 necesita, así que un despliegue en otro lugar puede activar solo los
 esquemas que sus datos permiten.
 
+## El modelo de funciones de fragilidad
+
+El método más directo: cada clase de edificio tiene un conjunto de
+**funciones de fragilidad**, una por grado de daño, que dan la
+probabilidad de alcanzar o superar ese grado como función lognormal de una
+medida de intensidad en el emplazamiento:
+
+$$
+P(DS \ge ds_i \mid IM) = \Phi\!\left( \frac{\ln(IM / \theta_i)}{\beta_i} \right)
+$$
+
+con la mediana $\theta_i$ y la dispersión $\beta_i$ de cada grado. Cada
+curva está definida respecto a la medida de intensidad que mejor predice
+el daño de su clase (PGA, o SA a 0,3, 0,6 o 1,0 s), así que el escenario
+solo calcula esas. TWIN-ER lee las curvas publicadas en forma tabulada y
+las interpola en la intensidad de cada edificio. Los umbrales de los
+grados de daño son los de la propia base de datos: aquí, los de Martins y
+Silva [1].
+
+Las funciones de fragilidad resumen el comportamiento de una clase de
+edificio, así que el método es rápido y solo necesita la clase. Solo GEM
+las aporta.
+
 ## El modelo de espectro de capacidad
 
 Es el método de nivel II de RISK-UE (LM2) [2, 3], de la misma familia que
@@ -229,45 +252,19 @@ de GEM (0,15 g frente a 0,24 g).
 
 ## Comparación: Lorca 2011
 
-El terremoto de Lorca de 2011 (Mw 5,2, modo manual) con cada método, en la
-ciudad de Lorca (distrito censal 01 del INE, 7.001 edificios), la zona que
-cubrió la inspección posterior al terremoto. Las cifras son recuentos
-esperados (suma de probabilidades). Las probabilidades "baja" y "muy baja"
-dan los mismos recuentos esperados.
+La [validación de twinQUAKE](/docs/es/hazards/earthquake/#validación-lorca-2011)
+compara cada modelo, con cada nivel de probabilidad, con el daño
+inspeccionado en la ciudad de Lorca tras el terremoto de 2011. En resumen:
+con el nivel cuyo movimiento del suelo coincide con el registrado, el
+modelo de fragilidad subestima algo el daño observado y las dos variantes
+del espectro de capacidad lo sobrestiman, sobre todo por cómo define cada
+uno los grados de daño. Estos modelos son alternativas para comparar, no
+predicciones calibradas.
 
-| Nivel | Método | Leve | Moderado | Extenso | Completo | Algún daño | Moderado o superior |
-|---|---|---|---|---|---|---|---|
-| | **Observado** (de 7.890) | 4.035 | 1.328 | 689 *(moderado–grave)* | 329 *(demolidos)* | 81 % | 30 % |
-| Alta | Fragilidad (GEM) | 1.670 | 142 | 25 | 11 | 26 % | 3 % |
-| | Espectro de capacidad (GEM) | 1.537 | 1.582 | 572 | 216 | 56 % | 34 % |
-| | Espectro de capacidad (RISK-UE) | 787 | 1.600 | 806 | 409 | 51 % | 40 % |
-| Baja / muy baja | Fragilidad (GEM) | 3.263 | 868 | 283 | 241 | 67 % | 20 % |
-| | Espectro de capacidad (GEM) | 1.061 | 2.689 | 1.689 | 888 | 90 % | 75 % |
-| | Espectro de capacidad (RISK-UE) | 1.013 | 1.849 | 1.649 | 1.130 | 81 % | 66 % |
-
-- **La probabilidad "baja" es la que tiene un movimiento del suelo igual al
-  registrado en Lorca.** Con ella, el modelo de fragilidad se queda algo
-  corto respecto al daño observado. Las dos variantes del espectro de
-  capacidad lo superan: entre dos y tres veces la proporción observada con
-  daño moderado o superior. La proporción de edificios con algún daño de
-  RISK-UE coincide con el 81 % observado, pero demasiados llegan a daño
-  moderado o superior.
-- **Con probabilidad "alta", las variantes del espectro de capacidad son
-  las que más se acercan a la proporción observada con daño moderado o
-  superior** (34–40 % frente a 30 %), pero encuentran menos edificios
-  dañados en total.
-- **Las clases RISK-UE de la ciudad:** 2.029 M3.1, 707 M3.4, 1.120 RC1 sin
-  normativa y 2.187 de normativa baja, 434 RC3.2 y 524 RC3.1 (ambas de
-  normativa media, así que con curvas de normativa baja).
-- **La mayor parte de la diferencia entre métodos procede de la definición
-  de los grados de daño.** RISK-UE hace empezar el daño moderado en el
-  desplazamiento de plastificación, mientras que las funciones de
-  fragilidad de GEM usan umbrales más suaves.
-
-Estos métodos son alternativas para comparar, no predicciones calibradas.
-Las categorías de la inspección abarcan varios grados de la EMS-98, así que
-no se corresponden una a una con los grados del modelo (ver
-[twinQUAKE](/docs/es/hazards/earthquake/#validación-lorca-2011)).
+Los 7.001 edificios de la ciudad reciben estas clases RISK-UE: 2.029 M3.1,
+707 M3.4, 1.120 RC1 sin normativa y 2.187 de normativa baja, 434 RC3.2 y
+524 RC3.1 (ambas de normativa media, así que con curvas de normativa
+baja).
 
 ## Limitaciones
 

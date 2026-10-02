@@ -1,0 +1,12 @@
+---
+// Starlight's PageFrame, plus the sidebar/TOC show-hide toggles.
+import Default from '@astrojs/starlight/components/PageFrame.astro';
+import PanelToggles from './PanelToggles.astro';
+---
+
+<Default>
+	<slot name="header" slot="header" />
+	<slot name="sidebar" slot="sidebar" />
+	<PanelToggles />
+	<slot />
+</Default>

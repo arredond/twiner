@@ -22,8 +22,8 @@ OpenQuake Engine [2]:
    presenta.
 5. **Exposición y vulnerabilidad.** A qué clase estructural pertenece cada
    edificio, en el esquema de clasificación elegido.
-6. **Fragilidad y daño.** La probabilidad de que cada edificio alcance cada
-   grado de daño con ese movimiento.
+6. **Daño.** La probabilidad de que cada edificio alcance cada grado de
+   daño con ese movimiento, con el modelo de daño elegido.
 7. **Impacto.** Qué suponen esos grados de daño en personas, coste,
    escombros e infraestructuras críticas.
 
@@ -125,17 +125,15 @@ ecuaciones:
   aproximadamente a multiplicar el movimiento por dos.
 
 **Medidas de intensidad.** Los edificios de distinta altura responden a
-frecuencias de vibración distintas. La función de fragilidad de cada
-edificio (paso 6) está definida respecto a la medida de intensidad que
-mejor predice su daño, así que TWIN-ER calcula todas las que necesita:
+frecuencias de vibración distintas, y cada modelo de daño (paso 6) lee el
+movimiento del suelo de forma distinta. TWIN-ER calcula solo lo que
+necesita el modelo elegido:
 
-| Medida de intensidad | Se usa para |
+| Modelo de daño | Medidas de intensidad |
 |---|---|
-| Aceleración máxima del suelo (PGA) | Edificios de 1 planta de hormigón y de mampuesto |
-| Aceleración espectral SA(0,3 s) | Mampostería de 1–3 plantas (2–3 en mampuesto), hormigón de 2–4 |
-| SA(0,6 s) | Mampostería de 4–5 plantas, hormigón de 5–7 |
-| SA(1,0 s) | Hormigón de 8–12 plantas |
-| Velocidad máxima del suelo (PGV) | Intensidad macrosísmica (paso 7) |
+| Funciones de fragilidad | La que define la curva de cada edificio: aceleración máxima del suelo (PGA) en edificios de 1 planta de hormigón y de mampuesto; aceleración espectral SA(0,3 s) en mampostería de 1–3 plantas (2–3 en mampuesto) y hormigón de 2–4; SA(0,6 s) en mampostería de 4–5 plantas y hormigón de 5–7; SA(1,0 s) en hormigón de 8–12 |
+| Espectro de capacidad | SA en el periodo elástico de cada clase, más PGA y velocidad máxima del suelo (PGV) para el periodo de esquina del espectro |
+| Todos | PGV, para la intensidad macrosísmica (paso 7) |
 
 **Malla de cálculo.** El modelo varía suavemente con la distancia. Por eso
 el movimiento del suelo se calcula una vez por celda ocupada de una malla
@@ -146,9 +144,9 @@ del modelo.
 
 **Radio de búsqueda.** Un escenario solo evalúa los edificios lo bastante
 cerca como para importar. El radio es la distancia a la que SA(0,3 s), con
-el nivel de probabilidad elegido, baja de 0,02 g. Es una intensidad muy
-inferior a la mínima a la que cualquiera de las funciones de fragilidad
-usadas predice daño. El radio se limita a entre 10 y 300 km.
+el nivel de probabilidad elegido, baja de 0,02 g, muy por debajo del
+movimiento al que las funciones de fragilidad predicen daño. El radio se
+limita a entre 10 y 300 km, y es el mismo para todos los modelos de daño.
 
 ## 3. Amplificación local
 
@@ -191,7 +189,7 @@ amplificación).
 ## 4. Niveles de probabilidad
 
 Un modelo de movimiento del suelo no predice un valor único, sino una
-distribución, y las funciones de fragilidad también predicen una
+distribución, y todos los modelos de daño predicen también una
 distribución de daño. Como MERISUR, TWIN-ER ofrece tres **niveles de
 probabilidad**. Cada uno lee un punto distinto de esas dos distribuciones
 [1]:
@@ -248,7 +246,7 @@ RISK-UE [16]. En lugar de traducir una taxonomía a otra, TWIN-ER calcula
 de antemano cada **esquema de clasificación** y guarda la clase de cada
 edificio en todos ellos. Un escenario lee la clase del esquema que
 corresponde a la base de datos elegida (ver
-[Modelos de daño](/docs/es/damage-models/#esquemas-de-clasificación)):
+[Modelos de daño](/docs/es/hazards/earthquake/damage-models/#esquemas-de-clasificación)):
 
 | Esquema | Taxonomía | Usa | Versión | Por defecto para |
 |---|---|---|---|---|
@@ -275,8 +273,9 @@ estructural, la ductilidad ni los refuerzos.
 - Si el año es desconocido, el edificio recibe la clase **más vulnerable**.
 
 La **clase de altura** es el número de plantas, de 1 a 12. Las clases de
-mampostería solo tienen funciones de fragilidad hasta 5 plantas, así que
-los edificios de mampostería más altos usan la de 5.
+mampostería solo tienen datos de vulnerabilidad de GEM hasta 5 plantas,
+así que los edificios de mampostería más altos usan las funciones de
+fragilidad y curvas de capacidad de 5 plantas.
 
 ### Clases RISK-UE (`risk_ue_feriche2012`)
 
@@ -324,15 +323,45 @@ mediante trabajo de campo y teledetección en seis clases de RISK-UE: una
 de hormigón y cinco de mampostería. Afinar las clases de mampostería sigue
 siendo la vía más clara para mejorar las estimaciones.
 
-## 6. Fragilidad y daño
+## 6. Daño
+
+Un **modelo de daño** convierte el movimiento en un edificio en la
+probabilidad de cada grado de daño. TWIN-ER ofrece dos, cada uno con sus
+datos de vulnerabilidad, leídos a partir de la clase del edificio en la
+taxonomía de esos datos (paso 5):
+
+| Modelo de daño | Base de datos de vulnerabilidad | Clasificación | |
+|---|---|---|---|
+| Funciones de fragilidad | GEM (Martins y Silva 2021) | `gem_heuristic` | Por defecto |
+| Espectro de capacidad | GEM (Martins y Silva 2021) | `gem_heuristic` | |
+| Espectro de capacidad | RISK-UE (2003) | `risk_ue_feriche2012` | |
+
+El modelo por defecto es el que más tiempo lleva en uso, no el que se ha
+mostrado más preciso: ver [validación](#validación-lorca-2011). La página
+de [Modelos de daño](/docs/es/hazards/earthquake/damage-models/) describe
+cada método y base de datos en detalle.
+
+Todos los modelos producen los mismos cuatro grados de daño, más "sin
+daño". Las descripciones son orientativas:
+
+| Grado | Daño estructural típico |
+|---|---|
+| Sin daño | Ninguno |
+| Leve | Fisuras finas; reparable sin afectar al uso |
+| Moderado | Fisuración apreciable; hay que reparar antes del uso normal |
+| Extenso | Grietas grandes, fallo parcial de elementos; edificio probablemente inseguro |
+| Completo | Colapso o colapso inminente; reparación no rentable |
+
+### 6.1 Funciones de fragilidad
 
 Una **función de fragilidad** da la probabilidad de que un edificio de una
-clase alcance o supere un grado de daño, en función de la medida de
+clase alcance o supere un grado de daño, en función de una medida de
 intensidad en su emplazamiento. TWIN-ER usa el modelo global de fragilidad
-de **Martins y Silva (2021)** [11]. Se obtuvo analíticamente, mediante
+de **Martins y Silva (2021)** [11], de la misma familia que los modelos de
+riesgo global y europeo de GEM. Se obtuvo analíticamente, mediante
 análisis dinámico no lineal de edificios tipo de cada clase de la
-taxonomía de GEM. Es la misma familia de modelos que usan los modelos de
-riesgo global y europeo de GEM.
+taxonomía de GEM, y cada curva está definida respecto a la medida de
+intensidad que mejor predice su daño (paso 2).
 
 Las funciones siguen la forma lognormal habitual:
 
@@ -349,19 +378,38 @@ donde:
 TWIN-ER usa las curvas publicadas en forma tabulada y las interpola en la
 intensidad de cada edificio.
 
-Hay cuatro grados de daño, más "sin daño". Las descripciones son
-orientativas:
+### 6.2 Espectro de capacidad
 
-| Grado | Daño estructural típico |
-|---|---|
-| Sin daño | Ninguno |
-| Leve | Fisuras finas; reparable sin afectar al uso |
-| Moderado | Fisuración apreciable; hay que reparar antes del uso normal |
-| Extenso | Grietas grandes, fallo parcial de elementos; edificio probablemente inseguro |
-| Completo | Colapso o colapso inminente; reparación no rentable |
+El **método del espectro de capacidad** es el nivel II (LM2) de RISK-UE
+[16], el enfoque mecánico que describe la metodología de MERISUR. Parte de
+la **curva de capacidad** de cada clase: la aceleración lateral $S_a$ que
+resiste el edificio a medida que crece su desplazamiento $S_d$,
+idealizada como bilineal, con un punto de plastificación $(D_y, A_y)$ y un
+desplazamiento último $D_u$.
 
-La probabilidad de estar en cada grado es la diferencia entre curvas de
-excedencia consecutivas:
+1. **Periodo elástico** del edificio: $T_e = 2\pi\sqrt{D_y / (A_y\,g)}$.
+2. **Demanda:** la aceleración espectral del emplazamiento en ese periodo,
+   $S_{ae} = SA(T_e)$, del mismo modelo de movimiento del suelo y la misma
+   amplificación local que el resto de cálculos.
+3. **Punto de desempeño:** el desplazamiento $S_d$ que el terremoto impone
+   al edificio, en forma cerrada (método N2).
+4. **Daño:** fragilidad lognormal sobre ese desplazamiento, con umbrales y
+   dispersiones obtenidos de la propia curva de capacidad:
+
+$$
+P(DS \ge ds_k \mid S_d) = \Phi\!\left(\frac{\ln(S_d / S_{d,k})}{\beta_k}\right),
+\qquad S_{d,k} = 0{,}7D_y,\ D_y,\ D_y + 0{,}25(D_u - D_y),\ D_u
+$$
+
+Las curvas de capacidad proceden de cualquiera de las dos bases de datos:
+las de GEM, para las clases GEM, o las de RISK-UE, para las clases RISK-UE.
+Ambas usan los umbrales de daño de RISK-UE, en los que el daño moderado
+empieza en la plastificación.
+
+### 6.3 De las probabilidades al grado mostrado
+
+Sea cual sea el modelo, la probabilidad de estar en cada grado es la
+diferencia entre curvas de excedencia consecutivas:
 
 $$
 P(DS = ds_i) = P(DS \ge ds_i) - P(DS \ge ds_{i+1})
@@ -369,15 +417,9 @@ $$
 
 con $P(DS \ge \text{sin daño}) = 1$ y $P(DS \ge ds_5) = 0$.
 
-Este es el **modelo de daño** por defecto. TWIN-ER puede calcular también
-el daño con el método del espectro de capacidad (nivel II de RISK-UE), con
-los datos de edificios de GEM o de RISK-UE, cada uno con sus propias
-clases: ver [Modelos de daño](/docs/es/damage-models/).
-
-Cada edificio se evalúa con la medida de intensidad para la que está
-definida su propia curva (ver la tabla del paso 2). El grado con el que se
-muestra depende del nivel de probabilidad: el más probable o el percentil
-85. La distribución completa se conserva también:
+El grado con el que se muestra cada edificio depende del nivel de
+probabilidad (paso 4): el más probable o el percentil 85. La distribución
+completa se conserva también:
 
 - el mapa la muestra en la ventana de cada edificio;
 - la lista de infraestructuras la indica para cada instalación;
@@ -464,25 +506,68 @@ Al reproducirlo en modo manual con los datos nacionales:
   "muy baja") queda a pocos puntos porcentuales.
 - **Intensidad.** La estimación para la ciudad es VI con la mediana y entre
   VI y VII con +1σ. El IGN observó VII.
-- **Daño.** La inspección cubrió la ciudad, no todo el municipio: Lorca es
-  uno de los municipios más extensos de España, y mayoritariamente rural.
-  Para comparar la misma zona, las cifras de TWIN-ER se toman en las
-  secciones censales de la ciudad (distrito 01 del INE, 7.001 edificios).
-  Son recuentos esperados, suma de probabilidades
-  (ver [estimaciones de impacto](/docs/es/impact-estimates/#datos-de-partida)):
+**Daño.** La inspección cubrió la ciudad, no todo el municipio: Lorca es
+uno de los municipios más extensos de España, y mayoritariamente rural.
+Para comparar la misma zona, las cifras de TWIN-ER se toman en las
+secciones censales de la ciudad (distrito 01 del INE, 7.001 edificios).
+Son recuentos esperados, suma de probabilidades (ver
+[estimaciones de impacto](/docs/es/impact-estimates/#datos-de-partida)),
+para cada modelo de daño y nivel de probabilidad:
 
-  | | Leve | Moderado | Extenso | Completo | Algún daño | Moderado o superior |
-  |---|---|---|---|---|---|---|
-  | Observado (de 7.890) | 4.035 | 1.328 | 689 *(moderado–grave)* | 329 *(demolidos)* | 81 % | 30 % |
-  | Probabilidad alta | 1.670 | 142 | 25 | 11 | 26 % | 3 % |
-  | Probabilidad baja / muy baja | 3.263 | 868 | 283 | 241 | 67 % | 20 % |
+| Nivel | Modelo de daño | Leve | Moderado | Extenso | Completo | Algún daño | Moderado+ |
+|---|---|--:|--:|--:|--:|--:|--:|
+| | **Observado** (de 7.890) | 4.035 | 1.328 | 689 | 329 | 81 % | 30 % |
+| Alta | Fragilidad (GEM) | 1.670 | 142 | 25 | 11 | 26 % | 3 % |
+| | Espectro de capacidad (GEM) | 1.537 | 1.582 | 572 | 216 | 56 % | 34 % |
+| | Espectro de capacidad (RISK-UE) | 787 | 1.600 | 806 | 409 | 51 % | 40 % |
+| Baja, muy baja | Fragilidad (GEM) | 3.263 | 868 | 283 | 241 | 67 % | 20 % |
+| | Espectro de capacidad (GEM) | 1.061 | 2.689 | 1.689 | 888 | 90 % | 75 % |
+| | Espectro de capacidad (RISK-UE) | 1.013 | 1.849 | 1.649 | 1.130 | 81 % | 66 % |
 
-  Con probabilidad "baja", cuyo movimiento del suelo coincide con el
-  registrado, el modelo se queda algo corto respecto a lo observado: dos
-  tercios de los edificios dañados frente a cuatro quintos, y una quinta
-  parte con daño moderado o superior frente a casi un tercio. La página de
-  [modelos de daño](/docs/es/damage-models/#comparación-lorca-2011) compara
-  los demás métodos.
+Las categorías de la inspección son leve (grados 1–2 de la EMS-98),
+moderado (2–3), de moderado a grave (3–4) y demolido (4–5); ocupan, en ese
+orden, las columnas de Leve a Completo. Las probabilidades "baja" y "muy
+baja" comparten el movimiento del suelo, así que dan los mismos recuentos
+esperados.
+
+Los niveles de probabilidad se diferencian en el grado con el que se
+**muestra** cada edificio en el mapa. Contando esos grados (uno por
+edificio) se obtiene:
+
+| Nivel | Modelo de daño | Sin daño | Leve | Moderado | Extenso | Completo |
+|---|---|--:|--:|--:|--:|--:|
+| Alta | Fragilidad (GEM) | 6.549 | 452 | 0 | 0 | 0 |
+| | Espectro de capacidad (GEM) | 3.668 | 1.222 | 2.111 | 0 | 0 |
+| | Espectro de capacidad (RISK-UE) | 3.581 | 382 | 3.033 | 5 | 0 |
+| Baja | Fragilidad (GEM) | 1.363 | 5.638 | 0 | 0 | 0 |
+| | Espectro de capacidad (GEM) | 788 | 418 | 4.802 | 993 | 0 |
+| | Espectro de capacidad (RISK-UE) | 1.497 | 918 | 2.441 | 1.865 | 280 |
+| Muy baja | Fragilidad (GEM) | 569 | 2.739 | 3.043 | 650 | 0 |
+| | Espectro de capacidad (GEM) | 109 | 47 | 977 | 2.805 | 3.063 |
+| | Espectro de capacidad (RISK-UE) | 624 | 633 | 523 | 1.982 | 3.239 |
+
+Lo que muestra la comparación:
+
+- **Ningún modelo coincide en las dos medidas.** Con probabilidad "baja",
+  cuyo movimiento del suelo coincide con el registrado, el modelo de
+  fragilidad se queda algo corto respecto a lo observado (67 % de
+  edificios dañados frente a 81 %, 20 % con daño moderado o superior
+  frente a 30 %). Las dos variantes del espectro de capacidad lo superan:
+  entre dos y tres veces la proporción observada con daño moderado o
+  superior, aunque la proporción con algún daño de RISK-UE coincide con
+  el 81 % observado.
+- **Con probabilidad "alta", las variantes del espectro de capacidad son
+  las que más se acercan a la proporción con daño moderado o superior**
+  (34–40 % frente a 30 %), pero encuentran menos edificios dañados en
+  total.
+- **La mayor parte de la diferencia entre modelos procede de la definición
+  de los grados de daño.** Los umbrales del espectro de capacidad hacen
+  empezar el daño moderado en la plastificación, mientras que las
+  funciones de fragilidad de GEM usan umbrales más suaves.
+- **Los grados mostrados ocultan buena parte de la distribución.** Con
+  probabilidad "baja", el modelo de fragilidad no muestra ningún edificio
+  por encima de Leve, aunque su recuento esperado con daño moderado o
+  superior ronda los 1.400.
 
 La comparación es orientativa, no una calibración:
 
@@ -491,15 +576,15 @@ La comparación es orientativa, no una calibración:
 - **Las categorías no se corresponden una a una.** Las categorías de la
   inspección proceden de las fichas de seguridad de los edificios y abarcan
   varios grados de la EMS-98 (moderado son los grados 2–3), así que no se
-  corresponden exactamente con los grados del modelo de fragilidad.
+  corresponden exactamente con los grados de los modelos.
 
-Es poco probable que la amplificación
-local sea una fuente de error importante: la $V_{S30}$ del ESRM20 en Lorca
-coincide con los estudios locales. La mayor incertidumbre está en el
-modelo de fragilidad. Las funciones de Martins y Silva son analíticas y
-globales, y difieren de las curvas calibradas empíricamente con daños en
-mampostería mediterránea, como las de Risk-UE. El siguiente paso es
-calibrar con los registros de daño de Lorca, edificio a edificio.
+Es poco probable que la amplificación local sea una fuente de error
+importante: la $V_{S30}$ del ESRM20 en Lorca coincide con los estudios
+locales. La mayor incertidumbre está en la vulnerabilidad, en todos los
+modelos: los datos de GEM son analíticos y globales, los de RISK-UE
+proceden de edificios prototipo italianos y griegos, y ninguno está
+calibrado con daños en España. El siguiente paso es calibrar con los
+registros de daño de Lorca, edificio a edificio.
 
 ## Limitaciones
 
@@ -512,8 +597,10 @@ calibrar con los registros de daño de Lorca, edificio a edificio.
   o cinco tipologías RISK-UE con su nivel de código; el esquema RISK-UE
   está calibrado en Lorca. No hay información sobre sistema estructural,
   irregularidades, refuerzos ni estado de conservación.
-- **Funciones de fragilidad genéricas.** Son globales, no calibradas con
-  datos de daño en España.
+- **Datos de vulnerabilidad genéricos.** Las funciones de fragilidad y
+  curvas de capacidad de GEM son globales; las curvas de capacidad de
+  RISK-UE proceden de prototipos italianos y griegos. Ninguno está
+  calibrado con datos de daño en España.
 - **Sin correlación espacial.** Todos los edificios se sitúan en el mismo
   punto de la distribución del movimiento (el $\varepsilon$ elegido), en
   lugar de muestrear campos correlacionados.

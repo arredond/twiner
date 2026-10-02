@@ -78,6 +78,27 @@ The [twinQUAKE](/docs/hazards/earthquake/#5-exposure-and-vulnerability-classes)
 page gives both rules in full. Each scheme states the attributes it needs,
 so a deployment elsewhere can enable only the schemes its data supports.
 
+## The fragility-function model
+
+The most direct method: each building class has a set of **fragility
+functions**, one per damage state, giving the probability of reaching or
+exceeding that state as a lognormal function of one intensity measure at
+the site:
+
+$$
+P(DS \ge ds_i \mid IM) = \Phi\!\left( \frac{\ln(IM / \theta_i)}{\beta_i} \right)
+$$
+
+with the median $\theta_i$ and dispersion $\beta_i$ of each state. Each
+curve is defined against the intensity measure that best predicts its
+class's damage (PGA, or SA at 0.3, 0.6 or 1.0 s), so the scenario computes
+only those. TWIN-ER reads the published curves in tabulated form and
+interpolates them at each building's intensity. The damage-state
+thresholds are the database's own: here, Martins & Silva's [1].
+
+Fragility functions summarise a building class's behaviour, so the method
+is fast and needs only the class. Only GEM provides them.
+
 ## The capacity-spectrum model
 
 This is the RISK-UE Level II method (LM2) [2, 3], the same family of
@@ -216,41 +237,18 @@ buildings, is weaker than GEM's rubble stone (0.15 g against 0.24 g).
 
 ## Comparison: Lorca 2011
 
-The 2011 Lorca earthquake (Mw 5.2, manual mode) with each method, in the
-town of Lorca (INE census district 01, 7,001 buildings), the area the
-post-earthquake inspection covered. Figures are expected counts (summed
-probabilities). "Low" and "very low" give the same expected counts.
+The [twinQUAKE validation](/docs/hazards/earthquake/#validation-lorca-2011)
+compares every model, at every probability level, with the damage
+inspected in the town of Lorca after the 2011 earthquake. In short: at
+the level whose ground motion matches the recordings, the fragility model
+somewhat underestimates the observed damage and both capacity-spectrum
+variants overestimate it, mostly because of how each defines the damage
+states. Treat the models as alternatives to compare, not as calibrated
+predictions.
 
-| Level | Method | Slight | Moderate | Extensive | Complete | Any damage | Moderate or worse |
-|---|---|---|---|---|---|---|---|
-| | **Observed** (of 7,890) | 4,035 | 1,328 | 689 *(mod.–severe)* | 329 *(demolished)* | 81% | 30% |
-| High | Fragility (GEM) | 1,670 | 142 | 25 | 11 | 26% | 3% |
-| | Capacity spectrum (GEM) | 1,537 | 1,582 | 572 | 216 | 56% | 34% |
-| | Capacity spectrum (RISK-UE) | 787 | 1,600 | 806 | 409 | 51% | 40% |
-| Low / very low | Fragility (GEM) | 3,263 | 868 | 283 | 241 | 67% | 20% |
-| | Capacity spectrum (GEM) | 1,061 | 2,689 | 1,689 | 888 | 90% | 75% |
-| | Capacity spectrum (RISK-UE) | 1,013 | 1,849 | 1,649 | 1,130 | 81% | 66% |
-
-- **"Low" is the level whose ground motion matches what was recorded in
-  Lorca.** There, the fragility model is somewhat short of the observed
-  damage. Both capacity-spectrum variants exceed it: two to three times
-  the observed share at moderate or worse. RISK-UE's share of buildings
-  with any damage matches the observed 81%, but too many of them reach
-  moderate or worse.
-- **At "high" probability, the capacity-spectrum variants come closest to
-  the observed share at moderate or worse** (34–40% against 30%), but
-  find fewer damaged buildings overall.
-- **The town's RISK-UE classes:** 2,029 M3.1, 707 M3.4, 1,120 pre-code and
-  2,187 low-code RC1, 434 RC3.2 and 524 RC3.1 (both moderate-code, so on
-  low-code curves).
-- **Most of the difference between methods comes from the damage-state
-  definitions.** RISK-UE starts Moderate damage at the yield displacement,
-  while GEM's own fragility functions use milder thresholds.
-
-Treat these methods as alternatives to compare, not as calibrated
-predictions. The inspection's categories span EMS-98 grades, so they don't
-match the model's states one-to-one (see
-[twinQUAKE](/docs/hazards/earthquake/#validation-lorca-2011)).
+The town's 7,001 buildings get these RISK-UE classes: 2,029 M3.1, 707
+M3.4, 1,120 pre-code and 2,187 low-code RC1, 434 RC3.2 and 524 RC3.1 (both
+moderate-code, so on low-code curves).
 
 ## Limitations
 

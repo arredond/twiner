@@ -1,0 +1,16 @@
+---
+// Starlight's Head, plus restoring the sidebar/TOC visibility the reader
+// chose (PanelToggles.astro) before the page paints, so it doesn't flash.
+import Default from '@astrojs/starlight/components/Head.astro';
+---
+
+<Default />
+<script is:inline>
+	try {
+		const panels = JSON.parse(localStorage.getItem('twiner-docs-panels') || '{}');
+		if (panels.sidebar === false) document.documentElement.setAttribute('data-hide-sidebar', '');
+		if (panels.toc === false) document.documentElement.setAttribute('data-hide-toc', '');
+	} catch {
+		// Storage unavailable: both panels stay visible.
+	}
+</script>

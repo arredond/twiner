@@ -14,3 +14,73 @@
 .hazard-flood {
 	color: var(--twiner-flood);
 }
+
+/* Tables: Starlight lets list items break words anywhere, which a table
+ * inside a list inherits ("Lev|e"); break only between words, keep
+ * numbers whole, and let wide tables scroll sideways. */
+.sl-markdown-content :is(th, td) {
+	overflow-wrap: normal;
+	word-break: normal;
+}
+.sl-markdown-content th {
+	vertical-align: bottom;
+}
+.sl-markdown-content :is(th, td)[style*='right'],
+.sl-markdown-content :is(th, td)[align='right'] {
+	white-space: nowrap;
+	font-variant-numeric: tabular-nums;
+}
+
+/* Sidebar / table-of-contents toggles (src/components/PanelToggles.astro). */
+.panel-toggle {
+	display: none;
+	position: fixed;
+	bottom: 0.75rem;
+	z-index: var(--sl-z-index-menu);
+	align-items: center;
+	justify-content: center;
+	width: 2.25rem;
+	height: 2.25rem;
+	border: 1px solid var(--sl-color-gray-5);
+	border-radius: 0.5rem;
+	background: var(--sl-color-bg-nav);
+	color: var(--sl-color-gray-2);
+	cursor: pointer;
+}
+.panel-toggle:hover {
+	color: var(--sl-color-white);
+	border-color: var(--sl-color-gray-3);
+}
+.panel-toggle--sidebar {
+	inset-inline-start: 0.75rem;
+}
+.panel-toggle--toc {
+	inset-inline-end: 0.75rem;
+}
+@media (min-width: 50rem) {
+	.panel-toggle--sidebar {
+		display: flex;
+	}
+	html[data-hide-sidebar] {
+		--sl-content-inline-start: 0rem;
+		--__sidebar-pad: 0rem;
+	}
+	html[data-hide-sidebar] .sidebar-pane {
+		display: none;
+	}
+}
+@media (min-width: 72rem) {
+	.panel-toggle--toc {
+		display: flex;
+	}
+	html[data-hide-toc] {
+		--__toc-width: 0rem;
+	}
+	html[data-hide-toc] .right-sidebar-container {
+		display: none;
+	}
+	html[data-hide-toc][data-has-toc] .main-pane {
+		--sl-content-margin-inline: auto;
+		width: 100%;
+	}
+}
