@@ -52,9 +52,11 @@ The bulk of the data volume. Two entry points:
 
 **Single municipality** (`exposure.__main__`, defaults to Lorca) --
 downloads one municipality's INSPIRE Buildings GML from Catastro, parses
-footprints/floors/construction year, assigns a taxonomy class heuristically
-(no field survey -- see `taxonomy.py`'s docstring for the method and its
-limits), and writes `buildings.parquet` + `exposure.parquet` (+ PMTiles if
+footprints/floors/construction year, assigns every classification scheme's
+class (`classification.py`, ADR-0035: GEM classes heuristically, RISK-UE
+types after Feriche et al. 2012 -- no field survey; see `taxonomy.py`'s and
+`risk_ue_classes.py`'s docstrings for the methods and their limits), and
+writes `buildings.parquet` + `exposure.parquet` (+ PMTiles if
 requested). Good for local iteration on parsing/taxonomy logic without
 waiting on a multi-hour crawl -- point it at a directory other than
 `data/exposure` (the full national dataset, see below) so the two don't
@@ -99,6 +101,29 @@ re-downloading:
 
 ```bash
 uv run python -m exposure.backfill "data/exposure/parts/*.buildings.parquet"
+```
+
+After changing a classification scheme (and bumping its version), or
+adding one, re-derive every stale exposure part from its buildings part
+and recombine `exposure.parquet` -- about a minute nationally, no
+re-crawl. Then re-upload `exposure.parquet` and bump `DATA_VERSION`:
+
+```bash
+uv run python -m exposure.retaxonomy_cli data/exposure/parts data/exposure/exposure.parquet
+```
+
+### NCSE-02 seismic zoning (`exposure.ncse02`)
+
+The RISK-UE scheme needs each municipality's NCSE-02 basic acceleration.
+Its outputs are committed (`src/exposure/ncse02_data/`), so this only
+needs re-running to change the parsing or matching. It downloads the BOE
+PDF, parses Annex 1 with poppler's `pdftotext` (`brew install poppler`)
+and matches names to `municipalities.parquet`, using
+`ncse02_data/aliases.csv` for the hand-checked cases; it prints anything
+fuzzy or unmatched:
+
+```bash
+uv run python -m exposure.ncse02 data/exposure/municipalities.parquet
 ```
 
 ### Municipal boundaries (`exposure.municipalities_cli`)

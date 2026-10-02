@@ -1,31 +1,39 @@
 ---
 title: Modelos de daño
-description: Los métodos de cálculo y las bases de datos de vulnerabilidad que puede usar twinQUAKE, qué necesita y produce cada uno, y cómo se obtuvo cada base de datos.
+description: Los métodos de cálculo, las bases de datos de vulnerabilidad y los esquemas de clasificación de edificios que puede usar twinQUAKE, qué necesita y produce cada uno, y cómo se obtuvo cada uno.
 ---
 
 Un escenario sísmico convierte el movimiento del suelo en daño a los
-edificios mediante dos elecciones independientes:
+edificios mediante tres elecciones:
 
 - un **modelo de daño**: el método de cálculo, que convierte el movimiento
   del suelo y los datos de vulnerabilidad de un edificio en la probabilidad
   de cada grado de daño;
 - una **base de datos de vulnerabilidad**: de dónde proceden los datos de
-  vulnerabilidad de cada clase de edificio.
+  vulnerabilidad de cada clase de edificio;
+- un **esquema de clasificación**: cómo se ha asignado a cada edificio una
+  clase de la taxonomía de la base de datos.
 
 Una combinación es válida si la base de datos aporta los datos que
-necesita el modelo. En la aplicación se elige en la tarjeta de twinQUAKE,
-en **Modelo de daño**. En la API, con los parámetros `damage_model` y
-`vulnerability_db` de
+necesita el modelo y el esquema da clases de la taxonomía de la base de
+datos. Todos los esquemas se calculan de antemano para todos los
+edificios, así que cambiar de esquema o de base de datos nunca traduce una
+taxonomía a otra.
+
+En la aplicación se elige la combinación en la tarjeta de twinQUAKE, en
+**Modelo de daño**; cada base de datos usa su esquema por defecto. En la
+API, con los parámetros `damage_model`, `vulnerability_db` y, si se
+quiere, `classification` de
 [`/scenarios/fault`](/docs/es/api/operations/run_fault_scenario/) o
 [`/scenarios/manual`](/docs/es/api/operations/run_manual_scenario/);
 [`GET /methods`](/docs/es/api/operations/list_methods/) devuelve todo lo de
 esta página en formato legible por máquina.
 
-| Modelo de daño | Base de datos | En la aplicación |
-|---|---|---|
-| `fragility` | `gem` | Curvas de fragilidad (GEM). **Por defecto** |
-| `capacity_spectrum` | `gem` | Espectro de capacidad (curvas GEM) |
-| `capacity_spectrum` | `risk_ue` | Espectro de capacidad (RISK-UE) |
+| Modelo de daño | Base de datos | Clasificación (por defecto) | En la aplicación |
+|---|---|---|---|
+| `fragility` | `gem` | `gem_heuristic` | Curvas de fragilidad (GEM). **Por defecto** |
+| `capacity_spectrum` | `gem` | `gem_heuristic` | Espectro de capacidad (curvas GEM) |
+| `capacity_spectrum` | `risk_ue` | `risk_ue_feriche2012` | Espectro de capacidad (RISK-UE) |
 
 Los niveles de probabilidad se aplican igual a todos: +1σ eleva todas las
 medidas del movimiento del suelo, y "muy baja" presenta el grado de daño
@@ -41,7 +49,7 @@ del percentil 85 de la distribución que produzca el modelo (ver
 | Método | Lee las probabilidades de daño de cada edificio en una curva de fragilidad, con la medida de intensidad para la que está definida | Nivel II de RISK-UE: busca dónde se cruza la curva de capacidad del edificio con el espectro de demanda del lugar y aplica una fragilidad lognormal sobre ese desplazamiento |
 | Datos de vulnerabilidad necesarios | Funciones de fragilidad por clase | Curvas de capacidad por clase |
 | Movimiento del suelo necesario (por celda de 1 km) | PGA, SA(0,3 s), SA(0,6 s) o SA(1,0 s), según la clase | SA en el periodo elástico de cada clase; PGA y PGV (para el periodo de esquina del espectro) |
-| Exposición necesaria (por edificio) | Clase de vulnerabilidad, clase de altura | Clase de vulnerabilidad, clase de altura |
+| Exposición necesaria (por edificio) | Clase en la taxonomía de la base de datos, plantas | Clase en la taxonomía de la base de datos, plantas |
 | Salida (por edificio) | Probabilidad de sin daño, leve, moderado, extenso y completo | Igual, más el desplazamiento espectral del punto de desempeño |
 
 Los dos producen los mismos grados de daño, así que el mapa, las
@@ -53,10 +61,26 @@ igual con cualquiera de ellos.
 | | **GEM** (`gem`) | **RISK-UE** (`risk_ue`) |
 |---|---|---|
 | Aporta | Funciones de fragilidad y curvas de capacidad | Solo curvas de capacidad |
-| Clases | Las tres clases de TWIN-ER directamente, de 1 a 12 plantas (mampostería hasta 5) | Asignadas a partir de las clases de TWIN-ER (ver abajo), por rango de altura |
+| Taxonomía | Taxonomía de edificios de GEM | Tipologías de RISK-UE, con nivel de normativa y rango de altura |
+| Clases con datos | Las tres clases usadas, de 1 a 12 plantas (mampostería hasta 5) | M1.2, M3.4, RC1 (sin normativa); RC1, RC3.1, RC3.2 (normativa baja); el resto usa la más cercana (ver abajo) |
 | Cómo se obtuvo | Analíticamente: análisis dinámicos no lineales del sistema equivalente de un grado de libertad de cada clase con un gran conjunto de registros sísmicos [1] | Mecánicamente: análisis pushover de edificios europeos representativos por los socios de RISK-UE, idealizados como curvas bilineales [2] |
 | Umbrales de daño (espectro de capacidad) | Los de RISK-UE (ver abajo) | Los de RISK-UE |
 | Fuente y licencia | Martins y Silva (2021), [GitHub](https://github.com/lmartins88/global_fragility_vulnerability), CC BY-SA 4.0 | Informe WP4 de RISK-UE (2003), tablas 3.1-1 y 3.1-2 |
+
+### Esquemas de clasificación
+
+| | **Heurística GEM** (`gem_heuristic`) | **RISK-UE, Feriche et al. 2012** (`risk_ue_feriche2012`) |
+|---|---|---|
+| Taxonomía | GEM | RISK-UE |
+| Atributos del edificio | Año de construcción, plantas | Año de construcción, plantas |
+| Atributos del emplazamiento | Ninguno | Aceleración básica $a_b$ de la NCSE-02 en el municipio |
+| Regla | Material y sistema según la época de construcción | Matriz de tipologías de Feriche et al. para Lorca [6]; nivel de normativa según la época y $a_b$ |
+| Clases | 3, por número de plantas | 5 tipologías × 3 niveles de normativa × 3 rangos de altura |
+
+La página de [twinQUAKE](/docs/es/hazards/earthquake/#5-exposición-y-clases-de-vulnerabilidad)
+recoge las dos reglas completas. Cada esquema declara los atributos que
+necesita, así que un despliegue en otro lugar puede activar solo los
+esquemas que sus datos permiten.
 
 ## El modelo de espectro de capacidad
 
@@ -157,28 +181,51 @@ mediante análisis pushover de modelos de edificios representativos:
 Las curvas están tabuladas por tipología, rango de altura y nivel de
 normativa sísmica.
 
-Las tipologías de RISK-UE son más detalladas que lo que permite distinguir
-el catastro. TWIN-ER asigna a cada una de sus clases la más parecida:
+TWIN-ER asigna a cada edificio una tipología, un nivel de normativa y un
+rango de altura de RISK-UE con el esquema `risk_ue_feriche2012` (ver
+[twinQUAKE](/docs/es/hazards/earthquake/#clases-risk-ue-risk_ue_feriche2012)).
+Los parámetros usados, de las tablas 3.1-1 (sin normativa) y 3.1-2
+(normativa baja) del WP4:
 
-| Clase de TWIN-ER | Tipología RISK-UE | Nivel de normativa | Rangos de altura |
-|---|---|---|---|
-| `CR_LDUAL-DUL` (hormigón, 1970 o posterior) | RC1: pórticos de hormigón armado | Bajo | L 1–2, M 3–5, H 6+ plantas |
-| `MUR_LWAL-DNO` (mampostería, 1940–1969) | M3.4: mampostería sin armar con forjados de hormigón | Sin normativa | L, M, H |
-| `MUR-STRUB_LWAL-DNO` (mampostería, antes de 1940) | M1.1: mampostería de piedra (mampuesto) | Sin normativa | L, M, H |
+| Tipología | Normativa | $D_y$ (cm) | $A_y$ (g) | $D_u$ (cm) | $T_e$ (s) | Fuente |
+|---|---|---|---|---|---|---|
+| M1.2 L / M / H | Sin | 0,15 / 0,31 / 0,48 | 0,150 / 0,120 / 0,100 | 1,55 / 1,69 / 1,85 | 0,20 / 0,32 / 0,44 | UNIGE |
+| M3.4 L / M / H | Sin | 0,53 / 0,75 / 0,92 | 0,297 / 0,149 / 0,099 | 3,18 / 3,47 / 3,67 | 0,27 / 0,45 / 0,61 | UNIGE |
+| RC1 L / M / H | Sin | 0,77 / 2,21 / 3,86 | 0,187 / 0,156 / 0,073 | 4,47 / 8,79 / 11,48 | 0,41 / 0,76 / 1,46 | UNIGE |
+| RC1 L / M / H | Baja | 2,32 / 4,27 / 5,76 | 0,192 / 0,170 / 0,124 | 9,58 / 10,77 / 14,83 | 0,70 / 1,01 / 1,37 | AUTh |
+| RC3.1 L / M / H | Baja | 0,44 / 0,85 / 2,14 | 1,541 / 0,808 / 0,455 | 1,87 / 2,63 / 5,98 | 0,11 / 0,21 / 0,44 | AUTh |
+| RC3.2 L / M / H | Baja | 1,63 / 1,90 / 2,26 | 0,182 / 0,198 / 0,253 | 6,37 / 7,87 / 7,80 | 0,60 / 0,62 / 0,60 | AUTh |
 
-Los parámetros usados, de las tablas 3.1-1 y 3.1-2 del WP4:
+El WP4 da también una curva de M1.2 de baja altura obtenida por AUTh;
+TWIN-ER usa la de UNIGE, para que todas las curvas de mampostería procedan
+del mismo socio y método.
 
-| Tipología | $D_y$ (cm) | $A_y$ (g) | $D_u$ (cm) | $T_e$ (s) | Fuente |
-|---|---|---|---|---|---|
-| M1.1 L / M / H | 0,38 / 0,47 / 0,66 | 0,173 / 0,115 / 0,058 | 1,93 / 2,03 / 2,28 | 0,30 / 0,41 / 0,68 | UNIGE |
-| M3.4 L / M / H | 0,53 / 0,75 / 0,92 | 0,297 / 0,149 / 0,099 | 3,18 / 3,47 / 3,67 | 0,27 / 0,45 / 0,61 | UNIGE |
-| RC1 L / M / H | 2,32 / 4,27 / 5,76 | 0,192 / 0,170 / 0,124 | 9,58 / 10,77 / 14,83 | 0,70 / 1,01 / 1,37 | AUTh |
+**Las curvas que faltan se sustituyen por la más cercana disponible.** El
+WP4 no tabula una curva para cada tipología y nivel de normativa que
+asigna el esquema. En esos casos TWIN-ER usa la curva disponible más
+cercana, y lo indica:
 
-La principal diferencia con GEM está en el hormigón: los pórticos de
-hormigón de normativa baja de RISK-UE plastifican con aproximadamente un
-tercio de la aceleración que los de GEM (0,19 g frente a 0,56 g en edificios
-bajos), así que resultan mucho más vulnerables. Las curvas de mampostería
-son parecidas a las de GEM.
+| Asignada | Usa | Motivo |
+|---|---|---|
+| M3.1, sin normativa | M1.2, sin normativa | El WP4 no tiene curva de M3.1. M1.2 (mampostería de piedra simple) tiene el mismo índice de vulnerabilidad de nivel I, $V^* = 0{,}74$ (tabla 2.2 del WP4) |
+| RC3.1, sin normativa o normativa media | RC3.1, normativa baja | RC3.1 solo está tabulada con normativa baja |
+| RC3.2, sin normativa o normativa media | RC3.2, normativa baja | RC3.2 solo está tabulada con normativa baja |
+
+Las sustituciones importan. El RC3.x de normativa media, todo edificio
+desde 1997 en un municipio sísmico, usa curvas de normativa baja, así que
+probablemente se **sobrestima** su vulnerabilidad. El RC3.x sin
+normativa, de los mismos años donde $a_b < 0{,}04$ g, probablemente se
+subestima, aunque esas zonas apenas sufren movimiento.
+
+La principal diferencia con GEM está en el hormigón. Los pórticos RC1 de
+RISK-UE plastifican con aproximadamente un tercio de la aceleración que la
+clase de hormigón de GEM (0,19 g frente a 0,56 g en edificios bajos), así
+que resultan mucho más vulnerables. RC3.1, los pórticos con cerramientos
+asignados a los edificios desde 2005, es en cambio muy rígido y
+resistente. En mampostería, M3.4 se parece a la clase de mediados de siglo
+de GEM (plastifica a 0,30 g frente a 0,29 g con dos plantas), mientras que
+M1.2, usada para los edificios más antiguos, es más débil que el mampuesto
+de GEM (0,15 g frente a 0,24 g).
 
 ## Comparación: Lorca 2011
 
@@ -193,20 +240,25 @@ dan los mismos recuentos esperados.
 | | **Observado** (de 7.890) | 4.035 | 1.328 | 689 *(moderado–grave)* | 329 *(demolidos)* | 81 % | 30 % |
 | Alta | Fragilidad (GEM) | 1.670 | 142 | 25 | 11 | 26 % | 3 % |
 | | Espectro de capacidad (GEM) | 1.537 | 1.582 | 572 | 216 | 56 % | 34 % |
-| | Espectro de capacidad (RISK-UE) | 1.047 | 1.557 | 794 | 332 | 53 % | 38 % |
+| | Espectro de capacidad (RISK-UE) | 787 | 1.600 | 806 | 409 | 51 % | 40 % |
 | Baja / muy baja | Fragilidad (GEM) | 3.263 | 868 | 283 | 241 | 67 % | 20 % |
 | | Espectro de capacidad (GEM) | 1.061 | 2.689 | 1.689 | 888 | 90 % | 75 % |
-| | Espectro de capacidad (RISK-UE) | 859 | 1.707 | 1.689 | 1.124 | 77 % | 65 % |
+| | Espectro de capacidad (RISK-UE) | 1.013 | 1.849 | 1.649 | 1.130 | 81 % | 66 % |
 
 - **La probabilidad "baja" es la que tiene un movimiento del suelo igual al
   registrado en Lorca.** Con ella, el modelo de fragilidad se queda algo
   corto respecto al daño observado. Las dos variantes del espectro de
   capacidad lo superan: entre dos y tres veces la proporción observada con
-  daño moderado o superior.
-- **Con probabilidad "alta", las variantes del espectro de capacidad
-  coinciden con la proporción observada con daño moderado o superior**
-  (34–38 % frente a 30 %), pero encuentran menos edificios dañados en
-  total.
+  daño moderado o superior. La proporción de edificios con algún daño de
+  RISK-UE coincide con el 81 % observado, pero demasiados llegan a daño
+  moderado o superior.
+- **Con probabilidad "alta", las variantes del espectro de capacidad son
+  las que más se acercan a la proporción observada con daño moderado o
+  superior** (34–40 % frente a 30 %), pero encuentran menos edificios
+  dañados en total.
+- **Las clases RISK-UE de la ciudad:** 2.029 M3.1, 707 M3.4, 1.120 RC1 sin
+  normativa y 2.187 de normativa baja, 434 RC3.2 y 524 RC3.1 (ambas de
+  normativa media, así que con curvas de normativa baja).
 - **La mayor parte de la diferencia entre métodos procede de la definición
   de los grados de daño.** RISK-UE hace empezar el daño moderado en el
   desplazamiento de plastificación, mientras que las funciones de
@@ -233,8 +285,12 @@ no se corresponden una a una con los grados del modelo (ver
 - **Las curvas de RISK-UE proceden de edificios prototipo italianos y
   griegos**, no españoles. RISK-UE tiene también curvas obtenidas para
   Barcelona (CIMNE) para algunas tipologías, que aún no se usan.
-- **La asignación de clases es aproximada**, como las propias clases: solo
-  se basa en el año de construcción y el número de plantas.
+- **Los esquemas de clasificación son aproximados.** Se basan en el año de
+  construcción y el número de plantas (y, en RISK-UE, en la zona sísmica).
+  El esquema RISK-UE procede de Lorca y se aplica a toda España.
+- **Algunas clases RISK-UE usan la curva de otra** (ver
+  [arriba](#risk-ue-2003)): M3.1 usa M1.2, y RC3.x usa su curva de
+  normativa baja con cualquier nivel de normativa.
 
 ## Referencias
 
@@ -254,3 +310,6 @@ no se corresponden una a una con los grados del modelo (ver
 5. Fajfar, P. (2000). A nonlinear analysis method for performance-based
    seismic design. *Earthquake Spectra*, 16(3), 573–592.
    [doi:10.1193/1.1586128](https://doi.org/10.1193/1.1586128)
+6. Feriche, M., Vidal, F., Alguacil, G., Navarro, M., & Aranda, C. (2012).
+   Vulnerabilidad y daño en el terremoto de Lorca de 2011. *Física de la
+   Tierra*, 24, 255–287.

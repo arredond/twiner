@@ -1,30 +1,37 @@
 ---
 title: Damage models
-description: The calculation methods and vulnerability databases twinQUAKE can use, what each needs and produces, and how each database was derived.
+description: The calculation methods, vulnerability databases and building classification schemes twinQUAKE can use, what each needs and produces, and how each was derived.
 ---
 
 An earthquake scenario turns ground motion into building damage through
-two independent choices:
+three choices:
 
 - a **damage model**: the calculation method, which turns ground motion
   and a building's vulnerability data into the probability of each damage
   state;
 - a **vulnerability database**: where each building class's vulnerability
-  data comes from.
+  data comes from;
+- a **classification scheme**: how each building was given a class in the
+  database's taxonomy.
 
 A combination is valid when the database provides the data the model
-needs. In the app, pick one in the twinQUAKE card under **Damage model**.
-In the API, pass `damage_model` and `vulnerability_db` to
+needs, and the scheme gives classes in the database's taxonomy. Every
+scheme is computed in advance for every building, so switching scheme or
+database never translates one taxonomy into another.
+
+In the app, pick a combination in the twinQUAKE card under **Damage
+model**; each database uses its default scheme. In the API, pass
+`damage_model`, `vulnerability_db` and, optionally, `classification` to
 [`/scenarios/fault`](/docs/api/operations/run_fault_scenario/) or
 [`/scenarios/manual`](/docs/api/operations/run_manual_scenario/);
 [`GET /methods`](/docs/api/operations/list_methods/) lists everything below
 in machine-readable form.
 
-| Damage model | Vulnerability database | In the app |
-|---|---|---|
-| `fragility` | `gem` | Fragility curves (GEM). **Default** |
-| `capacity_spectrum` | `gem` | Capacity spectrum (GEM curves) |
-| `capacity_spectrum` | `risk_ue` | Capacity spectrum (RISK-UE) |
+| Damage model | Vulnerability database | Classification (default) | In the app |
+|---|---|---|---|
+| `fragility` | `gem` | `gem_heuristic` | Fragility curves (GEM). **Default** |
+| `capacity_spectrum` | `gem` | `gem_heuristic` | Capacity spectrum (GEM curves) |
+| `capacity_spectrum` | `risk_ue` | `risk_ue_feriche2012` | Capacity spectrum (RISK-UE) |
 
 The probability levels apply to all of them in the same way: +1σ raises
 every ground-motion input, and "very low" reports the 85th-percentile
@@ -40,7 +47,7 @@ damage state of whatever distribution the model produces (see
 | Method | Read each building's damage probabilities off a fragility curve, at the intensity measure the curve is defined for | RISK-UE Level II: find where the building's capacity curve meets the site's demand spectrum, then apply lognormal fragility on that displacement |
 | Vulnerability data needed | Fragility functions per class | Capacity curves per class |
 | Ground motion needed (per 1 km cell) | PGA, SA(0.3 s), SA(0.6 s) or SA(1.0 s), depending on the class | SA at each class's elastic period; PGA and PGV (for the spectrum's corner period) |
-| Exposure needed (per building) | Vulnerability class, height class | Vulnerability class, height class |
+| Exposure needed (per building) | Class in the database's taxonomy, storeys | Class in the database's taxonomy, storeys |
 | Output (per building) | Probability of None, Slight, Moderate, Extensive, Complete | Same, plus the performance-point spectral displacement |
 
 Both produce the same damage states, so the map, the impact estimates,
@@ -51,10 +58,25 @@ the infrastructure list and the API work unchanged whichever one runs.
 | | **GEM** (`gem`) | **RISK-UE** (`risk_ue`) |
 |---|---|---|
 | Provides | Fragility functions and capacity curves | Capacity curves only |
-| Classes | TWIN-ER's three classes directly, 1–12 storeys (masonry up to 5) | Mapped from TWIN-ER's classes (below), by height band |
+| Taxonomy | GEM building taxonomy | RISK-UE building types, with code level and height band |
+| Classes with data | Three classes used, 1–12 storeys (masonry up to 5) | M1.2, M3.4, RC1 (pre-code); RC1, RC3.1, RC3.2 (low code); others use the nearest (below) |
 | How it was derived | Analytical: nonlinear dynamic analyses of each class's equivalent single-degree-of-freedom model under a large set of ground-motion records [1] | Mechanical: pushover analyses of representative European buildings by the RISK-UE partners, idealised as bilinear curves [2] |
 | Damage-state thresholds (capacity spectrum) | RISK-UE's (see below) | RISK-UE's |
 | Source and licence | Martins & Silva (2021), [GitHub](https://github.com/lmartins88/global_fragility_vulnerability), CC BY-SA 4.0 | RISK-UE WP4 report (2003), Tables 3.1-1 and 3.1-2 |
+
+### Classification schemes
+
+| | **GEM heuristic** (`gem_heuristic`) | **RISK-UE, Feriche et al. 2012** (`risk_ue_feriche2012`) |
+|---|---|---|
+| Taxonomy | GEM | RISK-UE |
+| Building attributes | Construction year, floors | Construction year, floors |
+| Site attributes | None | NCSE-02 basic acceleration $a_b$ of the municipality |
+| Rule | Material and system by construction era | Feriche et al.'s typology matrix for Lorca [6]; code level by era and $a_b$ |
+| Classes | 3, by storeys | 5 types × 3 code levels × 3 height bands |
+
+The [twinQUAKE](/docs/hazards/earthquake/#5-exposure-and-vulnerability-classes)
+page gives both rules in full. Each scheme states the attributes it needs,
+so a deployment elsewhere can enable only the schemes its data supports.
 
 ## The capacity-spectrum model
 
@@ -150,27 +172,47 @@ representative building models:
 The curves are tabulated by building type, height band and seismic-code
 level.
 
-RISK-UE's building types are more detailed than what the cadastre can
-tell apart. TWIN-ER maps each of its own classes to the closest one:
+TWIN-ER gives each building a RISK-UE type, code level and height band
+with the `risk_ue_feriche2012` scheme (see
+[twinQUAKE](/docs/hazards/earthquake/#risk-ue-classes-risk_ue_feriche2012)).
+The parameters used, from WP4 Tables 3.1-1 (pre-code) and 3.1-2 (low
+code):
 
-| TWIN-ER class | RISK-UE type | Code level | Height bands |
-|---|---|---|---|
-| `CR_LDUAL-DUL` (concrete, 1970 or later) | RC1: concrete moment frames | Low code | L 1–2, M 3–5, H 6+ storeys |
-| `MUR_LWAL-DNO` (masonry, 1940–1969) | M3.4: unreinforced masonry with RC slabs | Pre-code | L, M, H |
-| `MUR-STRUB_LWAL-DNO` (masonry, before 1940) | M1.1: rubble stone, fieldstone | Pre-code | L, M, H |
+| Type | Code | $D_y$ (cm) | $A_y$ (g) | $D_u$ (cm) | $T_e$ (s) | Source |
+|---|---|---|---|---|---|---|
+| M1.2 L / M / H | Pre | 0.15 / 0.31 / 0.48 | 0.150 / 0.120 / 0.100 | 1.55 / 1.69 / 1.85 | 0.20 / 0.32 / 0.44 | UNIGE |
+| M3.4 L / M / H | Pre | 0.53 / 0.75 / 0.92 | 0.297 / 0.149 / 0.099 | 3.18 / 3.47 / 3.67 | 0.27 / 0.45 / 0.61 | UNIGE |
+| RC1 L / M / H | Pre | 0.77 / 2.21 / 3.86 | 0.187 / 0.156 / 0.073 | 4.47 / 8.79 / 11.48 | 0.41 / 0.76 / 1.46 | UNIGE |
+| RC1 L / M / H | Low | 2.32 / 4.27 / 5.76 | 0.192 / 0.170 / 0.124 | 9.58 / 10.77 / 14.83 | 0.70 / 1.01 / 1.37 | AUTh |
+| RC3.1 L / M / H | Low | 0.44 / 0.85 / 2.14 | 1.541 / 0.808 / 0.455 | 1.87 / 2.63 / 5.98 | 0.11 / 0.21 / 0.44 | AUTh |
+| RC3.2 L / M / H | Low | 1.63 / 1.90 / 2.26 | 0.182 / 0.198 / 0.253 | 6.37 / 7.87 / 7.80 | 0.60 / 0.62 / 0.60 | AUTh |
 
-The parameters used, from WP4 Tables 3.1-1 and 3.1-2:
+WP4 also gives a low-rise M1.2 curve from AUTh; TWIN-ER uses UNIGE's, so
+that all masonry curves come from the same partner and method.
 
-| Type | $D_y$ (cm) | $A_y$ (g) | $D_u$ (cm) | $T_e$ (s) | Source |
-|---|---|---|---|---|---|
-| M1.1 L / M / H | 0.38 / 0.47 / 0.66 | 0.173 / 0.115 / 0.058 | 1.93 / 2.03 / 2.28 | 0.30 / 0.41 / 0.68 | UNIGE |
-| M3.4 L / M / H | 0.53 / 0.75 / 0.92 | 0.297 / 0.149 / 0.099 | 3.18 / 3.47 / 3.67 | 0.27 / 0.45 / 0.61 | UNIGE |
-| RC1 L / M / H | 2.32 / 4.27 / 5.76 | 0.192 / 0.170 / 0.124 | 9.58 / 10.77 / 14.83 | 0.70 / 1.01 / 1.37 | AUTh |
+**Missing curves use the nearest available one.** WP4 doesn't tabulate a
+curve for every type and code level the scheme assigns. TWIN-ER then uses
+the nearest available curve, and says so:
 
-The main difference from GEM is concrete: RISK-UE's low-code RC frames
-yield at about a third of the acceleration of GEM's (0.19 g against 0.56 g
-for low-rise), so they come out much more vulnerable. The masonry curves
-are close to GEM's.
+| Assigned | Uses | Why |
+|---|---|---|
+| M3.1, pre-code | M1.2, pre-code | WP4 has no M3.1 curve. M1.2 (simple stone) has the same Level I vulnerability index, $V^* = 0.74$ (WP4 Table 2.2) |
+| RC3.1, pre- or moderate-code | RC3.1, low-code | RC3.1 is only tabulated at low code |
+| RC3.2, pre- or moderate-code | RC3.2, low-code | RC3.2 is only tabulated at low code |
+
+The substitutions matter. Moderate-code RC3.x, every building from 1997 in
+a seismic municipality, uses low-code curves and so is likely
+**overestimated** in vulnerability. Pre-code RC3.x, the same years where
+$a_b < 0.04$ g, is likely underestimated, though those areas see little
+shaking.
+
+The main difference from GEM is concrete. RISK-UE's RC1 frames yield at
+about a third of the acceleration of GEM's concrete class (0.19 g against
+0.56 g for low-rise), so they come out much more vulnerable. RC3.1, the
+infilled frames assigned to buildings from 2005, is by contrast very stiff
+and strong. For masonry, M3.4 is close to GEM's mid-century class (yield at
+0.30 g against 0.29 g for two storeys), while M1.2, used for the oldest
+buildings, is weaker than GEM's rubble stone (0.15 g against 0.24 g).
 
 ## Comparison: Lorca 2011
 
@@ -184,18 +226,23 @@ probabilities). "Low" and "very low" give the same expected counts.
 | | **Observed** (of 7,890) | 4,035 | 1,328 | 689 *(mod.–severe)* | 329 *(demolished)* | 81% | 30% |
 | High | Fragility (GEM) | 1,670 | 142 | 25 | 11 | 26% | 3% |
 | | Capacity spectrum (GEM) | 1,537 | 1,582 | 572 | 216 | 56% | 34% |
-| | Capacity spectrum (RISK-UE) | 1,047 | 1,557 | 794 | 332 | 53% | 38% |
+| | Capacity spectrum (RISK-UE) | 787 | 1,600 | 806 | 409 | 51% | 40% |
 | Low / very low | Fragility (GEM) | 3,263 | 868 | 283 | 241 | 67% | 20% |
 | | Capacity spectrum (GEM) | 1,061 | 2,689 | 1,689 | 888 | 90% | 75% |
-| | Capacity spectrum (RISK-UE) | 859 | 1,707 | 1,689 | 1,124 | 77% | 65% |
+| | Capacity spectrum (RISK-UE) | 1,013 | 1,849 | 1,649 | 1,130 | 81% | 66% |
 
 - **"Low" is the level whose ground motion matches what was recorded in
   Lorca.** There, the fragility model is somewhat short of the observed
   damage. Both capacity-spectrum variants exceed it: two to three times
-  the observed share at moderate or worse.
-- **At "high" probability, the capacity-spectrum variants match the
-  observed share at moderate or worse** (34–38% against 30%), but find
-  fewer damaged buildings overall.
+  the observed share at moderate or worse. RISK-UE's share of buildings
+  with any damage matches the observed 81%, but too many of them reach
+  moderate or worse.
+- **At "high" probability, the capacity-spectrum variants come closest to
+  the observed share at moderate or worse** (34–40% against 30%), but
+  find fewer damaged buildings overall.
+- **The town's RISK-UE classes:** 2,029 M3.1, 707 M3.4, 1,120 pre-code and
+  2,187 low-code RC1, 434 RC3.2 and 524 RC3.1 (both moderate-code, so on
+  low-code curves).
 - **Most of the difference between methods comes from the damage-state
   definitions.** RISK-UE starts Moderate damage at the yield displacement,
   while GEM's own fragility functions use milder thresholds.
@@ -219,8 +266,12 @@ match the model's states one-to-one (see
 - **RISK-UE's curves come from Italian and Greek prototype buildings**, not
   from Spanish ones. RISK-UE also has curves derived for Barcelona (CIMNE)
   for some types, not yet used.
-- **The class mapping is coarse**, like the classes themselves: it relies
-  on construction year and storeys only.
+- **The classification schemes are coarse.** They rely on construction
+  year and storeys (plus, for RISK-UE, the seismic zone). The RISK-UE
+  scheme comes from Lorca and is applied to all of Spain.
+- **Some RISK-UE classes use another class's curve** (see
+  [above](#risk-ue-2003)): M3.1 uses M1.2, and RC3.x uses its low-code
+  curve at every code level.
 
 ## References
 
@@ -240,3 +291,6 @@ match the model's states one-to-one (see
 5. Fajfar, P. (2000). A nonlinear analysis method for performance-based
    seismic design. *Earthquake Spectra*, 16(3), 573–592.
    [doi:10.1193/1.1586128](https://doi.org/10.1193/1.1586128)
+6. Feriche, M., Vidal, F., Alguacil, G., Navarro, M., & Aranda, C. (2012).
+   Vulnerabilidad y daño en el terremoto de Lorca de 2011. *Física de la
+   Tierra*, 24, 255–287.

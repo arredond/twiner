@@ -1,10 +1,11 @@
 """CLI: uv run python -m exposure.retaxonomy_cli <parts_dir> <exposure.parquet> [--force]
 
-Applies the current vulnerability-class rules (taxonomy.assign_taxonomy) to
-every already-crawled part whose `taxonomy_source` is out of date, then
-recombines exposure.parquet. See retaxonomy.py. Run after changing the
-rules (and bumping TAXONOMY_SOURCE); then re-upload exposure.parquet and
-bump DATA_VERSION (README, "Cloud deployment").
+Applies the current classification schemes (classification.py, ADR-0035)
+to every already-crawled part where any scheme's version column
+(`taxonomy_source`, `risk_ue_source`) is missing or out of date, then
+recombines exposure.parquet. See retaxonomy.py. Run after changing a
+scheme's rules (and bumping its version); then re-upload exposure.parquet
+and bump DATA_VERSION (README, "Cloud deployment").
 """
 
 from __future__ import annotations

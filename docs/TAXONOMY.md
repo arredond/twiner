@@ -182,15 +182,26 @@ Roughly in order of expected impact per unit of effort:
    improving which generic class each building maps to. Independent of,
    and a bigger ask than, (1)–(5) above.
 
-## 4b. Other vulnerability databases (ADR-0033)
+## 4b. Other classification schemes (ADR-0033, ADR-0035)
 
-The classes above are GEM-taxonomy classes from Martins & Silva (2021).
-The capacity-spectrum damage model can also use RISK-UE's capacity curves,
-which are keyed by RISK-UE building type. TWIN-ER maps its own class to
-the closest one: `CR_LDUAL-DUL` → RC1 low code, `MUR_LWAL-DNO` → M3.4
-pre-code, `MUR-STRUB_LWAL-DNO` → M1.1 pre-code, with a height band of L
-1–2, M 3–5, H 6+ storeys (`capacity_spectrum.GEM_TO_RISK_UE`). Any finer
-class split above (§4) should update that mapping too.
+Everything above is the `gem_heuristic` scheme: GEM-taxonomy classes for
+Martins & Silva (2021). It is one of several **classification schemes**,
+each computed for every building by the exposure pipeline
+(`classification.py`) and stored in its own columns; a scenario reads the
+scheme matching the chosen vulnerability database. No scheme is derived
+from another.
+
+`risk_ue_feriche2012` (`risk_ue_classes.py`, version `feriche2012_v1`)
+gives RISK-UE types from construction year, following Feriche et al.
+(2012)'s Lorca typology matrix: ≤1945/unknown M3.1, 1946–59 M3.4, 1960–96
+RC1, 1997–2004 RC3.2, ≥2005 RC3.1. Code level: masonry pre-code; RC pre
+<1970, low 1970–96, moderate ≥1997, and pre-code wherever the
+municipality's NCSE-02 $a_b$ < 0.04 g (`ncse02.py`). Height band L 1–2,
+M 3–5, H 6+. Columns `risk_ue_class`, `risk_ue_code_level`,
+`risk_ue_height`, `risk_ue_source`, plus `ncse02_ab_g`.
+
+A finer split of either scheme bumps that scheme's version; then run
+`retaxonomy_cli`.
 
 ## 5. Where this is implemented
 

@@ -21,7 +21,7 @@ OpenQuake Engine [2]:
 4. **Nivel de probabilidad.** Qué parte del rango de incertidumbre se
    presenta.
 5. **Exposición y vulnerabilidad.** A qué clase estructural pertenece cada
-   edificio.
+   edificio, en el esquema de clasificación elegido.
 6. **Fragilidad y daño.** La probabilidad de que cada edificio alcance cada
    grado de daño con ese movimiento.
 7. **Impacto.** Qué suponen esos grados de daño en personas, coste,
@@ -237,9 +237,29 @@ edificios en total.
 
 La **clase de vulnerabilidad** de un edificio es la tipología estructural
 que determina cómo responde al movimiento. Un modelo nacional no puede
-basarse en trabajo de campo, así que TWIN-ER asigna la clase a partir de
-los dos atributos catastrales con información estructural. Los nombres de
-las clases siguen la taxonomía de edificios de GEM [10]:
+basarse en trabajo de campo, así que TWIN-ER asigna las clases a partir de
+los atributos catastrales con información estructural (año de
+construcción y número de plantas) y, en uno de los esquemas, de la zona
+sísmica en la que está el edificio.
+
+Cada base de datos de vulnerabilidad está indexada por su propia
+**taxonomía**: la taxonomía de edificios de GEM [10] o las tipologías de
+RISK-UE [16]. En lugar de traducir una taxonomía a otra, TWIN-ER calcula
+de antemano cada **esquema de clasificación** y guarda la clase de cada
+edificio en todos ellos. Un escenario lee la clase del esquema que
+corresponde a la base de datos elegida (ver
+[Modelos de daño](/docs/es/damage-models/#esquemas-de-clasificación)):
+
+| Esquema | Taxonomía | Usa | Versión | Por defecto para |
+|---|---|---|---|---|
+| `gem_heuristic` | GEM | Año de construcción, plantas | `heuristic_v2` | `gem` (y el escenario por defecto) |
+| `risk_ue_feriche2012` | RISK-UE | Año de construcción, plantas, aceleración básica de la NCSE-02 | `feriche2012_v1` | `risk_ue` |
+
+Ambos son estimaciones informadas, no observaciones, y se guardan
+versionados en cada edificio. El Catastro no registra el sistema
+estructural, la ductilidad ni los refuerzos.
+
+### Clases GEM (`gem_heuristic`)
 
 | Año de construcción | Clase | Descripción |
 |---|---|---|
@@ -258,13 +278,51 @@ La **clase de altura** es el número de plantas, de 1 a 12. Las clases de
 mampostería solo tienen funciones de fragilidad hasta 5 plantas, así que
 los edificios de mampostería más altos usan la de 5.
 
-La asignación está versionada (`heuristic_v2`) y se indica en cada
-edificio, porque es una estimación informada, no una observación. El
-Catastro no registra el sistema estructural, la ductilidad ni los
-refuerzos. MERISUR, en cambio, clasificó los edificios de Lorca mediante
-trabajo de campo y teledetección en seis clases de Risk-UE: una de hormigón
-y cinco de mampostería. Afinar las clases de mampostería es la vía más
-clara para mejorar las estimaciones.
+### Clases RISK-UE (`risk_ue_feriche2012`)
+
+Tras el terremoto de Lorca de 2011, Feriche et al. [15] elaboraron una
+matriz de tipologías de edificios para Lorca que asigna una tipología de
+RISK-UE a partir del año de construcción catastral, contrastada con las
+inspecciones de daños de la ciudad. TWIN-ER la aplica a todos los
+edificios de España:
+
+| Año de construcción | Tipología RISK-UE | Descripción (Feriche et al., tabla 5) |
+|---|---|---|
+| 1945 o anterior, o desconocido | M3.1 | Muros de carga de mampostería o fábrica de ladrillo, forjados de madera |
+| 1946–1959 | M3.4 | Fábrica de ladrillo con forjados de hormigón armado |
+| 1960–1996 | RC1 | Pórticos de hormigón (vigas descolgadas hasta 1977; después vigas planas o forjado reticular) |
+| 1997–2004 | RC3.2 | Pórticos de hormigón con vigas planas o forjado reticular, irregulares (NCSE-94) |
+| 2005 o posterior | RC3.1 | Pórticos de hormigón con vigas planas o forjado reticular, o acero (NCSE-02) |
+
+El **nivel de código sísmico** sigue la historia de las normas españolas
+(Feriche et al., tabla 2): la mampostería es siempre anterior a código
+(*pre-code*); el hormigón es anterior a código antes de 1970, de código
+bajo de 1970 a 1996 (PGS-1, PDS-1) y de código medio desde 1997 (NCSE-94,
+NCSE-02). Donde el municipio del edificio tiene una **aceleración sísmica
+básica** $a_b$ inferior a 0,04 g en la norma vigente, la NCSE-02 [17],
+la norma no exige diseño sismorresistente, así que el edificio es anterior
+a código sea cual sea su año. TWIN-ER toma $a_b$ del anejo 1 de la
+NCSE-02, emparejado con los municipios actuales; 2.613 municipios, con el
+52 % de los edificios, tienen $a_b \ge 0{,}04$ g.
+
+La **banda de altura** es la de RISK-UE: baja (1–2 plantas), media (3–5)
+o alta (6 o más).
+
+:::caution[Calibrado en Lorca, aplicado a todo el país]
+La matriz de Feriche et al. describe la historia constructiva de Lorca.
+Usarla en todas partes supone que cada época construyó igual en toda
+España, algo plausible en la España mediterránea y menos en otras
+regiones. La regla de 0,04 g es de la NCSE-02 y se aplica a edificios de
+todas las épocas, aunque las normas anteriores zonificaban España de otra
+forma.
+:::
+
+En toda España, el esquema da un 27 % de M3.1, un 7 % de M3.4, un 43 % de
+RC1 (24 puntos anteriores a código y 19 de código bajo), un 11 % de RC3.1
+y un 11 % de RC3.2. MERISUR, en cambio, clasificó los edificios de Lorca
+mediante trabajo de campo y teledetección en seis clases de RISK-UE: una
+de hormigón y cinco de mampostería. Afinar las clases de mampostería sigue
+siendo la vía más clara para mejorar las estimaciones.
 
 ## 6. Fragilidad y daño
 
@@ -313,8 +371,8 @@ con $P(DS \ge \text{sin daño}) = 1$ y $P(DS \ge ds_5) = 0$.
 
 Este es el **modelo de daño** por defecto. TWIN-ER puede calcular también
 el daño con el método del espectro de capacidad (nivel II de RISK-UE), con
-los datos de edificios de GEM o de RISK-UE: ver
-[Modelos de daño](/docs/es/damage-models/).
+los datos de edificios de GEM o de RISK-UE, cada uno con sus propias
+clases: ver [Modelos de daño](/docs/es/damage-models/).
 
 Cada edificio se evalúa con la medida de intensidad para la que está
 definida su propia curva (ver la tabla del paso 2). El grado con el que se
@@ -450,9 +508,10 @@ calibrar con los registros de daño de Lorca, edificio a edificio.
   probable que es.
 - **Las rupturas de magnitud máxima rompen toda la falla modelada.** No se
   modelan rupturas por segmentos ni distribuciones magnitud-frecuencia.
-- **Tres clases de vulnerabilidad, asignadas por año y altura.** No hay
-  información sobre sistema estructural, irregularidades, refuerzos ni
-  estado de conservación.
+- **Clases poco detalladas, asignadas por año y altura.** Tres clases GEM,
+  o cinco tipologías RISK-UE con su nivel de código; el esquema RISK-UE
+  está calibrado en Lorca. No hay información sobre sistema estructural,
+  irregularidades, refuerzos ni estado de conservación.
 - **Funciones de fragilidad genéricas.** Son globales, no calibradas con
   datos de daño en España.
 - **Sin correlación espacial.** Todos los edificios se sitúan en el mismo
@@ -521,3 +580,11 @@ calibrar con los registros de daño de Lorca, edificio a edificio.
 15. Feriche, M., Vidal, F., Alguacil, G., Navarro, M., & Aranda, C. (2012).
     Vulnerabilidad y daño en el terremoto de Lorca de 2011. *Física de la
     Tierra*, 24, 255–287.
+16. Milutinovic, Z. V., & Trendafiloski, G. S. (2003). *RISK-UE, WP4:
+    Vulnerability of current buildings*. Informe del proyecto RISK-UE,
+    EVK4-CT-2000-00014.
+17. Real Decreto 997/2002, de 27 de septiembre, por el que se aprueba la
+    norma de construcción sismorresistente: parte general y edificación
+    (NCSE-02). *Boletín Oficial del Estado*, 244, 11 de octubre de 2002,
+    anejo 1.
+    [boe.es (PDF)](https://www.boe.es/boe/dias/2002/10/11/pdfs/A35898-35967.pdf)

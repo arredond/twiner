@@ -162,7 +162,7 @@ export interface ScenarioResult {
     probability_level: ProbabilityLevel;
   };
   // Which damage model and vulnerability database ran (ADR-0033).
-  damage_method?: { damage_model: string; vulnerability_db: string };
+  damage_method?: { damage_model: string; vulnerability_db: string; classification?: string };
   evaluated_region: EvaluatedRegion;
   // True when the backend served a stored result for this exact request
   // (content-addressed scenario_id, services/scenario/scenario_id.py)

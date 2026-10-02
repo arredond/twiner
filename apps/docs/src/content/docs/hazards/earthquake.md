@@ -19,7 +19,7 @@ implemented in MERISUR [1] and in tools such as the OpenQuake Engine [2]:
 3. **Site amplification.** How the local soil amplifies that shaking.
 4. **Probability level.** Which part of the uncertainty range to report.
 5. **Exposure and vulnerability.** Which structural class each building
-   belongs to.
+   belongs to, in the classification scheme chosen.
 6. **Fragility and damage.** The probability that each building reaches
    each damage state at its shaking.
 7. **Impact.** What those damage states mean for people, cost, debris and
@@ -222,9 +222,27 @@ million buildings in all.
 
 A building's **vulnerability class** is the structural typology that
 determines how it responds to shaking. Field surveys are out of scope for a
-national model, so TWIN-ER assigns the class from the two cadastral
-attributes that carry structural information. Class names follow the GEM
-building taxonomy [10]:
+national model, so TWIN-ER assigns classes from the cadastral attributes
+that carry structural information (construction year and number of
+floors), plus, for one scheme, the seismic zone the building is in.
+
+Every vulnerability database is keyed by its own **taxonomy**: GEM's
+building taxonomy [10] or RISK-UE's building types [16]. Rather than
+translating one taxonomy into another, TWIN-ER computes every
+**classification scheme** in advance and stores each building's class in
+each of them. A scenario reads the class of the scheme that matches the
+chosen database (see [Damage models](/docs/damage-models/#classification-schemes)):
+
+| Scheme | Taxonomy | Uses | Version | Default for |
+|---|---|---|---|---|
+| `gem_heuristic` | GEM | Construction year, floors | `heuristic_v2` | `gem` (and the default scenario) |
+| `risk_ue_feriche2012` | RISK-UE | Construction year, floors, NCSE-02 basic acceleration | `feriche2012_v1` | `risk_ue` |
+
+Both are informed guesses, not observations, and are versioned and stored
+with every building. Catastro doesn't record structural system, ductility
+or retrofitting.
+
+### GEM classes (`gem_heuristic`)
 
 | Construction year | Class | Description |
 |---|---|---|
@@ -242,12 +260,47 @@ The **height class** is the number of floors, from 1 to 12. The masonry
 classes only have fragility functions up to 5 storeys, so taller masonry
 buildings use the 5-storey function.
 
-The assignment is versioned (`heuristic_v2`) and stated with every
-building, because it is an informed guess, not an observation. Catastro
-doesn't record structural system, ductility or retrofitting. MERISUR, by
-contrast, classified Lorca's buildings from field surveys and remote
-sensing into six Risk-UE classes: one concrete and five masonry. Finer
-masonry classes are the clearest route to better estimates.
+### RISK-UE classes (`risk_ue_feriche2012`)
+
+After the 2011 Lorca earthquake, Feriche et al. [15] built a building
+typology matrix for Lorca that assigns a RISK-UE type from the cadastral
+construction year, checked against the town's damage inspections. TWIN-ER
+applies it to every building in Spain:
+
+| Construction year | RISK-UE type | Description (Feriche et al., Table 5) |
+|---|---|---|
+| 1945 or earlier, or unknown | M3.1 | Masonry or brick load-bearing walls, timber floors |
+| 1946–1959 | M3.4 | Brick masonry with reinforced-concrete floors |
+| 1960–1996 | RC1 | Concrete frames (deep beams to 1977; flat beams or waffle slabs after) |
+| 1997–2004 | RC3.2 | Concrete frames with flat beams or waffle slabs, irregular (NCSE-94) |
+| 2005 or later | RC3.1 | Concrete frames with flat beams or waffle slabs, or steel (NCSE-02) |
+
+**Seismic code level** follows the history of Spain's codes (Feriche et
+al., Table 2): masonry is always pre-code; concrete is pre-code before
+1970, low-code from 1970 to 1996 (PGS-1, PDS-1) and moderate-code from
+1997 (NCSE-94, NCSE-02). Where the building's municipality has a **basic
+acceleration** $a_b$ below 0.04 g in the current code, NCSE-02 [17], the
+code doesn't require seismic design, so the building is pre-code whatever
+its year. TWIN-ER takes $a_b$ from NCSE-02's Annex 1, matched to today's
+municipalities; 2,613 municipalities, with 52% of buildings, have
+$a_b \ge 0.04$ g.
+
+The **height band** is RISK-UE's: low (1–2 storeys), mid (3–5) or high
+(6 or more).
+
+:::caution[Calibrated on Lorca, applied nationally]
+Feriche et al.'s matrix describes Lorca's construction history. Using it
+everywhere assumes that each era built the same way across Spain, which is
+plausible for Mediterranean Spain and less so elsewhere. The 0.04 g rule is
+NCSE-02's, applied to buildings of every era, although earlier codes zoned
+Spain differently.
+:::
+
+Across Spain the scheme gives 27% M3.1, 7% M3.4, 43% RC1 (24 points
+pre-code, 19 low-code), 11% RC3.1 and 11% RC3.2. MERISUR, by contrast,
+classified Lorca's buildings from field surveys and remote sensing into
+six RISK-UE classes: one concrete and five masonry. Finer masonry classes
+remain the clearest route to better estimates.
 
 ## 6. Fragility and damage
 
@@ -295,7 +348,8 @@ with $P(DS \ge \text{None}) = 1$ and $P(DS \ge ds_5) = 0$.
 
 This is the default **damage model**. TWIN-ER can also compute damage with
 the capacity-spectrum method (RISK-UE Level II), with either GEM's or
-RISK-UE's building data: see [Damage models](/docs/damage-models/).
+RISK-UE's building data, each on its own classes: see
+[Damage models](/docs/damage-models/).
 
 Each building is evaluated against the intensity measure its own curve is
 defined for (see the table in step 2). The state it is shown with follows
@@ -425,9 +479,10 @@ damage records is the next step.
 - **Maximum-magnitude ruptures break the whole modelled fault.**
   Segment-by-segment ruptures and magnitude–frequency distributions are not
   modelled.
-- **Three vulnerability classes, assigned from year and height.** There is
-  no information on structural system, irregularities, retrofitting or
-  state of conservation.
+- **Coarse classes, assigned from year and height.** Three GEM classes, or
+  five RISK-UE types with a code level; the RISK-UE scheme is calibrated
+  on Lorca. There is no information on structural system, irregularities,
+  retrofitting or state of conservation.
 - **Generic fragility functions.** They are global, not calibrated on
   Spanish damage data.
 - **Spatial correlation is ignored.** Every building sits at the same point
@@ -496,3 +551,10 @@ damage records is the next step.
 15. Feriche, M., Vidal, F., Alguacil, G., Navarro, M., & Aranda, C. (2012).
     Vulnerabilidad y daño en el terremoto de Lorca de 2011. *Física de la
     Tierra*, 24, 255–287.
+16. Milutinovic, Z. V., & Trendafiloski, G. S. (2003). *RISK-UE, WP4:
+    Vulnerability of current buildings*. RISK-UE project report,
+    EVK4-CT-2000-00014.
+17. Real Decreto 997/2002, de 27 de septiembre, por el que se aprueba la
+    norma de construcción sismorresistente: parte general y edificación
+    (NCSE-02). *Boletín Oficial del Estado*, 244, 11 October 2002, Annex 1.
+    [boe.es (PDF)](https://www.boe.es/boe/dias/2002/10/11/pdfs/A35898-35967.pdf)

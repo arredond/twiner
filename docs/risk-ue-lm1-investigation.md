@@ -40,13 +40,15 @@ But most of this doc's blockers have moved:
 - **§5's architecture now exists** (ADR-0033, `services/scenario/methods.py`).
   LM1 would be a third damage model, `macroseismic`, which needs a new
   vulnerability data kind (`vulnerability_index`), plus a database
-  providing it (`risk_ue`, from WP4 Table 2.2, mapped like ADR-0033's
-  capacity curves), and an `EMS-98 intensity` hazard input. §4's
+  providing it (`risk_ue`, from WP4 Table 2.2, keyed by the precomputed
+  `risk_ue_feriche2012` classes of ADR-0035, which already follow Feriche
+  et al.'s Lorca matrix), and an `EMS-98 intensity` hazard input. §4's
   five-grade (D0–D5) to five-state mapping is still a decision to make.
   One option: D1→Slight, D2→Moderate, D3→Extensive, D4+D5→Complete.
 
 Remaining order: (1) validate intensity against IGN data; (2) vendor WP4
-Table 2.2 rows for the three mapped types; (3) decide the grade mapping;
+Table 2.2 rows for the five types the ADR-0035 scheme assigns (M3.1,
+M3.4, RC1, RC3.1, RC3.2); (3) decide the grade mapping;
 (4) implement the `macroseismic` model against Feriche et al.'s Lorca
 results.
 

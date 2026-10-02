@@ -784,3 +784,46 @@ match. The district-01 proxy misses some of the town's fringe. Matching
 the town's georeferenced inspection forms to Catastro footprints would
 make this a building-by-building comparison (ask UPM or the town
 council).
+
+## 15. RISK-UE classes from Feriche et al. (ADR-0035, 2026-10-02)
+
+The RISK-UE rows above used a translation of the GEM classes (concrete →
+RC1 low code, 1940–69 masonry → M3.4, older → M1.1). ADR-0035 replaces it
+with a scheme computed per building from construction year, floors and
+NCSE-02's basic acceleration, after Feriche et al. (2012)'s typology
+matrix for Lorca (Table 5) and code levels (Table 2). The town's 7,001
+buildings become:
+
+| Type | Code | Buildings | Curve used |
+|---|---|---|---|
+| M3.1 | pre | 2,029 | M1.2 pre (substitution) |
+| M3.4 | pre | 707 | M3.4 pre |
+| RC1 | pre (< 1970) | 1,120 | RC1 pre |
+| RC1 | low (1970–96) | 2,187 | RC1 low |
+| RC3.2 | moderate (1997–2004) | 434 | RC3.2 low (substitution) |
+| RC3.1 | moderate (≥ 2005) | 524 | RC3.1 low (substitution) |
+
+Lorca's $a_b$ is 0.12 g, so its post-1970 concrete is low or moderate
+code. Re-run of `validate_lorca`, capacity spectrum + RISK-UE only (the GEM
+rows are unchanged, to the building):
+
+| Level | Slight | Moderate | Extensive | Complete | Any damage | Moderate+ |
+|---|---|---|---|---|---|---|
+| Observed | 4,035 | 1,328 | 689 (mod.-severe) | 329 (demolished) | 6,381 (81%) | 2,346 (30%) |
+| high, before | 1,047 | 1,557 | 794 | 332 | 3,730 (53%) | 2,683 (38%) |
+| high, ADR-0035 | 787 | 1,600 | 806 | 409 | 3,602 (51%) | 2,815 (40%) |
+| low, before | 859 | 1,707 | 1,689 | 1,124 | 5,379 (77%) | 4,519 (65%) |
+| low, ADR-0035 | 1,013 | 1,849 | 1,649 | 1,130 | 5,641 (81%) | 4,628 (66%) |
+
+Reported states (low): None 1,497, Slight 918, Moderate 2,441, Extensive
+1,865, Complete 280. Whole municipality, expected (low): 4,111 Slight,
+6,263 Moderate, 3,976 Extensive, 2,329 Complete.
+
+**Reading.** The town totals barely move: RISK-UE's share with any damage
+at "low" now matches the observed 81%, but moderate or worse stays at about
+twice the observed 30%. Many buildings changed class, in both directions:
+pre-1940 masonry went from M1.1 to M3.1 (on M1.2's weaker curve); 1940–45
+from M3.4 to M3.1; 1960–69 from masonry M3.4 to RC1 pre-code; 1997+ from
+RC1 low code to RC3.x. Their separate effects weren't measured. The
+capacity-spectrum over-prediction remains mostly a damage-threshold
+question (§14, ADR-0033), not a classification one.

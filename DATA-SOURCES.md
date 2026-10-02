@@ -70,11 +70,18 @@ Fetched live by the scenario API (`/realtime/...`), not by a pipeline -- see [AD
 |---|---|---|---|
 | Instituto Geológico y Minero de España (IGME) — QAFI v4 (Quaternary Active Faults of Iberia) | All of Spain, 201 active faults | Official shapefile download: [`QAFI_Traces.rar`](https://info.igme.es/qafi/docs/QAFI_Traces.rar) (see [ADR-0004](docs/decisions/0004-qafi-shapefile-source.md) for why this replaces an earlier ArcGIS MapServer REST approach) | `pipelines/faults/src/faults/source.py` |
 
+## Seismic code zoning
+
+| Source | Coverage | Resource | Pipeline module |
+|---|---|---|---|
+| Real Decreto 997/2002, NCSE-02 (BOE núm. 244, 11 October 2002), Annex 1: basic seismic acceleration $a_b$ and contribution coefficient $K$ per municipality | 2,615 municipalities (2002 names) with $a_b \ge 0.04$ g, matched to 2,613 of today's INE codes (2,535 exact, 25 fuzzy, 55 via the hand-checked `ncse02_data/aliases.csv`). Legal text: not subject to copyright (art. 13 LPI). Used by the RISK-UE classification scheme (ADR-0035) for seismic code level | BOE PDF, pages 52–70: [`A35898-35967.pdf`](https://www.boe.es/boe/dias/2002/10/11/pdfs/A35898-35967.pdf), parsed with poppler's `pdftotext -raw`. Outputs committed as `ncse02_data/annex1.csv` and `ab_by_municipality.csv` | `pipelines/exposure/src/exposure/ncse02.py` |
+
 ## Fragility functions
 
 | Source | Coverage | Resource | Pipeline module |
 |---|---|---|---|
 | Martins & Silva (2020), *Global Fragility and Vulnerability Functions* | 3 curated taxonomy classes: CR_LDUAL-DUL (reinforced concrete, height classes 1–12 storeys); MUR_LWAL-DNO (generic unreinforced masonry) and MUR-STRUB_LWAL-DNO (vernacular rubble-stone masonry), height classes 1–5 only — that's all the source repo publishes for them. Licensed [CC BY-SA 4.0](https://raw.githubusercontent.com/lmartins88/global_fragility_vulnerability/master/fragility_curves/licence.txt) (`fragility_curves/licence.txt`); cite the paper | GitHub repo, raw CSVs: [`global_fragility_vulnerability/fragility_curves/fragility_other_IMs`](https://raw.githubusercontent.com/lmartins88/global_fragility_vulnerability/master/fragility_curves/fragility_other_IMs) | `pipelines/fragility/src/fragility/source.py` |
+| Milutinovic & Trendafiloski (2003), *RISK-UE WP4: Vulnerability of current buildings*, Tables 3.1-1 and 3.1-2 | Bilinear capacity curves for M1.2, M3.4, RC1 (pre-code, UNIGE) and RC1, RC3.1, RC3.2 (low code, AUTh), L/M/H. © European Commission 2003; rows cited by table | Copied by hand from the WP4 report | `services/scenario/src/scenario/vulnerability_data/risk_ue_2003_capacity.csv` |
 
 ## Basemap
 

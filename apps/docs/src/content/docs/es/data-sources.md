@@ -43,6 +43,8 @@ servicios distintos.
 | QAFI v4: base de datos de fallas activas del Cuaternario de Iberia | Instituto Geológico y Minero de España (IGME-CSIC) | 201 fallas activas en España | CC BY-SA 4.0 | [Trazas de fallas](https://info.igme.es/qafi/docs/QAFI_Traces.rar) |
 | Modelo de suelo del ESRM20 ($V_{S30}$, 30 segundos de arco) | EFEHR / ETH Zúrich, Modelo Europeo de Riesgo Sísmico 2020 | España, salvo Canarias | CC BY 4.0 | [Repositorio](https://gitlab.seismo.ethz.ch/efehr/esrm20) |
 | Funciones de fragilidad globales (Martins y Silva 2021) | Autores de la Fundación GEM | 3 clases de edificio, de 1 a 12 plantas | CC BY-SA 4.0 | [Repositorio](https://github.com/lmartins88/global_fragility_vulnerability) |
+| Curvas de capacidad de RISK-UE (tablas 3.1-1 y 3.1-2 del WP4) | Proyecto RISK-UE (contrato de la UE EVK4-CT-2000-00014): UNIGE, AUTh | 6 tipologías, sin normativa y normativa baja, 3 rangos de altura | © Comisión Europea, 2003; parámetros citados por tabla | Milutinovic y Trendafiloski (2003), informe del WP4 |
+| Anejo 1 de la NCSE-02: aceleración sísmica básica $a_b$ y coeficiente $K$ por municipio | Ministerio de Fomento, Real Decreto 997/2002 (BOE núm. 244, 11 de octubre de 2002) | 2.615 municipios con $a_b \ge 0{,}04$ g, emparejados con 2.613 actuales | Texto legal, excluido de la propiedad intelectual (art. 13 de la LPI) | [BOE (PDF)](https://www.boe.es/boe/dias/2002/10/11/pdfs/A35898-35967.pdf) |
 
 El modelo de movimiento del suelo, Akkar et al. (2014), procede de la
 biblioteca `hazardlib` de OpenQuake (Fundación GEM, AGPL-3.0).
