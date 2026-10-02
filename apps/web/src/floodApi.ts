@@ -1,14 +1,24 @@
 import { API_URL } from "./scenarioApi";
 import { staticDataUrl } from "./staticData";
 
-// Client for flood scenarios (ADR-0029): services/scenario's
-// POST /scenarios/flood, plus the static admin-area index the area picker
-// searches. Section rows and the infrastructure list come through the same
-// /results/{id}/... routes as a seismic scenario's.
+// Client for flood scenarios: services/scenario's POST /scenarios/flood
+// (river flooding, twinFLOOD, ADR-0029) and POST /scenarios/coast (coastal
+// flooding, twinCOAST, ADR-0037), plus the static admin-area index the
+// area picker searches. Section rows and the infrastructure list come
+// through the same /results/{id}/... routes as a seismic scenario's.
 
-// MITECO's four mapped return periods (years). Canarias only has 100/500.
+// Which flood hazard: the response's `hazard`, and the route's last part.
+export type FloodKind = "flood" | "coast";
+export const FLOOD_KINDS = ["flood", "coast"] as const;
+
+// MITECO's mapped return periods (years). River: four (Canarias only has
+// 100/500). Coast: 100/500 only, everywhere.
 export const RETURN_PERIODS = [10, 50, 100, 500] as const;
 export type ReturnPeriod = (typeof RETURN_PERIODS)[number];
+export const KIND_RETURN_PERIODS: Record<FloodKind, readonly ReturnPeriod[]> = {
+  flood: RETURN_PERIODS,
+  coast: [100, 500],
+};
 
 export type AdminLevel = "ccaa" | "province" | "municipality";
 
@@ -70,7 +80,7 @@ export interface FloodTotals {
 
 export interface FloodResult {
   scenario_id: string;
-  hazard: "flood";
+  hazard: FloodKind;
   flood: {
     return_period: ReturnPeriod;
     region: FloodRegion;
@@ -115,8 +125,12 @@ export function roundRegion(region: FloodRegion): FloodRegion {
   };
 }
 
-export async function runFloodScenario(returnPeriod: ReturnPeriod, region: FloodRegion): Promise<FloodResult> {
-  const resp = await fetch(`${API_URL}/scenarios/flood`, {
+export async function runFloodScenario(
+  kind: FloodKind,
+  returnPeriod: ReturnPeriod,
+  region: FloodRegion
+): Promise<FloodResult> {
+  const resp = await fetch(`${API_URL}/scenarios/${kind}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ return_period: returnPeriod, region: roundRegion(region) }),
@@ -206,6 +220,56 @@ export function loadAdminIndex(): Promise<AdminArea[]> {
   return adminIndex;
 }
 
+// --- coverage (pipelines/flood areas.py) ---------------------------------
+
+// The admin areas a hazard's maps reach at all: twinCOAST's picker and
+// search list only these (coastal zones touch ~400 of ~8.1k
+// municipalities). CCAA come from the provinces' parents in the admin index.
+export interface FloodCoverage {
+  municipality: Set<string>;
+  province: Set<string>;
+  ccaa: Set<string>;
+}
+
+interface CoverageFile {
+  municipality: string[];
+  province: string[];
+}
+
+const coverage: Partial<Record<FloodKind, Promise<FloodCoverage | null>>> = {};
+
+// null: the hazard lists every area (river flooding).
+export function loadCoverage(kind: FloodKind): Promise<FloodCoverage | null> {
+  if (kind === "flood") return Promise.resolve(null);
+  let pending = coverage[kind];
+  if (!pending) {
+    pending = Promise.all([
+      fetch(staticDataUrl(`${kind}_areas.json`)).then((resp) => {
+        if (!resp.ok) throw new Error(`coverage request failed (${resp.status})`);
+        return resp.json() as Promise<CoverageFile>;
+      }),
+      loadAdminIndex(),
+    ]).then(([file, index]) => coverageFrom(file, index));
+    pending.catch(() => {
+      delete coverage[kind]; // retry on the next call
+    });
+    coverage[kind] = pending;
+  }
+  return pending;
+}
+
+export function coverageFrom(file: CoverageFile, index: AdminArea[]): FloodCoverage {
+  const province = new Set(file.province);
+  const ccaa = new Set(
+    index.filter((a) => a.level === "province" && province.has(a.code) && a.parent).map((a) => a.parent as string)
+  );
+  return { municipality: new Set(file.municipality), province, ccaa };
+}
+
+export function isCovered(area: { level: AdminLevel; code: string }, cov: FloodCoverage | null): boolean {
+  return cov === null || cov[area.level].has(area.code);
+}
+
 // Case- and accent-insensitive.
 export function normalizeName(text: string): string {
   return text.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
@@ -213,12 +277,18 @@ export function normalizeName(text: string): string {
 
 // Best matches first: names starting with the query, then containing it;
 // CCAA before provinces before municipalities on ties.
-export function searchAdminAreas(index: AdminArea[], query: string, limit = 12): AdminArea[] {
+export function searchAdminAreas(
+  index: AdminArea[],
+  query: string,
+  limit = 12,
+  cov: FloodCoverage | null = null
+): AdminArea[] {
   const needle = normalizeName(query.trim());
   if (!needle) return [];
   const levelRank: Record<AdminLevel, number> = { ccaa: 0, province: 1, municipality: 2 };
   const scored: Array<[number, AdminArea]> = [];
   for (const area of index) {
+    if (!isCovered(area, cov)) continue;
     const name = normalizeName(area.name);
     const at = name.indexOf(needle);
     if (at < 0 && area.code !== needle) continue;

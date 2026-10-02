@@ -39,9 +39,15 @@ and from a research tool towards an operational one.
 		(MITECO) on every building footprint and census section.
 		[How it works →](/docs/hazards/flood/)
 	</Card>
+	<Card title="twinCOAST: coastal floods">
+		Choose a return period (100 or 500 years) and a coastal area. The same
+		method as twinFLOOD, over MITECO's maps of the land the sea reaches in a
+		storm.
+		[How it works →](/docs/hazards/coast/)
+	</Card>
 </CardGrid>
 
-Both hazards share the same exposure model, the same reporting units and the
+All hazards share the same exposure model, the same reporting units and the
 same API. Live layers sit alongside them: traffic incidents from Spain's
 traffic authorities, and observations and warnings from the state weather
 agency (AEMET). They show what is happening now next to what a scenario
@@ -96,7 +102,8 @@ vulnerability classes, the fragility functions and the impact model.
 Changing the ground-motion model or adding a set of fragility curves doesn't
 touch the rest. A new hazard reuses the exposure model, the census and
 infrastructure layers, the reporting units and the API: twinFLOOD was built
-this way on top of twinQUAKE's foundations.
+this way on top of twinQUAKE's foundations, and twinCOAST on top of
+twinFLOOD's.
 
 **Precompute what doesn't depend on the scenario.** Building footprints,
 vulnerability classes, site conditions, census assignments, debris
@@ -165,6 +172,7 @@ substitutions.
 <CardGrid>
 	<LinkCard title="twinQUAKE" description="Earthquake scenarios, step by step." href="/docs/hazards/earthquake/" />
 	<LinkCard title="twinFLOOD" description="Flood scenarios from MITECO's flood zones." href="/docs/hazards/flood/" />
+	<LinkCard title="twinCOAST" description="Coastal flood scenarios from MITECO's marine-origin flood zones." href="/docs/hazards/coast/" />
 	<LinkCard title="API reference" description="Every endpoint, with request and response schemas." href="/docs/api/" />
 	<LinkCard title="Data sources" description="Every dataset, with links to the exact resource." href="/docs/data-sources/" />
 </CardGrid>

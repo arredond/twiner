@@ -1,9 +1,10 @@
 import { useI18n, useSettings } from "../settings";
-import { FLOOD_PALETTE, FLOOD_SHARE_STOPS, type FloodLayerToggles } from "./floodLayers";
+import type { FloodKind } from "../floodApi";
+import { FLOOD_PALETTE, FLOOD_SHARE_STOPS, zoneColor, type FloodLayerToggles } from "./floodLayers";
 import { LegendRow, type LayerStatus } from "./DamageLegend";
 import { Switch } from "./Switch";
 
-// Flood mode's legend sections (ADR-0029), shown by DamageLegend in place of
+// Flood modes' legend sections (ADR-0029, ADR-0037), shown by DamageLegend in place of
 // the seismic ones: the flood zones and the buildings in them, each with its
 // own toggle. The affected municipalities/sections are DamageLegend's
 // generic "Zonas afectadas" section, keyed by FloodShareKey.
@@ -12,7 +13,9 @@ export function FloodLegend({
   show,
   onShowChange,
   returnPeriod,
+  kind,
 }: {
+  kind: FloodKind;
   status: LayerStatus;
   show: FloodLayerToggles;
   onShowChange: (show: FloodLayerToggles) => void;
@@ -37,8 +40,8 @@ export function FloodLegend({
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "0.35rem" }}>
       {row(
-        palette.zone,
-        t("legend.floodZoneLine", { period: returnPeriod }),
+        zoneColor(kind, theme),
+        t(kind === "coast" ? "legend.coastZoneLine" : "legend.floodZoneLine", { period: returnPeriod }),
         t("legend.showFloodZones"),
         show.zones,
         (zones) => onShowChange({ ...show, zones })

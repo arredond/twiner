@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 
-// One hazard's card in the top-left stack (twinQUAKE, twinFLOOD): its name
+// One hazard's card in the top-left stack (twinQUAKE, twinFLOOD, twinCOAST): its name
 // is the header, with the hazard's part ("QUAKE") in its colour
 // (HAZARD_COLORS). Clicking it opens the card's setup controls (App.tsx
 // decides what that means: switching hazard, a new run, or collapsing).

@@ -200,7 +200,9 @@ maps don't provide. For each census section, rolled up to municipalities:
 | Flooded area | Area of the flood zone inside the section, and inside the circle if one was drawn, in km². |
 
 "Not mapped" is not "not flooded". See [twinFLOOD](/docs/hazards/flood/)
-for what the flood maps cover.
+for what the flood maps cover. Coastal flood scenarios
+([twinCOAST](/docs/hazards/coast/)) report the same figures, for the
+coastal flood zone.
 
 ## Limitations
 

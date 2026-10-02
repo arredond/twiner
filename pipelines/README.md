@@ -17,6 +17,9 @@ pipelines/exposure     Catastro (INSPIRE) ----> buildings.parquet (partitioned)
 pipelines/fragility    Martins & Silva (2020) -> fragility.parquet
 pipelines/flood        MITECO SNCZI (ADR-0029) -> building_flood.parquet, zone_areas.parquet
                                             \--> flood_zones.pmtiles, flood_buildings.pmtiles
+                       --hazard coastal (ADR-0037) -> data/coast/ (same files),
+                                            \--> coast_zones.pmtiles, coast_buildings.pmtiles,
+                                                coast_areas.json
                                                         |
                                                         v
                                           services/scenario reads all five
@@ -247,10 +250,39 @@ per-return-period zones and per-province flags are also cached under
 3. **Infrastructure**: the same test on each asset's geometry ->
    `infrastructure_flood.parquet`.
 4. **Tiles** (`tiles.py`): `flood_zones.pmtiles` (layer `flood_zones`: `rp`,
-   `sec`) and `flood_buildings.pmtiles` (layer `flood_buildings`:
+   `sec`; z0-6 overview band + z7-13 detail, joined with `tile-join`; an
+   archive built before the overview existed gets one with
+   `tiles.add_zone_overview`, without rebuilding its detail zooms) and `flood_buildings.pmtiles` (layer `flood_buildings`:
    `building_id`, `sec`, `t10`..`t500`).
 
 The scenario service reads `$TWINER_FLOOD_DIR` (default `data/flood`).
+
+### Coastal flooding (`--hazard coastal`, twinCOAST)
+
+The same pipeline over MITECO's coastal ("origen marino") flood zones,
+T=100/T=500 only ([ADR-0037](../docs/decisions/0037-coastal-flood-scenarios.md)).
+**Manual download first**, same captcha: `laminas-q100.zip` and
+`laminas-q500.zip` from
+<https://www.miteco.gob.es/es/cartografia-y-sig/ide/descargas/costas-medio-marino/zi-origen-marino.html>
+into `data/coast/raw/`. Then:
+
+```bash
+uv run python -m flood --hazard coastal --workers 4 data/coast/raw data/exposure/parts \
+    data/exposure/buildings-cloud-impact.parquet data/census/sections.parquet \
+    data/infrastructure/infrastructure.parquet data/coast
+cp data/coast/coast_zones.pmtiles data/coast/coast_buildings.pmtiles \
+    data/coast/coast_areas.json apps/web/public/data/
+```
+
+Same steps and file names under `data/coast/` (flags `flood_t100`,
+`flood_t500`, never NULL: one file per period covers all of Spain), with
+the tiles named `coast_*` (layers `coast_zones`, `coast_buildings`), plus
+`coast_areas.json`: the municipalities and provinces with a coastal zone,
+which twinCOAST's area picker is limited to (`areas.py`). The source files
+are in ETRS89 lat/lon, so they're repaired and simplified in EPSG:3035 (a
+metric CRS) before the usual steps. About 8 minutes nationally (most of it
+zones and zone tiles). The scenario service reads `$TWINER_COAST_DIR`
+(default `data/coast`).
 
 ## `fragility`: Martins & Silva (2020) fragility functions
 

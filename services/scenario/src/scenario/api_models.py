@@ -24,8 +24,9 @@ then read their results by area, as map tiles, or as GeoJSON.
 ## How it fits together
 
 1. **Run a scenario.** `GET /scenarios/fault` (a fault's maximum-magnitude
-   earthquake), `POST /scenarios/manual` (an earthquake you define) or
-   `POST /scenarios/flood`. The response has a `scenario_id` and one row of
+   earthquake), `POST /scenarios/manual` (an earthquake you define),
+   `POST /scenarios/flood` (river flooding) or `POST /scenarios/coast`
+   (coastal flooding). The response has a `scenario_id` and one row of
    figures per affected municipality.
 2. **Read the details** with that id: per-census-section figures, affected
    critical infrastructure, intensity bands (`/results/{scenario_id}/...`),
@@ -50,13 +51,17 @@ reference describes the API the web app uses, not a stable public contract.
 The local server answers errors as `{"detail": "..."}`; the Lambda as
 `{"error": "..."}`.
 
-See the [twinQUAKE](/docs/hazards/earthquake/) and
-[twinFLOOD](/docs/hazards/flood/) pages for what the numbers mean.
+See the [twinQUAKE](/docs/hazards/earthquake/),
+[twinFLOOD](/docs/hazards/flood/) and [twinCOAST](/docs/hazards/coast/)
+pages for what the numbers mean.
 """
 
 OPENAPI_TAGS = [
     {"name": "Earthquake", "description": "twinQUAKE: faults and earthquake scenarios."},
-    {"name": "Flood", "description": "twinFLOOD: flood-zone scenarios."},
+    {
+        "name": "Flood",
+        "description": "twinFLOOD and twinCOAST: river and coastal flood-zone scenarios.",
+    },
     {"name": "Results", "description": "A scenario's outputs, by its `scenario_id`."},
     {"name": "Tiles", "description": "Vector tiles joined with a scenario's results."},
     {"name": "Exposure", "description": "Static attributes of the building stock."},
@@ -387,7 +392,10 @@ class FloodTotals(_Model):
 
 class FloodScenarioResponse(_Model):
     scenario_id: str
-    hazard: Literal["flood"]
+    hazard: Literal["flood", "coast"] = Field(
+        description="`flood` for river flooding (/scenarios/flood), `coast` for coastal "
+        "flooding (/scenarios/coast)."
+    )
     flood: FloodParams
     region_bbox: list[float] | None = Field(description="[west, south, east, north], degrees.")
     n_flooded: int

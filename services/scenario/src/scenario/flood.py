@@ -1,6 +1,11 @@
 """Flood scenarios: which buildings, people and critical infrastructure lie
-in MITECO's flood zone for a return period, inside a circle or an admin area
-(ADR-0029).
+in MITECO's flood zone for a return period, inside a circle or an admin area.
+
+Two hazards share this module, each with its own pipeline outputs
+(`FloodHazard`): fluvial (twinFLOOD, ADR-0029, `POST /scenarios/flood`)
+and coastal (twinCOAST, ADR-0037, `POST /scenarios/coast`). Both are
+"polygon zone per return period -> flagged buildings"; only the return
+periods, the data directory and which provinces are unmapped differ.
 
 No physics runs per request. The flood pipeline (pipelines/flood) has
 already intersected every building footprint with every return period's
@@ -41,9 +46,9 @@ import pyarrow as pa
 from .impact import AreaMeta, area_meta
 
 FLOOD_DIR = os.environ.get("TWINER_FLOOD_DIR", "data/flood")
+COAST_DIR = os.environ.get("TWINER_COAST_DIR", "data/coast")
 
-RETURN_PERIODS = (10, 50, 100, 500)
-# Provinces without a T=10/T=50 map (sources.py in pipelines/flood).
+# Provinces without a fluvial T=10/T=50 map (sources.py in pipelines/flood).
 CANARIAS_PROVINCES = ("35", "38")
 
 _KM_PER_DEG_LAT = 111.32
@@ -76,6 +81,37 @@ CCAA_PROVINCES: dict[str, tuple[str, ...]] = {
 _PROVINCES = {p for ps in CCAA_PROVINCES.values() for p in ps}
 
 AdminLevel = Literal["ccaa", "province", "municipality"]
+
+
+@dataclass(frozen=True)
+class FloodHazard:
+    """One flood hazard's request rules and data location."""
+
+    key: Literal["flood", "coast"]  # the response's `hazard`, the id's `mode`
+    # Name of the module global holding the data directory (FLOOD_DIR /
+    # COAST_DIR), looked up on use so tests can point it elsewhere.
+    dir_name: str
+    return_periods: tuple[int, ...]
+    # Return period -> provinces with no map for it ("not mapped", not "dry").
+    unmapped: dict[int, tuple[str, ...]]
+
+    @property
+    def data_dir(self) -> str:
+        return globals()[self.dir_name]
+
+
+FLUVIAL = FloodHazard(
+    key="flood",
+    dir_name="FLOOD_DIR",
+    return_periods=(10, 50, 100, 500),
+    unmapped={10: CANARIAS_PROVINCES, 50: CANARIAS_PROVINCES},
+)
+# One file per return period covers all of Spain, Canarias, Ceuta and
+# Melilla included, so nothing is unmapped (ADR-0037).
+COASTAL = FloodHazard(key="coast", dir_name="COAST_DIR", return_periods=(100, 500), unmapped={})
+HAZARDS: dict[str, FloodHazard] = {h.key: h for h in (FLUVIAL, COASTAL)}
+# Kept for callers that predate the coastal hazard.
+RETURN_PERIODS = FLUVIAL.return_periods
 
 
 class FloodRequestError(ValueError):
@@ -141,13 +177,14 @@ def parse_region(body: dict) -> Region:
     raise FloodRequestError("region.type must be 'circle' or 'admin'")
 
 
-def validate_return_period(value: object) -> int:
+def validate_return_period(value: object, hazard: FloodHazard = FLUVIAL) -> int:
+    allowed = hazard.return_periods
     try:
         rp = int(value)  # pyrefly: ignore -- checked below
     except (TypeError, ValueError) as e:
-        raise FloodRequestError(f"return_period must be one of {RETURN_PERIODS}") from e
-    if rp not in RETURN_PERIODS:
-        raise FloodRequestError(f"return_period must be one of {RETURN_PERIODS}")
+        raise FloodRequestError(f"return_period must be one of {allowed}") from e
+    if rp not in allowed:
+        raise FloodRequestError(f"return_period must be one of {allowed}")
     return rp
 
 
@@ -191,9 +228,12 @@ class FloodData:
     zone_area_m2: np.ndarray
     zone_bbox: np.ndarray  # (n, 4): xmin, ymin, xmax, ymax
     infrastructure: pa.Table | None
+    # Where these were read from: circles cut by a zone read its geometry
+    # (zones.parquet) from here on demand. None: the fluvial FLOOD_DIR.
+    data_dir: str | None = None
 
 
-_DATA: FloodData | None = None
+_DATA: dict[str, FloodData] = {}
 _DATA_LOCK = threading.Lock()
 
 
@@ -201,13 +241,13 @@ def _read(con, path: str) -> pa.Table:
     return con.execute("SELECT * FROM read_parquet(?)", [path]).arrow().read_all()
 
 
-def load_data(flood_dir: str | None = None) -> FloodData:
-    """Reads the flood pipeline's outputs (local paths or `s3://`)."""
+def load_data(flood_dir: str | None = None, hazard: FloodHazard = FLUVIAL) -> FloodData:
+    """Reads one hazard's flood pipeline outputs (local paths or `s3://`)."""
     import duckdb
 
     from .db import ensure_httpfs, get_connection
 
-    flood_dir = flood_dir or FLOOD_DIR
+    flood_dir = flood_dir or hazard.data_dir
     con = get_connection()
     if flood_dir.startswith("s3://"):
         ensure_httpfs(con)
@@ -235,7 +275,7 @@ def load_data(flood_dir: str | None = None) -> FloodData:
     )
     flags = {
         rp: buildings.column(f"flood_t{rp}").fill_null(False).to_numpy(zero_copy_only=False)
-        for rp in RETURN_PERIODS
+        for rp in hazard.return_periods
     }
     bbox = np.column_stack(
         [zones.column(c).to_numpy() for c in ("bbox_xmin", "bbox_ymin", "bbox_xmax", "bbox_ymax")]
@@ -255,6 +295,7 @@ def load_data(flood_dir: str | None = None) -> FloodData:
         zone_area_m2=zones.column("area_m2").to_numpy(),
         zone_bbox=bbox,
         infrastructure=infrastructure,
+        data_dir=flood_dir,
     )
 
 
@@ -263,12 +304,11 @@ def _catastro_to_ine(code: str | None) -> str:
     return {"55101": "51001", "56101": "52001"}.get(code, code)
 
 
-def flood_data() -> FloodData:
-    global _DATA
+def flood_data(hazard: FloodHazard = FLUVIAL) -> FloodData:
     with _DATA_LOCK:
-        if _DATA is None:
-            _DATA = load_data()
-        return _DATA
+        if hazard.key not in _DATA:
+            _DATA[hazard.key] = load_data(hazard=hazard)
+        return _DATA[hazard.key]
 
 
 # --- selection ----------------------------------------------------------------
@@ -326,11 +366,17 @@ def flooded_area_by_section(
     }
     straddling = rows[~corners_inside]
     if len(straddling):
-        areas.update(_clipped_areas(data.zone_section[straddling], region, return_period))
+        areas.update(
+            _clipped_areas(
+                data.zone_section[straddling], region, return_period, data.data_dir or FLOOD_DIR
+            )
+        )
     return {s: a for s, a in areas.items() if a > 0}
 
 
-def _clipped_areas(sections: np.ndarray, circle: Circle, return_period: int) -> dict[str, float]:
+def _clipped_areas(
+    sections: np.ndarray, circle: Circle, return_period: int, data_dir: str
+) -> dict[str, float]:
     """Area of each section's zone piece inside the circle, from the zone
     geometry (read only for these sections)."""
     import shapely
@@ -339,7 +385,7 @@ def _clipped_areas(sections: np.ndarray, circle: Circle, return_period: int) -> 
     from .db import ensure_httpfs, get_connection
 
     con = get_connection()
-    if FLOOD_DIR.startswith("s3://"):
+    if data_dir.startswith("s3://"):
         ensure_httpfs(con)
     lon_lo, lat_lo, lon_hi, lat_hi = circle.box()
     table = (
@@ -350,7 +396,7 @@ def _clipped_areas(sections: np.ndarray, circle: Circle, return_period: int) -> 
           AND bbox_xmax >= ? AND bbox_xmin <= ? AND bbox_ymax >= ? AND bbox_ymin <= ?
         """,
             [
-                f"{FLOOD_DIR}/zones.parquet",
+                f"{data_dir}/zones.parquet",
                 return_period,
                 sections.tolist(),
                 lon_lo,
@@ -377,15 +423,19 @@ def _clipped_areas(sections: np.ndarray, circle: Circle, return_period: int) -> 
     return dict(zip(table.column("section_code").to_pylist(), shapely.area(clipped).astype(float)))
 
 
-def unmapped_provinces(region: Region, return_period: int) -> list[str]:
+def unmapped_provinces(
+    region: Region, return_period: int, hazard: FloodHazard = FLUVIAL
+) -> list[str]:
     """Provinces in (or, for a circle, possibly in) the region that have no
-    map for this return period."""
-    if return_period in (100, 500):
+    map for this return period. Only fluvial Canarias at T=10/T=50 today."""
+    unmapped = hazard.unmapped.get(return_period, ())
+    if not unmapped:
         return []
     if isinstance(region, AdminArea):
-        return [p for p in region.provinces() if p in CANARIAS_PROVINCES]
+        return [p for p in region.provinces() if p in unmapped]
+    # A circle reaching west of -13 degrees can only be touching Canarias.
     lon_lo, _, _, _ = region.box()
-    return list(CANARIAS_PROVINCES) if lon_lo < -13.0 else []
+    return [p for p in unmapped if p in CANARIAS_PROVINCES] if lon_lo < -13.0 else []
 
 
 # --- aggregation --------------------------------------------------------------
@@ -480,8 +530,9 @@ def summarize_flood(
     return_period: int,
     data: FloodData | None = None,
     meta: AreaMeta | None = None,
+    hazard: FloodHazard = FLUVIAL,
 ) -> FloodSummary:
-    data = data or flood_data()
+    data = data or flood_data(hazard)
     meta = meta or area_meta()
     rows = select_buildings(data, region, return_period)
     by_section = _sum_by_section(data, rows)
@@ -541,7 +592,7 @@ def summarize_flood(
         section_stats=section_rows,
         totals=totals,
         infrastructure=_infrastructure(data, region, return_period),
-        unmapped_provinces=unmapped_provinces(region, return_period),
+        unmapped_provinces=unmapped_provinces(region, return_period, hazard),
         building_ids=data.building_id[rows],
     )
 
@@ -611,14 +662,20 @@ def region_bbox(region: Region, meta: AreaMeta | None = None) -> list[float] | N
 
 
 def flood_payload(
-    scenario_id: str, region: Region, return_period: int, summary: FloodSummary
+    scenario_id: str,
+    region: Region,
+    return_period: int,
+    summary: FloodSummary,
+    hazard: FloodHazard = FLUVIAL,
 ) -> dict:
     """The response body, shared by local.py and handler.py. The section
     rows and infrastructure list are stored separately (fetched through the
-    existing /results/{id}/... routes), like a seismic scenario's."""
+    existing /results/{id}/... routes), like a seismic scenario's. Both
+    hazards answer the same shape; `hazard` says which ("flood" or
+    "coast"), and the parameters stay under `flood` for either."""
     return {
         "scenario_id": scenario_id,
-        "hazard": "flood",
+        "hazard": hazard.key,
         "flood": {
             "return_period": return_period,
             "region": region_params(region),

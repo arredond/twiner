@@ -4,7 +4,7 @@ Thin adapter only (see docs/decisions/0001-compute-and-iac.md) -- all
 domain logic lives in engine.py/rupture.py/ground_motion.py/damage.py/
 faults.py/building_lookup.py, shared with the local dev server in
 local.py. Mirrors local.py's routes (`/scenarios/manual`, `/scenarios/flood`,
-`/faults`, `/scenarios/fault`, `/buildings/{id}`, `/warmup`) plus `/health`, the
+`/scenarios/coast`, `/faults`, `/scenarios/fault`, `/buildings/{id}`, `/warmup`) plus `/health`, the
 `/results/{id}/...` reads and the `/realtime/...` layers.
 
 A Lambda Function URL has no *routing rules* the way API Gateway does (no
@@ -92,8 +92,9 @@ def handler(event: dict, context) -> dict:
             body = json.loads(event.get("body") or "{}")
             return _manual_scenario(body)
 
-        if method == "POST" and path == "/scenarios/flood":
-            return _flood_scenario(json.loads(event.get("body") or "{}"))
+        if method == "POST" and path in ("/scenarios/flood", "/scenarios/coast"):
+            hazard = "coast" if path == "/scenarios/coast" else "flood"
+            return _flood_scenario(json.loads(event.get("body") or "{}"), hazard)
 
         artifact_route = _ARTIFACT_ROUTE.fullmatch(path)
         if method == "GET" and artifact_route:
@@ -277,12 +278,14 @@ def _manual_scenario(body: dict) -> dict:
     )
 
 
-def _flood_scenario(body: dict) -> dict:
-    """Mirrors local.py's POST /scenarios/flood (ADR-0029). No physics:
+def _flood_scenario(body: dict, hazard_key: str = "flood") -> dict:
+    """Mirrors local.py's POST /scenarios/flood (ADR-0029) and
+    /scenarios/coast (ADR-0037). No physics:
     flood.py only filters precomputed flags, so none of hazardlib's import
     weight is paid here (flood.py imports numpy/pyarrow, and shapely only
     for circles cutting through zones)."""
     from .flood import (
+        HAZARDS,
         FloodRequestError,
         flood_payload,
         parse_region,
@@ -292,20 +295,21 @@ def _flood_scenario(body: dict) -> dict:
     )
     from .scenario_id import flood_scenario_id
 
+    hazard = HAZARDS[hazard_key]
     try:
-        return_period = validate_return_period(body.get("return_period"))
+        return_period = validate_return_period(body.get("return_period"), hazard)
         region = parse_region(body.get("region") or {})
     except FloodRequestError as e:
         return _response(400, {"error": str(e)})
-    scenario_id = flood_scenario_id(return_period, region_params(region))
+    scenario_id = flood_scenario_id(return_period, region_params(region), hazard.key)
     if (cached := _cached_response(scenario_id)) is not None:
         return cached
     t0 = time.monotonic()
     try:
-        summary = summarize_flood(region, return_period)
+        summary = summarize_flood(region, return_period, hazard=hazard)
     except FileNotFoundError as e:
         return _response(500, {"error": f"missing pipeline output: {e}"})
-    payload = flood_payload(scenario_id, region, return_period, summary)
+    payload = flood_payload(scenario_id, region, return_period, summary, hazard)
     if RESULTS_BUCKET is not None:
         from tiles.results_store import (
             init_scenario,
@@ -324,7 +328,7 @@ def _flood_scenario(body: dict) -> dict:
             write_artifact(RESULTS_BUCKET, scenario_id, INFRASTRUCTURE_FILE, summary.infrastructure)
         write_response(RESULTS_BUCKET, scenario_id, payload)
     print(
-        f"scenario: flood {scenario_id} T={return_period} {region_params(region)}: "
+        f"scenario: {hazard.key} {scenario_id} T={return_period} {region_params(region)}: "
         f"{summary.n_flooded} flooded, {time.monotonic() - t0:.2f}s"
     )
     return _response(200, {**payload, "cached": False})

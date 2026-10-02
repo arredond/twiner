@@ -112,7 +112,9 @@ def manual_scenario_id(
     )
 
 
-def flood_scenario_id(return_period: int, region: dict) -> str:
-    """Flood mode (ADR-0029): the return period plus the region, as
-    `flood.region_params` spells it."""
-    return _hash({"mode": "flood", "return_period": int(return_period), "region": region})
+def flood_scenario_id(return_period: int, region: dict, hazard: str = "flood") -> str:
+    """Flood modes: the hazard ("flood" fluvial, ADR-0029; "coast" coastal,
+    ADR-0037), the return period and the region, as `flood.region_params`
+    spells it. Fluvial ids hash exactly what they did before coastal
+    existed."""
+    return _hash({"mode": hazard, "return_period": int(return_period), "region": region})

@@ -40,6 +40,12 @@ herramienta de investigación a una operativa.
 		sección censal.
 		[Cómo funciona →](/docs/es/hazards/flood/)
 	</Card>
+	<Card title="twinCOAST: inundaciones costeras">
+		Elige un periodo de retorno (100 o 500 años) y una zona costera. El mismo
+		método que twinFLOOD, sobre los mapas del MITECO del terreno al que llega
+		el mar en un temporal.
+		[Cómo funciona →](/docs/es/hazards/coast/)
+	</Card>
 </CardGrid>
 
 Los dos peligros comparten el mismo modelo de exposición, las mismas
@@ -102,7 +108,7 @@ fragilidad y el modelo de impacto. Cambiar el modelo de movimiento del suelo
 o añadir un conjunto de curvas de fragilidad no afecta al resto. Un peligro
 nuevo reutiliza el modelo de exposición, las capas de censo e
 infraestructuras, las unidades de informe y la API: twinFLOOD se construyó
-así sobre las bases de twinQUAKE.
+así sobre las bases de twinQUAKE, y twinCOAST sobre las de twinFLOOD.
 
 **Precalcular lo que no depende del escenario.** Las huellas de los
 edificios, las clases de vulnerabilidad, las condiciones del suelo, la
@@ -175,6 +181,7 @@ cada sustitución.
 <CardGrid>
 	<LinkCard title="twinQUAKE" description="Escenarios sísmicos, paso a paso." href="/docs/es/hazards/earthquake/" />
 	<LinkCard title="twinFLOOD" description="Escenarios de inundación a partir de las zonas inundables del MITECO." href="/docs/es/hazards/flood/" />
+	<LinkCard title="twinCOAST" description="Escenarios de inundación costera a partir de las zonas inundables de origen marino del MITECO." href="/docs/es/hazards/coast/" />
 	<LinkCard title="Referencia de la API" description="Todos los endpoints, con sus esquemas de petición y respuesta." href="/docs/es/api/" />
 	<LinkCard title="Fuentes de datos" description="Cada conjunto de datos, con enlace al recurso exacto." href="/docs/es/data-sources/" />
 </CardGrid>

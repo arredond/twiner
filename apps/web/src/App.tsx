@@ -14,10 +14,14 @@ import {
   getFloodInfrastructure,
   getFloodSectionShares,
   getFloodSectionStats,
+  KIND_RETURN_PERIODS,
   loadAdminIndex,
+  loadCoverage,
   runFloodScenario,
   type AdminArea,
   type AdminLevel,
+  type FloodCoverage,
+  type FloodKind,
   type FloodRegion,
   type FloodResult,
   type FloodSectionStats,
@@ -173,13 +177,16 @@ export default function App() {
   const nextFocusKey = useRef(0);
   const hasInfrastructure = result?.infrastructure_summary != null;
 
-  // Flood mode (ADR-0029): its own setup, result and drill-down, next to
-  // the seismic ones. `hazard` is the card in use (twinQUAKE / twinFLOOD,
-  // none at first); switching it clears both results. `cardOpen`: its setup
-  // controls are showing (a run collapses them).
+  // Flood modes (river ADR-0029, coastal ADR-0037): their own setup, result
+  // and drill-down, next to the seismic ones, shared by twinFLOOD and
+  // twinCOAST (`floodKind` says which). `hazard` is the card in use
+  // (twinQUAKE / twinFLOOD / twinCOAST, none at first); switching it clears
+  // every result. `cardOpen`: its setup controls are showing (a run
+  // collapses them).
   // twinQUAKE starts open, so the map opens on something (its faults) that
   // matches the legend.
-  const [hazard, setHazard] = useState<"seismic" | "flood" | null>("seismic");
+  const [hazard, setHazard] = useState<HazardCardId | null>("seismic");
+  const floodKind: FloodKind | null = hazard === "flood" || hazard === "coast" ? hazard : null;
   const [cardOpen, setCardOpen] = useState(true);
   // The choropleths' level at the current zoom, for the legend's title.
   const [areaLevel, setAreaLevel] = useState<"municipality" | "section">("municipality");
@@ -199,16 +206,30 @@ export default function App() {
   const [floodSectionsError, setFloodSectionsError] = useState<string | null>(null);
   const floodSectionCacheRef = useRef<Map<string, Promise<FloodSectionStats[]>>>(new Map());
   const floodScenarioId = floodResult?.scenario_id ?? null;
+  // twinCOAST's areas (null: river flooding lists them all, or loading).
+  const [coverage, setCoverage] = useState<FloodCoverage | null>(null);
 
   useEffect(() => {
-    if (hazard !== "flood" || adminIndex) return;
+    if (floodKind === null || adminIndex) return;
     loadAdminIndex()
       .then(setAdminIndex)
       .catch(() => {
         // FloodPanel shows the error; CCAA outlines on the map just can't
         // be filtered to their provinces.
       });
-  }, [hazard, adminIndex]);
+  }, [floodKind, adminIndex]);
+
+  useEffect(() => {
+    setCoverage(null);
+    if (floodKind === null) return;
+    let cancelled = false;
+    loadCoverage(floodKind)
+      .then((cov) => !cancelled && setCoverage(cov))
+      .catch((e) => !cancelled && setError(e instanceof Error ? e.message : String(e)));
+    return () => {
+      cancelled = true;
+    };
+  }, [floodKind]);
 
   const loadFloodSectionStats = useCallback(
     (municipalityCode: string): Promise<FloodSectionStats[]> => {
@@ -274,7 +295,7 @@ export default function App() {
   // before that every asset in Spain draws as a full marker, which is
   // overwhelming until the affected/greyed-out styling applies.
   const showInfraOnLoadRef = useRef(false);
-  const scenarioInfrastructure = hazard === "flood" ? floodInfrastructure : infrastructure;
+  const scenarioInfrastructure = floodKind ? floodInfrastructure : infrastructure;
   useEffect(() => {
     if (!scenarioInfrastructure || !showInfraOnLoadRef.current) return;
     showInfraOnLoadRef.current = false;
@@ -302,6 +323,7 @@ export default function App() {
         ? (adminIndex ?? []).filter((a) => a.level === "province" && a.parent === region.code).map((a) => a.code)
         : [];
     return {
+      kind: floodResult.hazard,
       returnPeriod: return_period,
       region,
       provinces,
@@ -435,7 +457,8 @@ export default function App() {
     setIsRunning(true);
     setError(null);
     try {
-      setFloodResult(await runFloodScenario(returnPeriod, region));
+      if (!floodKind) return;
+      setFloodResult(await runFloodScenario(floodKind, returnPeriod, region));
       setCardOpen(false);
       showInfraOnLoadRef.current = true;
     } catch (e) {
@@ -461,10 +484,15 @@ export default function App() {
     setLegendOpen(false);
   }
 
-  function changeHazard(next: "seismic" | "flood" | null) {
+  function changeHazard(next: HazardCardId | null) {
     clearScenario();
     clearFlood();
     setHazard(next);
+    // Coastal maps only exist for T100/T500.
+    if (next === "flood" || next === "coast") {
+      const periods = KIND_RETURN_PERIODS[next];
+      if (!periods.includes(returnPeriod)) setReturnPeriod(periods[0]);
+    }
     setPending(null);
     // Faults are the seismic mode's own layer.
     setShowFaults(next === "seismic");
@@ -473,13 +501,16 @@ export default function App() {
   // A card's name was clicked: open that hazard (closing the other), start
   // a new run if its result is showing, or else open/close its setup
   // (closing it leaves no hazard on the map).
-  function onCardClick(card: "seismic" | "flood") {
+  function onCardClick(card: HazardCardId) {
     if (isRunning) return;
     if (hazard !== card) {
       changeHazard(card);
       setCardOpen(true);
+      // The flood zones show from the start (Spain-wide, at the selected
+      // return period) so the map isn't empty before a run.
+      if (card !== "seismic") setFloodLayers((l) => ({ ...l, zones: true }));
     } else if (hasSidebar) {
-      if (card === "flood") clearFlood();
+      if (card !== "seismic") clearFlood();
       else clearScenario();
       setCardOpen(true);
     } else if (cardOpen) {
@@ -571,10 +602,13 @@ export default function App() {
   }
 
   const floodMapProps: FloodMapProps | null =
-    hazard === "flood"
+    floodKind
       ? {
+          kind: floodKind,
+          coverage,
           picker: floodResult || isRunning ? null : regionMode === "circle" ? { kind: "circle" } : { kind: "admin", level: regionMode },
           scenario: floodMapScenario,
+          preview: floodResult ? null : { kind: floodKind, returnPeriod },
           bbox: floodResult?.region_bbox ?? null,
           show: floodLayers,
           municipalityStats: floodResult?.municipality_stats ?? [],
@@ -587,7 +621,7 @@ export default function App() {
           },
         }
       : null;
-  const hasSidebar = hazard === "flood" ? floodResult !== null : result !== null;
+  const hasSidebar = floodKind ? floodResult !== null : result !== null;
 
   const runPopup =
     pending === null
@@ -611,13 +645,13 @@ export default function App() {
           scenarioId={scenarioId}
           municipalityStats={result?.municipality_stats ?? []}
           sectionSeverity={sectionSeverity}
-          selectedMunicipality={hazard === "flood" ? floodMunicipality : selectedMunicipality}
-          selectedSection={hazard === "flood" ? floodSection : selectedSection}
+          selectedMunicipality={floodKind ? floodMunicipality : selectedMunicipality}
+          selectedSection={floodKind ? floodSection : selectedSection}
           loadSectionStats={loadSectionStats}
           evaluatedRegion={result?.evaluated_region ?? null}
           faults={faults}
           selectedFaultId={selectedFaultId}
-          mode={hazard === "flood" ? "flood" : hazard === "seismic" ? mode : "none"}
+          mode={floodKind ? "flood" : hazard === "seismic" ? mode : "none"}
           flood={floodMapProps}
           onAreaLevelChange={setAreaLevel}
           onFaultClick={handleFaultClick}
@@ -630,7 +664,7 @@ export default function App() {
           intensityBands={intensityBands}
           showIntensity={showIntensity}
           infrastructureCategories={infraCategories}
-          infrastructureResults={hazard === "flood" ? floodInfrastructure : infrastructure}
+          infrastructureResults={floodKind ? floodInfrastructure : infrastructure}
           focusedAsset={focusedAsset}
           dgtIncidents={showDgt ? dgt.data : null}
           dgtCategories={dgtCategories}
@@ -649,7 +683,7 @@ export default function App() {
         {/* Clear of MapLibre's attribution ("i") control in the corner. */}
         <BasemapPicker style={{ bottom: "3rem", right: `${(hasSidebar ? SIDEBAR_WIDTH_REM : 0) + 0.75}rem` }} />
 
-        {/* The two hazard cards (twinQUAKE, twinFLOOD), collapsed at first;
+        {/* The hazard cards (twinQUAKE, twinFLOOD, twinCOAST), collapsed at first;
             a card's name opens it (see onCardClick). */}
         <div
           style={{
@@ -663,7 +697,7 @@ export default function App() {
             gap: "0.5rem",
           }}
         >
-          {(["seismic", "flood"] as const).map((card) => {
+          {HAZARD_CARDS.map((card) => {
             const active = hazard === card;
             const open = active && cardOpen;
             const errorStyle: React.CSSProperties = {
@@ -686,21 +720,23 @@ export default function App() {
             return (
               <HazardCard
                 key={card}
-                name={card === "seismic" ? "QUAKE" : "FLOOD"}
+                name={CARD_NAMES[card]}
                 color={HAZARD_COLORS[theme][card]}
                 open={open}
                 title={
                   active && hasSidebar
                     ? t("app.newRun")
-                    : t(card === "seismic" ? "card.quakeTitle" : "card.floodTitle")
+                    : t(CARD_TITLES[card])
                 }
                 onHeaderClick={() => onCardClick(card)}
                 docsHref={hazardDocsHref(card, settings.language)}
                 docsLabel={t("card.docs")}
                 status={status}
               >
-                {card === "flood" ? (
+                {card !== "seismic" ? (
                   <FloodPanel
+                    kind={card}
+                    coverage={coverage}
                     returnPeriod={returnPeriod}
                     onReturnPeriodChange={setReturnPeriod}
                     regionMode={regionMode}
@@ -822,11 +858,12 @@ export default function App() {
                 infraCategories={infraCategories}
                 onInfraCategoriesChange={setInfraCategories}
                 infraCounts={
-                  hazard === "flood" ? (floodResult?.infrastructure_summary ?? null) : (result?.infrastructure_summary ?? null)
+                  floodKind ? (floodResult?.infrastructure_summary ?? null) : (result?.infrastructure_summary ?? null)
                 }
                 flood={
-                  hazard === "flood" ? (
+                  floodKind ? (
                     <FloodLegend
+                      kind={floodKind}
                       status={isRunning ? "loading" : floodResult ? "ready" : "idle"}
                       show={floodLayers}
                       onShowChange={setFloodLayers}
@@ -836,14 +873,14 @@ export default function App() {
                 }
                 showAreas={showAreas}
                 onShowAreasChange={setShowAreas}
-                areasStatus={isRunning ? "loading" : (hazard === "flood" ? floodResult : result) ? "ready" : "idle"}
-                areasKey={hazard === "flood" ? <FloodShareKey /> : undefined}
+                areasStatus={isRunning ? "loading" : (floodKind ? floodResult : result) ? "ready" : "idle"}
+                areasKey={floodKind ? <FloodShareKey /> : undefined}
                 areaLevel={areaLevel}
               />
             </div>
           </details>
         </div>
-        {hazard === "flood" && floodResult && (
+        {floodKind && floodResult && (
           <FloodSidebar
             title={floodTitle(floodResult, adminIndex, i18n)}
             result={floodResult}
@@ -943,8 +980,18 @@ function methodLabel(
   return label;
 }
 
-function hazardDocsHref(card: "seismic" | "flood", language: Language): string {
-  const page = card === "seismic" ? "earthquake" : "flood";
+// The hazard cards, top to bottom: twinQUAKE, twinFLOOD (river), twinCOAST.
+type HazardCardId = "seismic" | FloodKind;
+const HAZARD_CARDS: readonly HazardCardId[] = ["seismic", "flood", "coast"];
+const CARD_NAMES: Record<HazardCardId, string> = { seismic: "QUAKE", flood: "FLOOD", coast: "COAST" };
+const CARD_TITLES = {
+  seismic: "card.quakeTitle",
+  flood: "card.floodTitle",
+  coast: "card.coastTitle",
+} as const satisfies Record<HazardCardId, TranslationKey>;
+
+function hazardDocsHref(card: HazardCardId, language: Language): string {
+  const page = { seismic: "earthquake", flood: "flood", coast: "coast" }[card];
   return `/docs/${language === "es" ? "es/" : ""}hazards/${page}/`;
 }
 
@@ -996,5 +1043,5 @@ function floodTitle(result: FloodResult, index: AdminArea[] | null, { t, fmtDeci
     region.type === "circle"
       ? t("flood.circleTitle", { radius: fmtDecimal(region.radius_km, 1) })
       : (index?.find((a) => a.level === region.level && a.code === region.code)?.name ?? region.code);
-  return t("flood.title", { period: return_period, area });
+  return t(result.hazard === "coast" ? "coast.title" : "flood.title", { period: return_period, area });
 }

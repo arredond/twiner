@@ -6,6 +6,7 @@ import shapely
 from pyproj import Transformer
 from scenario import flood
 from scenario.flood import (
+    COASTAL,
     AdminArea,
     Circle,
     FloodData,
@@ -142,6 +143,11 @@ def test_validate_return_period():
     assert validate_return_period("100") == 100
     with pytest.raises(FloodRequestError):
         validate_return_period(25)
+    # Coastal maps exist only for T=100/T=500.
+    assert validate_return_period(500, COASTAL) == 500
+    for rp in (10, 50):
+        with pytest.raises(FloodRequestError, match=r"\(100, 500\)"):
+            validate_return_period(rp, COASTAL)
 
 
 def test_select_buildings_circle_uses_exact_distance():
@@ -171,6 +177,62 @@ def test_unmapped_provinces():
     assert unmapped_provinces(AdminArea("province", "46"), 10) == []
     assert unmapped_provinces(Circle(28.1, -15.4, 20), 50) == ["35", "38"]
     assert unmapped_provinces(Circle(39.47, -0.37, 20), 50) == []
+    # The coastal maps cover Canarias at both of their return periods.
+    for rp in COASTAL.return_periods:
+        assert unmapped_provinces(AdminArea("ccaa", "05"), rp, COASTAL) == []
+        assert unmapped_provinces(Circle(28.1, -15.4, 20), rp, COASTAL) == []
+
+
+def test_coastal_data_reads_only_its_return_periods(tmp_path):
+    pq.write_table(
+        pa.table(
+            {
+                "building_id": ["c1"],
+                "centroid_lon": [-0.33],
+                "centroid_lat": [39.47],
+                "municipality_code": ["46250"],
+                "census_section_code": ["4625001001"],
+                "num_dwellings": pa.array([3], pa.int32()),
+                "built_area_m2": pa.array([90.0], pa.float32()),
+                "flood_t100": [False],
+                "flood_t500": [True],
+            }
+        ),
+        tmp_path / "building_flood.parquet",
+    )
+    pq.write_table(
+        pa.table(
+            {
+                "return_period": pa.array([500], pa.int16()),
+                "section_code": ["4625001001"],
+                "area_m2": [1e4],
+                "bbox_xmin": [-0.34],
+                "bbox_ymin": [39.46],
+                "bbox_xmax": [-0.32],
+                "bbox_ymax": [39.48],
+            }
+        ),
+        tmp_path / "zone_areas.parquet",
+    )
+    data = flood.load_data(str(tmp_path), COASTAL)
+    assert sorted(data.flags) == [100, 500]
+    assert data.data_dir == str(tmp_path)
+    rows = select_buildings(data, AdminArea("municipality", "46250"), 500)
+    assert list(data.building_id[rows]) == ["c1"]
+    summary = summarize_flood(
+        AdminArea("municipality", "46250"), 500, data=data, meta=META, hazard=COASTAL
+    )
+    assert summary.unmapped_provinces == []
+    payload = flood.flood_payload("x", AdminArea("municipality", "46250"), 500, summary, COASTAL)
+    assert payload["hazard"] == "coast"
+
+
+def test_flood_scenario_ids_hash_the_hazard():
+    from scenario.scenario_id import flood_scenario_id
+
+    region = {"type": "admin", "level": "province", "code": "46"}
+    assert flood_scenario_id(100, region) == flood_scenario_id(100, region, "flood")
+    assert flood_scenario_id(100, region) != flood_scenario_id(100, region, "coast")
 
 
 def test_summarize_flood_province():

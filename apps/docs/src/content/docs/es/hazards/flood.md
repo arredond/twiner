@@ -139,8 +139,8 @@ recogen las fórmulas.
   estudiados, "ningún edificio inundado" significa "sin mapa", no "sin
   riesgo".
 - **Solo inundación fluvial.** No incluye las avenidas súbitas por lluvias
-  intensas locales, la inundación costera ni los desbordamientos del
-  drenaje urbano.
+  intensas locales ni los desbordamientos del drenaje urbano. La inundación
+  costera es [twinCOAST](/docs/es/hazards/coast/).
 - **Extensión, no calado.** Sin calados ni velocidades no hay curvas
   calado-daño. twinFLOOD informa de la exposición (lo que queda dentro de
   la zona), no del daño, el coste ni los escombros.

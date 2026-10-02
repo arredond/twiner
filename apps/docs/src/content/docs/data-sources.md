@@ -52,6 +52,7 @@ The ground-motion model, Akkar et al. (2014), comes from the OpenQuake
 | Dataset | Publisher | Coverage | Resource |
 |---|---|---|---|
 | Flood zones by return period (*Zonas inundables asociadas a periodos de retorno*), 2nd cycle | Ministerio para la Transición Ecológica (MITECO), SNCZI | Studied river stretches. Peninsula and Balearic Islands at T = 10, 50, 100 and 500 years; Canary Islands at T = 100 and 500 | [Download page](https://www.miteco.gob.es/es/cartografia-y-sig/ide/descargas/agua/zi-lamina.html) |
+| Coastal flood zones (*Zonas inundables de origen marino*), 2014 studies | Ministerio para la Transición Ecológica (MITECO), SNCZI | Studied stretches of coast (ARPSIs), all of Spain including the Canary and Balearic Islands, Ceuta and Melilla, at T = 100 and 500 years | [Download page](https://www.miteco.gob.es/es/cartografia-y-sig/ide/descargas/costas-medio-marino/zi-origen-marino.html) |
 
 ## Critical infrastructure
 

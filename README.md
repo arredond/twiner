@@ -1,8 +1,10 @@
 # twiner
 
 A digital twin for multi-hazard risk assessment in Spain: earthquakes
-(twinQUAKE) and fluvial floods (twinFLOOD, from MITECO's flood zones --
-[ADR-0029](docs/decisions/0029-flood-scenarios.md)). Milestone 1 built a modern clone of UPM's
+(twinQUAKE), fluvial floods (twinFLOOD, from MITECO's flood zones --
+[ADR-0029](docs/decisions/0029-flood-scenarios.md)) and coastal floods
+(twinCOAST, from MITECO's marine-origin flood zones --
+[ADR-0037](docs/decisions/0037-coastal-flood-scenarios.md)). Milestone 1 built a modern clone of UPM's
 [MERISUR](docs/merisur.md) web simulator, prototyped against Lorca;
 milestone 2 expanded exposure coverage region by region -- Murcia +
 Andalucía first, then nationwide via Catastro's INSPIRE feed, then the
@@ -126,6 +128,8 @@ clicking a card's name opens it (and closes the other).
   draw a circle (click the centre, then the edge), click a CCAA / province
   / municipality, or search for one. The map shows the flood zones, the
   buildings in them, and the affected municipalities / census sections.
+- **twinCOAST**: the same, for coastal flooding: T100/T500 only, and the
+  area picker and search only offer areas with a mapped coastal zone.
 
 Either way, the right-hand scenario panel lists affected municipalities
 (population, cost, debris for earthquakes; buildings, residents and

@@ -1,23 +1,29 @@
 import { useEffect, useMemo, useState } from "react";
 import {
-  RETURN_PERIODS,
+  KIND_RETURN_PERIODS,
   loadAdminIndex,
   searchAdminAreas,
   type AdminArea,
   type AdminLevel,
+  type FloodCoverage,
+  type FloodKind,
   type ReturnPeriod,
 } from "../floodApi";
 import { useI18n } from "../settings";
 import { Segmented } from "./Segmented";
 
-// Flood mode's setup (ADR-0029), in the top-left panel: the return period
-// (like the seismic probability level) and how to pick the area -- draw a
-// circle (default), or click a CCAA / province / municipality on the map.
-// The search box finds an area at any level; picking one runs it.
+// A flood mode's setup (river ADR-0029, coastal ADR-0037), in the top-left
+// panel: the return period (like the seismic probability level) and how to
+// pick the area -- draw a circle (default), or click a CCAA / province /
+// municipality on the map. The search box finds an area at any level;
+// picking one runs it. Coastal mode offers only T100/T500 and only the
+// areas its maps reach (`coverage`).
 
 export type RegionMode = "circle" | AdminLevel;
 
 export function FloodPanel({
+  kind,
+  coverage,
   returnPeriod,
   onReturnPeriodChange,
   regionMode,
@@ -25,6 +31,9 @@ export function FloodPanel({
   onPickArea,
   disabled,
 }: {
+  kind: FloodKind;
+  // null: every area (river), or still loading (coast: then search waits).
+  coverage: FloodCoverage | null;
   returnPeriod: ReturnPeriod;
   onReturnPeriodChange: (rp: ReturnPeriod) => void;
   regionMode: RegionMode;
@@ -51,7 +60,11 @@ export function FloodPanel({
     () => new Map((index ?? []).filter((a) => a.level === "province").map((a) => [a.code, a.name])),
     [index]
   );
-  const matches = useMemo(() => (index ? searchAdminAreas(index, query) : []), [index, query]);
+  const coverageReady = kind === "flood" || coverage !== null;
+  const matches = useMemo(
+    () => (index && coverageReady ? searchAdminAreas(index, query, 12, coverage) : []),
+    [index, query, coverage, coverageReady]
+  );
 
   const pick = (area: AdminArea) => {
     setQuery("");
@@ -65,7 +78,7 @@ export function FloodPanel({
         <Segmented
           label={t("flood.returnPeriod")}
           value={String(returnPeriod)}
-          options={RETURN_PERIODS.map((rp) => ({
+          options={KIND_RETURN_PERIODS[kind].map((rp) => ({
             value: String(rp),
             label: `T${rp}`,
             title: t(`flood.returnPeriodTitle.${rp}`),
@@ -100,7 +113,7 @@ export function FloodPanel({
           onKeyDown={(e) => {
             if (e.key === "Enter" && matches[0] && !disabled) pick(matches[0]);
           }}
-          disabled={disabled || !index}
+          disabled={disabled || !index || !coverageReady}
           placeholder={t("flood.searchPlaceholder")}
           aria-label={t("flood.searchLabel")}
           style={{ width: "100%", fontSize: "0.85rem", boxSizing: "border-box" }}
@@ -159,6 +172,7 @@ export function FloodPanel({
 
       <p style={{ fontSize: "0.75rem", color: "var(--text-muted)", margin: 0 }}>
         {regionMode === "circle" ? t("flood.hintCircle") : t(`flood.hintAdmin.${regionMode}`)}
+        {kind === "coast" && regionMode !== "circle" && ` ${t("coast.hintCoverage")}`}
       </p>
     </div>
   );

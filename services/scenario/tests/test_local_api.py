@@ -756,7 +756,54 @@ def flood_data(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
         d / "zone_areas.parquet",
     )
     monkeypatch.setattr(flood, "FLOOD_DIR", str(d))
-    monkeypatch.setattr(flood, "_DATA", None)
+    monkeypatch.setattr(flood, "_DATA", {})
+    return d
+
+
+@pytest.fixture
+def coast_data(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """Coastal outputs (ADR-0037): the same files, T=100/T=500 flags only."""
+    import pyarrow as pa
+    import pyarrow.parquet as pq
+    from scenario import flood
+
+    d = tmp_path / "coast"
+    d.mkdir()
+    pq.write_table(
+        pa.table(
+            {
+                "building_id": ["c1", "c2"],
+                "centroid_lon": [-0.3263, -15.4363],
+                "centroid_lat": [39.4699, 28.1235],
+                "municipality_code": ["46250", "35016"],
+                "census_section_code": ["4625001001", "3501601001"],
+                "num_dwellings": pa.array([10, 4], pa.int32()),
+                "built_area_m2": pa.array([500.0, 200.0], pa.float32()),
+                "flood_t100": [False, True],
+                "flood_t500": [True, True],
+            }
+        ),
+        d / "building_flood.parquet",
+    )
+    pq.write_table(
+        pa.table(
+            {
+                "return_period": pa.array([500], pa.int16()),
+                "section_code": ["4625001001"],
+                "municipality_code": ["46250"],
+                "stretches": ["Playa de la Malva-rosa"],
+                "n_zones": pa.array([1], pa.int32()),
+                "area_m2": [2.5e5],
+                "bbox_xmin": [-0.33],
+                "bbox_ymin": [39.46],
+                "bbox_xmax": [-0.32],
+                "bbox_ymax": [39.48],
+            }
+        ),
+        d / "zone_areas.parquet",
+    )
+    monkeypatch.setattr(flood, "COAST_DIR", str(d))
+    monkeypatch.setattr(flood, "_DATA", {})
     return d
 
 
@@ -779,6 +826,37 @@ def test_flood_circle_scenario_and_section_drill_down(client, flood_data):
         f"/results/{result['scenario_id']}/section_stats", params={"municipality_code": "46250"}
     ).json()
     assert [s["section_code"] for s in sections] == ["4625001001"]
+
+
+def test_coast_scenario_admin_area(client, coast_data):
+    body = {"return_period": 500, "region": {"type": "admin", "level": "ccaa", "code": "05"}}
+    result = client.post("/scenarios/coast", json=body).json()
+    assert result["hazard"] == "coast"
+    assert result["n_flooded"] == 1  # c2, Las Palmas: Canarias is mapped
+    assert result["flood"]["unmapped_provinces"] == []
+    body["region"] = {"type": "admin", "level": "municipality", "code": "46250"}
+    valencia = client.post("/scenarios/coast", json=body).json()
+    assert valencia["n_flooded"] == 1
+    assert valencia["totals"]["flooded_area_km2"] == 0.25
+    body["return_period"] = 100
+    assert client.post("/scenarios/coast", json=body).json()["n_flooded"] == 0
+
+
+def test_coast_scenario_ids_differ_from_fluvial(client, flood_data, coast_data):
+    body = {"return_period": 100, "region": {"type": "admin", "level": "province", "code": "46"}}
+    fluvial = client.post("/scenarios/flood", json=body).json()
+    coastal = client.post("/scenarios/coast", json=body).json()
+    assert fluvial["hazard"] == "flood" and coastal["hazard"] == "coast"
+    assert fluvial["scenario_id"] != coastal["scenario_id"]
+
+
+def test_coast_rejects_fluvial_only_return_periods(client, coast_data):
+    resp = client.post(
+        "/scenarios/coast",
+        json={"return_period": 10, "region": {"type": "admin", "level": "province", "code": "46"}},
+    )
+    assert resp.status_code == 400
+    assert "(100, 500)" in resp.json()["detail"]
 
 
 def test_flood_rejects_bad_regions(client, flood_data):
@@ -822,6 +900,23 @@ def test_flood_responses_match_the_documented_shapes(client, flood_data):
         json={
             "return_period": 50,
             "region": {"type": "circle", "lat": 39.47, "lon": -0.376, "radius_km": 5},
+        },
+    ).json()
+    api_models.FloodScenarioResponse.model_validate(body)
+    rows = client.get(f"/results/{body['scenario_id']}/section_stats").json()
+    assert rows
+    for row in rows:
+        api_models.FloodSectionStats.model_validate(row)
+
+
+def test_coast_responses_match_the_documented_shapes(client, coast_data):
+    from scenario import api_models
+
+    body = client.post(
+        "/scenarios/coast",
+        json={
+            "return_period": 500,
+            "region": {"type": "circle", "lat": 39.47, "lon": -0.326, "radius_km": 5},
         },
     ).json()
     api_models.FloodScenarioResponse.model_validate(body)

@@ -210,7 +210,9 @@ mapas oficiales no dan. Para cada sección censal, agregadas por municipio:
 | Superficie inundada | Superficie de la zona inundable dentro de la sección, y dentro del círculo si se ha dibujado uno, en km². |
 
 "No cartografiado" no es "no inundado". Consulta
-[twinFLOOD](/docs/es/hazards/flood/) para saber qué cubren los mapas.
+[twinFLOOD](/docs/es/hazards/flood/) para saber qué cubren los mapas. Los
+escenarios de inundación costera ([twinCOAST](/docs/es/hazards/coast/))
+dan las mismas cifras, para la zona inundable costera.
 
 ## Limitaciones
 

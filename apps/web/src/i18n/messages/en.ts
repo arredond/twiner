@@ -14,6 +14,7 @@ export const en = {
 
   "card.quakeTitle": "Earthquake scenarios: open",
   "card.floodTitle": "Flood scenarios: open",
+  "card.coastTitle": "Coastal flood scenarios: open",
   "card.docs": "How this hazard is modelled (documentation, opens in a new tab)",
 
   // Flood mode (ADR-0029).
@@ -45,6 +46,12 @@ export const en = {
   "flood.coverageNote":
     "Only rivers MITECO has studied are mapped (about a third of main rivers): outside those, no flood zone does not mean no risk.",
   "flood.source": "Source: MITECO, National Flood Zone Mapping System (SNCZI).",
+
+  "coast.title": "Coastal flood T={period} · {area}",
+  "coast.coverageNote":
+    "Only stretches of coast MITECO has studied are mapped (its 2014 storm-surge studies): outside those, no flood zone does not mean no risk.",
+  "coast.source": "Source: MITECO, National Flood Zone Mapping System (SNCZI), coastal flood zones.",
+  "coast.hintCoverage": "Only areas with a mapped coastal flood zone are listed.",
   "flood.buildingsFlooded": "Buildings in flood zone",
   "flood.buildingsFloodedHint": "Buildings whose footprint touches the flood zone, of all buildings in the area.",
   "flood.dwellingsFlooded": "Dwellings in flood zone",
@@ -142,6 +149,7 @@ export const en = {
 
   "legend.title": "Legend",
   "legend.floodZoneLine": "Flood zone (T{period})",
+  "legend.coastZoneLine": "Coastal flood zone (T{period})",
   "legend.showFloodZones": "Show flood zones",
   "legend.floodedBuildings": "Buildings in flood zone",
   "legend.showFloodedBuildings": "Show buildings in the flood zone",

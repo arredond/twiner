@@ -1,6 +1,7 @@
 # ADR-0030: Coastal flooding: not now, and how it would fit
 
-Status: proposed (notes for a future hazard; nothing built)
+Status: superseded by [ADR-0037](0037-coastal-flood-scenarios.md), which
+built it (twinCOAST). Kept for the research it records.
 
 ## Context
 

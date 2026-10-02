@@ -4,7 +4,9 @@ Each source shapefile (sources.py) has a few thousand polygons per return
 period, but traced from a 2m LiDAR terrain model: T=10 alone is 94M vertices,
 and 13% of its polygons are invalid (self-intersections). So each polygon is:
 
-1. repaired (`make_valid`), in its own projected CRS;
+1. repaired (`make_valid`), in its own projected CRS (a geographic file,
+   like the coastal ones in ETRS89 lat/lon, is first reprojected to an
+   equal-area metric CRS, so the 1m tolerance below is still 1m);
 2. simplified with a 1m tolerance (Douglas-Peucker, then repaired again),
    which keeps ~15% of the vertices. 1m is half the terrain model's grid,
    and well under what the 1:25,000 maps claim to resolve;
@@ -39,7 +41,7 @@ import pyogrio
 import shapely
 from pyproj import Transformer
 
-from .sources import SOURCES, extract
+from .sources import FLUVIAL, Hazard, extract
 
 SIMPLIFY_TOLERANCE_M = 1.0
 CHUNK_FEATURES = 100
@@ -144,13 +146,16 @@ def _robust_intersection(a: shapely.Geometry, b: shapely.Geometry) -> shapely.Ge
     return polygonal(np.array([piece], dtype=object))[0]
 
 
-def _process_chunk(args: tuple[str, int, int, int, int]) -> dict:
-    shp, epsg, _return_period, offset, count = args
+def _process_chunk(args: tuple[str, int, int, str, int, int]) -> dict:
+    shp, epsg, work_epsg, name_field, offset, count = args
     assert _sections is not None and _section_codes is not None and _section_tree is not None
     df = pyogrio.read_dataframe(
-        shp, skip_features=offset, max_features=count, columns=["ID_ZONA", "RIO"]
+        shp, skip_features=offset, max_features=count, columns=["ID_ZONA", name_field]
     )
-    geoms = clean(np.asarray(df.geometry.values, dtype=object).copy(), epsg)
+    geoms = np.asarray(df.geometry.values, dtype=object).copy()
+    if work_epsg != epsg:
+        geoms = to_crs(geoms, epsg, work_epsg)
+    geoms = clean(geoms, work_epsg)
     valid = np.flatnonzero([g is not None for g in geoms])
     gi, si, pieces = cut_by_sections(geoms[valid], _sections, _section_tree)
     zone_rows = valid[gi]
@@ -159,7 +164,7 @@ def _process_chunk(args: tuple[str, int, int, int, int]) -> dict:
     return {
         "section_code": _section_codes[si],
         "zone_id": df["ID_ZONA"].to_numpy()[zone_rows],
-        "river": df["RIO"].to_numpy()[zone_rows],
+        "river": df[name_field].to_numpy()[zone_rows],
         "geometry": pieces,
         "n_features": len(df),
         "n_dropped": len(df) - len(valid),
@@ -185,18 +190,20 @@ def build_return_period(
     return_period: int,
     sections_path: str | Path,
     workers: int | None = None,
+    hazard: Hazard = FLUVIAL,
 ) -> gpd.GeoDataFrame:
-    """All sources for one return period, cleaned, cut by section and
-    merged: one row per (section, return period) with any flood zone."""
+    """All of `hazard`'s sources for one return period, cleaned, cut by
+    section and merged: one row per (section, return period) with any flood
+    zone."""
     workers = workers or max(1, mp.cpu_count() - 2)
     tasks = []
-    for source in [s for s in SOURCES if s.return_period == return_period]:
+    for source in [s for s in hazard.sources if s.return_period == return_period]:
         shp = extract(raw_dir, source)
         info = pyogrio.read_info(shp)
         if info["crs"] != f"EPSG:{source.epsg}":
             raise ValueError(f"{shp}: CRS {info['crs']}, expected EPSG:{source.epsg}")
         tasks += [
-            (str(shp), source.epsg, return_period, off, CHUNK_FEATURES)
+            (str(shp), source.epsg, source.work_epsg, hazard.name_field, off, CHUNK_FEATURES)
             for off in range(0, info["features"], CHUNK_FEATURES)
         ]
 
@@ -241,7 +248,7 @@ def build_return_period(
             "return_period": np.full(len(merged), return_period, dtype=np.int16),
             "section_code": [m[0] for m in merged],
             "municipality_code": [m[0][:5] for m in merged],
-            "rivers": [m[2] for m in merged],
+            hazard.label_column: [m[2] for m in merged],
             "n_zones": np.array([m[3] for m in merged], dtype=np.int32),
             "area_m2": shapely.area(to_crs(geoms, 4326, AREA_EPSG)) if len(geoms) else [],
         },
@@ -262,18 +269,17 @@ def build_zones(
     output: str | Path,
     workers: int | None = None,
     return_periods: tuple[int, ...] | None = None,
+    hazard: Hazard = FLUVIAL,
 ) -> gpd.GeoDataFrame:
     """Every return period (each cached as `work_dir/zones_T<rp>.parquet`,
     so a failed run resumes), combined into `output`."""
-    from .sources import RETURN_PERIODS
-
     work_dir = Path(work_dir)
     work_dir.mkdir(parents=True, exist_ok=True)
     frames = []
-    for rp in return_periods or RETURN_PERIODS:
+    for rp in return_periods or hazard.return_periods:
         path = work_dir / f"zones_T{rp}.parquet"
         if not path.exists():
-            build_return_period(raw_dir, rp, sections_path, workers).to_parquet(path)
+            build_return_period(raw_dir, rp, sections_path, workers, hazard).to_parquet(path)
         frames.append(gpd.read_parquet(path))
     zones = gpd.GeoDataFrame(pd.concat(frames, ignore_index=True), crs="EPSG:4326")
     # Small row groups, in section-code (so province) order: a worker

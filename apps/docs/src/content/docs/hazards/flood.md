@@ -128,9 +128,9 @@ formulas.
 
 - **Mapped is not the same as at risk.** Outside the studied river
   stretches, "no buildings flooded" means "no map", not "no risk".
-- **River flooding only.** Flash floods from intense local rainfall,
-  coastal and storm-surge flooding, and urban drainage overflow are not
-  included.
+- **River flooding only.** Flash floods from intense local rainfall and
+  urban drainage overflow are not included. Coastal and storm-surge
+  flooding is [twinCOAST](/docs/hazards/coast/).
 - **Extent, not depth.** Without water depths or velocities there are no
   depth–damage curves. twinFLOOD reports exposure (what lies in the zone),
   not damage, cost or debris.

@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "TWIN-ER API",
-    "description": "La API HTTP de la aplicación web de TWIN-ER: simula escenarios sísmicos y\nde inundación y consulta sus resultados por zona, como teselas de mapa o en\nGeoJSON.\n\n## Cómo encaja todo\n\n1. **Simula un escenario.** `GET /scenarios/fault` (el terremoto de magnitud\n   máxima de una falla), `POST /scenarios/manual` (un terremoto definido por\n   ti) o `POST /scenarios/flood`. La respuesta incluye un `scenario_id` y una\n   fila de cifras por municipio afectado.\n2. **Consulta los detalles** con ese identificador: cifras por sección\n   censal, infraestructuras críticas afectadas, bandas de intensidad\n   (`/results/{scenario_id}/...`) y teselas vectoriales de edificios y\n   escombros (`/tiles/{scenario_id}/...`).\n\nLos identificadores de escenario se derivan de su contenido: las mismas\nentradas, con la misma versión de datos y de código, dan el mismo\nidentificador, así que los resultados pueden cachearse y compartirse.\n\n## Despliegues\n\n- **Local** (`bin/twiner start`): todas las rutas, en un solo servidor.\n- **Nube** (URL de funciones AWS Lambda): la función de escenarios sirve\n  todas las rutas salvo `/tiles/...`, que sirve una función de teselas\n  aparte, y las dos rutas solo locales `/results/{scenario_id}/status` y\n  `/results/{scenario_id}/municipality_stats`.\n\nTodavía no hay autenticación, garantía de versiones ni límite de\npeticiones: esta referencia describe la API que usa la aplicación web, no un\ncontrato público estable.\n\n## Errores\n\nEl servidor local responde a los errores con `{\"detail\": \"...\"}`; la\nLambda, con `{\"error\": \"...\"}`.\n\nConsulta las páginas de [twinQUAKE](/docs/es/hazards/earthquake/) y\n[twinFLOOD](/docs/es/hazards/flood/) para saber qué significan las cifras.\n",
+    "description": "La API HTTP de la aplicación web de TWIN-ER: simula escenarios sísmicos y\nde inundación y consulta sus resultados por zona, como teselas de mapa o en\nGeoJSON.\n\n## Cómo encaja todo\n\n1. **Simula un escenario.** `GET /scenarios/fault` (el terremoto de magnitud\n   máxima de una falla), `POST /scenarios/manual` (un terremoto definido por\n   ti), `POST /scenarios/flood` (inundación fluvial) o `POST /scenarios/coast`\n   (inundación costera). La respuesta incluye un `scenario_id` y una fila de\n   cifras por municipio afectado.\n2. **Consulta los detalles** con ese identificador: cifras por sección\n   censal, infraestructuras críticas afectadas, bandas de intensidad\n   (`/results/{scenario_id}/...`) y teselas vectoriales de edificios y\n   escombros (`/tiles/{scenario_id}/...`).\n\nLos identificadores de escenario se derivan de su contenido: las mismas\nentradas, con la misma versión de datos y de código, dan el mismo\nidentificador, así que los resultados pueden cachearse y compartirse.\n\n## Despliegues\n\n- **Local** (`bin/twiner start`): todas las rutas, en un solo servidor.\n- **Nube** (URL de funciones AWS Lambda): la función de escenarios sirve\n  todas las rutas salvo `/tiles/...`, que sirve una función de teselas\n  aparte, y las dos rutas solo locales `/results/{scenario_id}/status` y\n  `/results/{scenario_id}/municipality_stats`.\n\nTodavía no hay autenticación, garantía de versiones ni límite de\npeticiones: esta referencia describe la API que usa la aplicación web, no un\ncontrato público estable.\n\n## Errores\n\nEl servidor local responde a los errores con `{\"detail\": \"...\"}`; la\nLambda, con `{\"error\": \"...\"}`.\n\nConsulta las páginas de [twinQUAKE](/docs/es/hazards/earthquake/),\n[twinFLOOD](/docs/es/hazards/flood/) y [twinCOAST](/docs/es/hazards/coast/)\npara saber qué significan las cifras.\n",
     "version": "2026.10.02.1"
   },
   "servers": [
@@ -87,6 +87,68 @@
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/FloodScenarioRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Respuesta correcta",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FloodScenarioResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Parámetros no válidos.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Falta en el servidor un resultado de los pipelines.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Error de validación",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/scenarios/coast": {
+      "post": {
+        "tags": [
+          "Flood"
+        ],
+        "summary": "Simular un escenario de inundación costera",
+        "description": "Edificios, residentes e infraestructuras críticas dentro de la zona inundable costera (de origen marino) del MITECO para un periodo de retorno, en un círculo (hasta 200 km) o un área administrativa. La misma respuesta que la ruta de inundación fluvial, con `hazard: coast`.",
+        "operationId": "coast_scenario",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CoastScenarioRequest"
               }
             }
           },
@@ -1206,6 +1268,106 @@
         ],
         "title": "ClassificationInfo"
       },
+      "CoastScenarioRequest": {
+        "properties": {
+          "return_period": {
+            "type": "integer",
+            "description": "Años: 100 o 500.",
+            "examples": [
+              500
+            ]
+          },
+          "region": {
+            "oneOf": [
+              {
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "const": "circle"
+                  },
+                  "lat": {
+                    "type": "number"
+                  },
+                  "lon": {
+                    "type": "number"
+                  },
+                  "radius_km": {
+                    "type": "number",
+                    "maximum": 200.0,
+                    "exclusiveMinimum": 0.0
+                  }
+                },
+                "additionalProperties": true,
+                "type": "object",
+                "required": [
+                  "type",
+                  "lat",
+                  "lon",
+                  "radius_km"
+                ],
+                "title": "CircleRegion"
+              },
+              {
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "const": "admin"
+                  },
+                  "level": {
+                    "type": "string",
+                    "enum": [
+                      "ccaa",
+                      "province",
+                      "municipality"
+                    ]
+                  },
+                  "code": {
+                    "type": "string",
+                    "description": "Código del INE: 2 dígitos para una comunidad autónoma o provincia, 5 para un municipio.",
+                    "examples": [
+                      "46250"
+                    ]
+                  }
+                },
+                "additionalProperties": true,
+                "type": "object",
+                "required": [
+                  "type",
+                  "level",
+                  "code"
+                ],
+                "title": "AdminRegion"
+              }
+            ],
+            "additionalProperties": true,
+            "type": "object",
+            "description": "Un círculo, `{type: circle, lat, lon, radius_km}` con radius_km de hasta 200, o una unidad administrativa, `{type: admin, level: ccaa | province | municipality, code}` con un código del INE.",
+            "examples": [
+              {
+                "code": "46250",
+                "level": "municipality",
+                "type": "admin"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "return_period",
+          "region"
+        ],
+        "title": "CoastScenarioRequest",
+        "examples": [
+          {
+            "region": {
+              "code": "46250",
+              "level": "municipality",
+              "type": "admin"
+            },
+            "return_period": 100
+          }
+        ]
+      },
       "DamageCounts": {
         "properties": {
           "None": {
@@ -1761,7 +1923,11 @@
           },
           "hazard": {
             "type": "string",
-            "const": "flood"
+            "enum": [
+              "flood",
+              "coast"
+            ],
+            "description": "`flood` para la inundación fluvial (/scenarios/flood), `coast` para la costera (/scenarios/coast)."
           },
           "flood": {
             "$ref": "#/components/schemas/FloodParams"
@@ -3074,7 +3240,7 @@
     },
     {
       "name": "Flood",
-      "description": "twinFLOOD: escenarios de zonas inundables."
+      "description": "twinFLOOD y twinCOAST: escenarios de zonas inundables fluviales y costeras."
     },
     {
       "name": "Results",

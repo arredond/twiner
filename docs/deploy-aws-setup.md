@@ -208,6 +208,20 @@ gzip -9c data/exposure/admin_index.json | aws s3 cp - \
     s3://<DataBucketName>/tiles/admin_index.json --profile twiner-admin \
     --content-type application/json --content-encoding gzip
 
+# Coastal flood scenarios (ADR-0037): the same four files under coast/
+# (TWINER_COAST_DIR), the coast_* archives and the area coverage index
+# under tiles/.
+for f in building_flood zone_areas zones infrastructure_flood; do
+  aws s3 cp data/coast/$f.parquet s3://<DataBucketName>/coast/$f.parquet --profile twiner-admin
+done
+aws s3 cp data/coast/coast_zones.pmtiles \
+    s3://<DataBucketName>/tiles/coast_zones.pmtiles --profile twiner-admin
+aws s3 cp data/coast/coast_buildings.pmtiles \
+    s3://<DataBucketName>/tiles/coast_buildings.pmtiles --profile twiner-admin
+gzip -9c data/coast/coast_areas.json | aws s3 cp - \
+    s3://<DataBucketName>/tiles/coast_areas.json --profile twiner-admin \
+    --content-type application/json --content-encoding gzip
+
 # The self-hosted basemap (ADR-0028): the Protomaps extract plus its
 # fonts/sprites, under tiles/basemap/ (apps/web/src/basemaps.ts). The ETL
 # syncs it itself; rerun it to refresh the OSM data (it skips the ~21GB

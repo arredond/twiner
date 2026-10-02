@@ -91,6 +91,7 @@ export default defineConfig({
 							],
 						},
 						{ label: 'twinFLOOD', link: '/hazards/flood/' },
+						{ label: 'twinCOAST', link: '/hazards/coast/' },
 					],
 				},
 				{

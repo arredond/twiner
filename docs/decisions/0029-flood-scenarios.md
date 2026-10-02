@@ -214,7 +214,9 @@ way, and 16 seconds after the swap.
   pieces are merged away. Coalescing also sent tippecanoe's polygon
   cleaning into an hour-long spin; without size limits the national build
   takes 10 minutes instead of 39. Zones start at z7: below that the map
-  shows the municipality choropleth.
+  shows the municipality choropleth. (ADR-0037 later added a z0-6
+  overview band, for the Spain-wide view an open flood card shows before
+  a run.)
 - Infrastructure in a zone (T=100): 21,743 assets, 19,861 of them bridges
   (a bridge crosses its river by definition), then 898 schools, 675 power
   assets, 156 dams, 97 health centres, 50 emergency services and 6 care

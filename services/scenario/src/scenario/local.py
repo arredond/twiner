@@ -27,6 +27,9 @@ from .building_lookup import get_building
 from .engine import summarize_scenario
 from .faults import faults_payload, get_fault, round_near_point, rupture_anchor
 from .flood import (
+    COASTAL,
+    FLUVIAL,
+    FloodHazard,
     FloodRequestError,
     flood_payload,
     parse_region,
@@ -430,17 +433,40 @@ def flood_scenario(req: FloodScenarioRequest) -> dict:
     MITECO's flood zone for a return period, in a circle or admin area.
     Stored like a seismic scenario, so the sidebar's section drill-down and
     infrastructure list use the same /results/{id}/... routes."""
+    return _flood_scenario(req, FLUVIAL)
+
+
+class CoastScenarioRequest(FloodScenarioRequest):
+    return_period: int = Field(description="Years: 100 or 500.", examples=[500])
+
+
+@app.post(
+    "/scenarios/coast",
+    tags=["Flood"],
+    summary="Run a coastal flood scenario",
+    description="Buildings, residents and critical infrastructure inside MITECO's coastal "
+    "(marine-origin) flood zone for one return period, in a circle (up to 200 km) or an "
+    "administrative area. Same response as the river flood route, with `hazard: coast`.",
+    response_model=None,
+    responses={**ok(api_models.FloodScenarioResponse), **errors(400, 500)},
+)
+def coast_scenario(req: CoastScenarioRequest) -> dict:
+    """Coastal mode (ADR-0037): the flood route over the coastal maps."""
+    return _flood_scenario(req, COASTAL)
+
+
+def _flood_scenario(req: FloodScenarioRequest, hazard: FloodHazard) -> dict:
     try:
-        return_period = validate_return_period(req.return_period)
+        return_period = validate_return_period(req.return_period, hazard)
         region = parse_region(req.region)
     except FloodRequestError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
-    scenario_id = flood_scenario_id(return_period, region_params(region))
+    scenario_id = flood_scenario_id(return_period, region_params(region), hazard.key)
     t0 = time.monotonic()
     if cache_enabled() and (payload := read_response(scenario_id)) is not None:
         return {**payload, "cached": True, "elapsed_ms": round((time.monotonic() - t0) * 1000, 1)}
     try:
-        summary = summarize_flood(region, return_period)
+        summary = summarize_flood(region, return_period, hazard=hazard)
     except FileNotFoundError as e:
         raise HTTPException(status_code=500, detail=f"missing pipeline output: {e}") from e
     init_scenario(scenario_id)
@@ -448,11 +474,11 @@ def flood_scenario(req: FloodScenarioRequest) -> dict:
     write_section_stats(scenario_id, summary.section_stats)
     if summary.infrastructure is not None:
         write_artifact(scenario_id, INFRASTRUCTURE_FILE, summary.infrastructure)
-    payload = flood_payload(scenario_id, region, return_period, summary)
+    payload = flood_payload(scenario_id, region, return_period, summary, hazard)
     write_response(scenario_id, payload)
     elapsed_ms = round((time.monotonic() - t0) * 1000, 1)
     print(
-        f"scenario: flood T={return_period} {region_params(region)} -> "
+        f"scenario: {hazard.key} T={return_period} {region_params(region)} -> "
         f"{summary.n_flooded} buildings flooded, in {elapsed_ms}ms"
     )
     return {**payload, "cached": False, "elapsed_ms": elapsed_ms}

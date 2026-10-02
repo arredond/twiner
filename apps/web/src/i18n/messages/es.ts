@@ -10,6 +10,7 @@ export const es: Messages = {
 
   "card.quakeTitle": "Escenarios sísmicos: abrir",
   "card.floodTitle": "Escenarios de inundación: abrir",
+  "card.coastTitle": "Escenarios de inundación costera: abrir",
   "card.docs": "Cómo se modela este riesgo (documentación, se abre en una pestaña nueva)",
 
   "flood.returnPeriod": "Periodo de retorno",
@@ -40,6 +41,12 @@ export const es: Messages = {
   "flood.coverageNote":
     "Solo están cartografiados los ríos estudiados por el MITECO (en torno a un tercio de los cauces principales): fuera de ellos, no tener zona inundable no significa no tener riesgo.",
   "flood.source": "Fuente: MITECO, Sistema Nacional de Cartografía de Zonas Inundables (SNCZI).",
+
+  "coast.title": "Inundación costera T={period} · {area}",
+  "coast.coverageNote":
+    "Solo está cartografiada la costa estudiada por el MITECO (sus estudios de temporales de 2014): fuera de ella, no tener zona inundable no significa no tener riesgo.",
+  "coast.source": "Fuente: MITECO, Sistema Nacional de Cartografía de Zonas Inundables (SNCZI), zonas inundables de origen marino.",
+  "coast.hintCoverage": "Solo se muestran las zonas con superficie inundable costera cartografiada.",
   "flood.buildingsFlooded": "Edificios en zona inundable",
   "flood.buildingsFloodedHint": "Edificios cuya huella toca la zona inundable, sobre el total de edificios de la zona.",
   "flood.dwellingsFlooded": "Viviendas en zona inundable",
@@ -134,6 +141,7 @@ export const es: Messages = {
 
   "legend.title": "Leyenda",
   "legend.floodZoneLine": "Superficie inundable (T{period})",
+  "legend.coastZoneLine": "Superficie inundable costera (T{period})",
   "legend.showFloodZones": "Mostrar zonas inundables",
   "legend.floodedBuildings": "Edificios en zona inundable",
   "legend.showFloodedBuildings": "Mostrar edificios en zona inundable",

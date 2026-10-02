@@ -223,6 +223,9 @@ class TwinerStack(Stack):
                 # zone_areas.parquet, zones.parquet (circles cut by zones)
                 # and infrastructure_flood.parquet, from pipelines/flood.
                 "TWINER_FLOOD_DIR": f"s3://{data_bucket.bucket_name}/flood",
+                # Coastal flood scenarios (ADR-0037): the same four files,
+                # from `python -m flood --hazard coastal`.
+                "TWINER_COAST_DIR": f"s3://{data_bucket.bucket_name}/coast",
                 "TWINER_RESULTS_BUCKET": results_bucket.bucket_name,
                 # Content-addressed scenario cache (ADR-0018): a repeat of
                 # an already-computed scenario returns the stored result

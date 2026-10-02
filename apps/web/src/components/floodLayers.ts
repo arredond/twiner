@@ -6,37 +6,56 @@ import type {
 } from "maplibre-gl";
 import type { Feature, Polygon } from "geojson";
 import { SELECTED_COLOR } from "../damageColors";
-import type { AdminLevel, FloodAreaStats, FloodCircle, FloodRegion, ReturnPeriod } from "../floodApi";
-import { RETURN_PERIODS } from "../floodApi";
+import type {
+  AdminLevel,
+  FloodAreaStats,
+  FloodCircle,
+  FloodCoverage,
+  FloodKind,
+  FloodRegion,
+  ReturnPeriod,
+} from "../floodApi";
+import { FLOOD_KINDS, KIND_RETURN_PERIODS } from "../floodApi";
 import type { I18n } from "../i18n";
 import type { Theme } from "../settings";
 import { escapeHtml } from "../popupHtml";
 import { staticDataUrl } from "../staticData";
 
-// Flood mode on the map (ADR-0029). Kept out of DamageMap.tsx, which owns
-// when these are added and fed:
+// Flood modes on the map: river (twinFLOOD, ADR-0029) and coastal
+// (twinCOAST, ADR-0037). Kept out of DamageMap.tsx, which owns when these
+// are added and fed:
 //
-// - flood zones (flood_zones.pmtiles) and flooded buildings
-//   (flood_buildings.pmtiles), both static archives filtered in the
-//   browser by return period and region -- no per-scenario tiles;
+// - flood zones (<kind>_zones.pmtiles) and flooded buildings
+//   (<kind>_buildings.pmtiles), both static archives filtered in the
+//   browser by return period and region -- no per-scenario tiles. Each
+//   kind has its own sources and layers; the inactive kind's are filtered
+//   to nothing;
 // - a per-municipality / per-section choropleth of % of buildings flooded,
 //   on the existing municipality and section sources (feature-state
 //   `flood_pct`);
 // - the area picker: CCAA / province outlines (admin_areas.pmtiles) or
 //   municipality outlines to click, and the drawn circle.
 
-const FLOOD_ZONES_PMTILES_URL = staticDataUrl("flood_zones.pmtiles");
-const FLOOD_BUILDINGS_PMTILES_URL = staticDataUrl("flood_buildings.pmtiles");
 const ADMIN_AREAS_PMTILES_URL = staticDataUrl("admin_areas.pmtiles");
 
-const ZONES_SOURCE_ID = "flood-zones";
-const BUILDINGS_SOURCE_ID = "flood-buildings";
 const ADMIN_SOURCE_ID = "admin-areas";
 const REGION_SOURCE_ID = "flood-region";
 
-export const FLOOD_ZONES_LAYER_ID = "flood-zones-fill";
-export const FLOOD_BUILDINGS_LAYER_ID = "flood-buildings-fill";
-const FLOOD_BUILDINGS_SELECTED_LAYER_ID = "flood-buildings-selected";
+// Per kind: "flood" keeps the ids it had before coastal existed.
+const zonesSourceId = (kind: FloodKind) => `${kind}-zones`;
+const buildingsSourceId = (kind: FloodKind) => `${kind}-buildings`;
+export const ZONES_LAYER_IDS: Record<FloodKind, string> = { flood: "flood-zones-fill", coast: "coast-zones-fill" };
+export const BUILDINGS_LAYER_IDS: Record<FloodKind, string> = {
+  flood: "flood-buildings-fill",
+  coast: "coast-buildings-fill",
+};
+const BUILDINGS_SELECTED_LAYER_IDS: Record<FloodKind, string> = {
+  flood: "flood-buildings-selected",
+  coast: "coast-buildings-selected",
+};
+// Back-compat names for the river layers.
+export const FLOOD_ZONES_LAYER_ID = ZONES_LAYER_IDS.flood;
+export const FLOOD_BUILDINGS_LAYER_ID = BUILDINGS_LAYER_IDS.flood;
 export const FLOOD_MUNICIPALITIES_LAYER_ID = "flood-municipalities-fill";
 export const FLOOD_SECTIONS_LAYER_ID = "flood-sections-fill";
 const REGION_FILL_LAYER_ID = "flood-region-fill";
@@ -81,13 +100,21 @@ const BUILDINGS_MINZOOM = 12;
 const FLOOD_BUILDINGS_MINZOOM = 9;
 
 // One hue per kind of thing, so the layers read apart at a glance: water
-// blue for the flood zones (translucent), orange for the buildings in them,
-// and a purple ramp (FLOOD_SHARE_STOPS) for the affected municipalities and
-// sections. Outlines and the circle being drawn stay neutral.
-export const FLOOD_PALETTE: Record<Theme, { zone: string; building: string; outline: string; draft: string }> = {
-  light: { zone: "#2b83ba", building: "#e6550d", outline: "#1c1c1c", draft: "#525252" },
-  dark: { zone: "#4ba3d6", building: "#fd8d3c", outline: "#f1f1f1", draft: "#bdbdbd" },
+// blue for river flood zones and teal for coastal ones (translucent),
+// orange for the buildings in them, and a purple ramp (FLOOD_SHARE_STOPS)
+// for the affected municipalities and sections. Outlines and the circle
+// being drawn stay neutral.
+export const FLOOD_PALETTE: Record<
+  Theme,
+  { zone: string; coastZone: string; building: string; outline: string; draft: string }
+> = {
+  light: { zone: "#2b83ba", coastZone: "#14958f", building: "#e6550d", outline: "#1c1c1c", draft: "#525252" },
+  dark: { zone: "#4ba3d6", coastZone: "#3cc1b8", building: "#fd8d3c", outline: "#f1f1f1", draft: "#bdbdbd" },
 };
+
+export function zoneColor(kind: FloodKind, theme: Theme): string {
+  return kind === "coast" ? FLOOD_PALETTE[theme].coastZone : FLOOD_PALETTE[theme].zone;
+}
 
 // % of an area's buildings in the flood zone -> colour (ColorBrewer
 // Purples). Most areas are in single digits, so the ramp is steep at the
@@ -126,12 +153,14 @@ export function addFloodLayers(
 ): void {
   LEVEL_SOURCES.municipality.source = sources.municipalities;
   const palette = FLOOD_PALETTE[theme];
-  map.addSource(ZONES_SOURCE_ID, { type: "vector", url: `pmtiles://${FLOOD_ZONES_PMTILES_URL}` });
-  map.addSource(BUILDINGS_SOURCE_ID, {
-    type: "vector",
-    url: `pmtiles://${FLOOD_BUILDINGS_PMTILES_URL}`,
-    promoteId: "building_id",
-  });
+  for (const kind of FLOOD_KINDS) {
+    map.addSource(zonesSourceId(kind), { type: "vector", url: `pmtiles://${staticDataUrl(`${kind}_zones.pmtiles`)}` });
+    map.addSource(buildingsSourceId(kind), {
+      type: "vector",
+      url: `pmtiles://${staticDataUrl(`${kind}_buildings.pmtiles`)}`,
+      promoteId: "building_id",
+    });
+  }
   map.addSource(ADMIN_SOURCE_ID, {
     type: "vector",
     url: `pmtiles://${ADMIN_AREAS_PMTILES_URL}`,
@@ -161,14 +190,15 @@ export function addFloodLayers(
     filter: NONE,
     paint: { "fill-color": SHARE_COLOR, "fill-opacity": 0.6, "fill-outline-color": "#00000022" },
   });
-  add({
-    id: FLOOD_ZONES_LAYER_ID,
-    type: "fill",
-    source: ZONES_SOURCE_ID,
-    "source-layer": "flood_zones",
-    filter: NONE,
-    paint: { "fill-color": palette.zone, "fill-opacity": 0.45 },
-  });
+  for (const kind of FLOOD_KINDS)
+    add({
+      id: ZONES_LAYER_IDS[kind],
+      type: "fill",
+      source: zonesSourceId(kind),
+      "source-layer": `${kind}_zones`,
+      filter: NONE,
+      paint: { "fill-color": zoneColor(kind, theme), "fill-opacity": 0.45 },
+    });
 
   for (const level of ["ccaa", "province", "municipality"] as AdminLevel[]) {
     const { source, sourceLayer } = LEVEL_SOURCES[level];
@@ -235,43 +265,47 @@ export function addFloodLayers(
 // Flooded buildings go above the (static) buildings layer, which DamageMap
 // re-adds whenever its source swaps; call after every such swap.
 export function addFloodBuildingLayers(map: MapLibreMap, theme: Theme, beforeLayerId?: string): void {
-  if (map.getLayer(FLOOD_BUILDINGS_LAYER_ID)) {
-    map.moveLayer(FLOOD_BUILDINGS_LAYER_ID, beforeLayerId);
-    map.moveLayer(FLOOD_BUILDINGS_SELECTED_LAYER_ID, beforeLayerId);
-    return;
+  for (const kind of FLOOD_KINDS) {
+    if (map.getLayer(BUILDINGS_LAYER_IDS[kind])) {
+      map.moveLayer(BUILDINGS_LAYER_IDS[kind], beforeLayerId);
+      map.moveLayer(BUILDINGS_SELECTED_LAYER_IDS[kind], beforeLayerId);
+      continue;
+    }
+    map.addLayer(
+      {
+        id: BUILDINGS_LAYER_IDS[kind],
+        type: "fill",
+        source: buildingsSourceId(kind),
+        "source-layer": `${kind}_buildings`,
+        minzoom: FLOOD_BUILDINGS_MINZOOM,
+        filter: NONE,
+        paint: { "fill-color": FLOOD_PALETTE[theme].building, "fill-opacity": 0.9 },
+      },
+      beforeLayerId
+    );
+    map.addLayer(
+      {
+        id: BUILDINGS_SELECTED_LAYER_IDS[kind],
+        type: "line",
+        source: buildingsSourceId(kind),
+        "source-layer": `${kind}_buildings`,
+        minzoom: FLOOD_BUILDINGS_MINZOOM,
+        filter: NONE,
+        paint: { "line-color": SELECTED_COLOR, "line-width": 2.5 },
+      },
+      beforeLayerId
+    );
   }
-  map.addLayer(
-    {
-      id: FLOOD_BUILDINGS_LAYER_ID,
-      type: "fill",
-      source: BUILDINGS_SOURCE_ID,
-      "source-layer": "flood_buildings",
-      minzoom: FLOOD_BUILDINGS_MINZOOM,
-      filter: NONE,
-      paint: { "fill-color": FLOOD_PALETTE[theme].building, "fill-opacity": 0.9 },
-    },
-    beforeLayerId
-  );
-  map.addLayer(
-    {
-      id: FLOOD_BUILDINGS_SELECTED_LAYER_ID,
-      type: "line",
-      source: BUILDINGS_SOURCE_ID,
-      "source-layer": "flood_buildings",
-      minzoom: FLOOD_BUILDINGS_MINZOOM,
-      filter: NONE,
-      paint: { "line-color": SELECTED_COLOR, "line-width": 2.5 },
-    },
-    beforeLayerId
-  );
 }
 
 export function setFloodPaint(map: MapLibreMap, theme: Theme): void {
   const palette = FLOOD_PALETTE[theme];
   if (!map.getLayer(FLOOD_ZONES_LAYER_ID)) return;
-  map.setPaintProperty(FLOOD_ZONES_LAYER_ID, "fill-color", palette.zone);
-  if (map.getLayer(FLOOD_BUILDINGS_LAYER_ID))
-    map.setPaintProperty(FLOOD_BUILDINGS_LAYER_ID, "fill-color", palette.building);
+  for (const kind of FLOOD_KINDS) {
+    map.setPaintProperty(ZONES_LAYER_IDS[kind], "fill-color", zoneColor(kind, theme));
+    if (map.getLayer(BUILDINGS_LAYER_IDS[kind]))
+      map.setPaintProperty(BUILDINGS_LAYER_IDS[kind], "fill-color", palette.building);
+  }
   for (const level of ["ccaa", "province", "municipality"] as AdminLevel[]) {
     map.setPaintProperty(PICK_FILL_LAYER_IDS[level], "fill-color", palette.draft);
     map.setPaintProperty(PICK_LINE_LAYER_IDS[level], "line-color", palette.outline);
@@ -284,13 +318,18 @@ export function setFloodPaint(map: MapLibreMap, theme: Theme): void {
 
 // --- area picker -------------------------------------------------------------
 
-// Shows one level's outlines to click (null: none).
-export function setAdminPicker(map: MapLibreMap, level: AdminLevel | null): void {
+// Shows one level's outlines to click (null: none), only the areas in
+// `coverage` when given (twinCOAST: just the ones with a coastal zone).
+export function setAdminPicker(map: MapLibreMap, level: AdminLevel | null, coverage: FloodCoverage | null = null): void {
   for (const l of ["ccaa", "province", "municipality"] as AdminLevel[]) {
     const visibility = l === level ? "visible" : "none";
-    map.setLayoutProperty(PICK_FILL_LAYER_IDS[l], "visibility", visibility);
-    map.setLayoutProperty(PICK_LINE_LAYER_IDS[l], "visibility", visibility);
-    map.setLayoutProperty(HOVER_LINE_LAYER_IDS[l], "visibility", visibility);
+    const filter: FilterSpecification | null = coverage
+      ? (["in", ["get", LEVEL_SOURCES[l].codeProp], ["literal", [...coverage[l]]]] as FilterSpecification)
+      : null;
+    for (const id of [PICK_FILL_LAYER_IDS[l], PICK_LINE_LAYER_IDS[l], HOVER_LINE_LAYER_IDS[l]]) {
+      map.setLayoutProperty(id, "visibility", visibility);
+      map.setFilter(id, filter);
+    }
     if (l !== level) setAdminHover(map, l, null);
   }
 }
@@ -368,6 +407,7 @@ export function setRegionCircle(map: MapLibreMap, circle: FloodCircle | null, dr
 // --- scenario ---------------------------------------------------------------------
 
 export interface FloodMapScenario {
+  kind: FloodKind;
   returnPeriod: ReturnPeriod;
   region: FloodRegion;
   // A CCAA's provinces (the tiles only carry section codes, whose first two
@@ -417,8 +457,12 @@ export function setFloodScenario(
   for (const level of ["ccaa", "province", "municipality"] as AdminLevel[])
     map.setFilter(AREA_LINE_LAYER_IDS[level], NONE);
 
+  // Every kind's zones and buildings off; the scenario's own back on below.
+  for (const kind of FLOOD_KINDS)
+    for (const id of [ZONES_LAYER_IDS[kind], BUILDINGS_LAYER_IDS[kind]])
+      if (map.getLayer(id)) map.setFilter(id, NONE);
   if (!scenario) {
-    for (const id of [FLOOD_ZONES_LAYER_ID, FLOOD_BUILDINGS_LAYER_ID, FLOOD_MUNICIPALITIES_LAYER_ID, FLOOD_SECTIONS_LAYER_ID])
+    for (const id of [FLOOD_MUNICIPALITIES_LAYER_ID, FLOOD_SECTIONS_LAYER_ID])
       if (map.getLayer(id)) map.setFilter(id, NONE);
     setRegionCircle(map, null, false);
     selectFloodBuilding(map, null);
@@ -428,13 +472,13 @@ export function setFloodScenario(
   const rp = scenario.returnPeriod;
   // `to-number`: tolerates an archive built before `rp` was typed as an
   // int (pipelines/flood tiles.py), where it's a string.
-  map.setFilter(FLOOD_ZONES_LAYER_ID, [
+  map.setFilter(ZONES_LAYER_IDS[scenario.kind], [
     "all",
     ["==", ["to-number", ["get", "rp"]], rp],
     regionFilter(scenario, "sec"),
   ]);
-  if (map.getLayer(FLOOD_BUILDINGS_LAYER_ID))
-    map.setFilter(FLOOD_BUILDINGS_LAYER_ID, [
+  if (map.getLayer(BUILDINGS_LAYER_IDS[scenario.kind]))
+    map.setFilter(BUILDINGS_LAYER_IDS[scenario.kind], [
       "all",
       ["==", ["get", `t${rp}`], 1],
       regionFilter(scenario, "sec"),
@@ -462,6 +506,16 @@ export function setFloodScenario(
   return { municipalities, sections };
 }
 
+// Before a run (an open twinFLOOD / twinCOAST card, no result yet): that
+// hazard's zones at the selected return period, all over Spain, so the map
+// isn't empty. The zone archives start at z0 for this (pipelines/flood
+// tiles.py's overview band). Call after setFloodScenario(map, null, ...),
+// which clears every zone filter.
+export function setFloodPreview(map: MapLibreMap, preview: { kind: FloodKind; returnPeriod: ReturnPeriod } | null): void {
+  if (!preview) return;
+  map.setFilter(ZONES_LAYER_IDS[preview.kind], ["==", ["to-number", ["get", "rp"]], preview.returnPeriod]);
+}
+
 // The legend's three flood toggles: zones, buildings in them, and the
 // affected municipalities/sections ("Zonas afectadas").
 export interface FloodLayerToggles {
@@ -472,8 +526,8 @@ export interface FloodLayerToggles {
 
 export function setFloodLayersVisible(map: MapLibreMap, show: FloodLayerToggles | null): void {
   const groups: Array<[string[], boolean]> = [
-    [[FLOOD_ZONES_LAYER_ID], show?.zones ?? false],
-    [[FLOOD_BUILDINGS_LAYER_ID, FLOOD_BUILDINGS_SELECTED_LAYER_ID], show?.buildings ?? false],
+    [Object.values(ZONES_LAYER_IDS), show?.zones ?? false],
+    [[...Object.values(BUILDINGS_LAYER_IDS), ...Object.values(BUILDINGS_SELECTED_LAYER_IDS)], show?.buildings ?? false],
     [[FLOOD_MUNICIPALITIES_LAYER_ID, FLOOD_SECTIONS_LAYER_ID], show?.areas ?? false],
   ];
   for (const [ids, visible] of groups)
@@ -481,18 +535,26 @@ export function setFloodLayersVisible(map: MapLibreMap, show: FloodLayerToggles 
       if (map.getLayer(id)) map.setLayoutProperty(id, "visibility", visible ? "visible" : "none");
 }
 
-export function selectFloodBuilding(map: MapLibreMap, buildingId: string | null): void {
-  if (map.getLayer(FLOOD_BUILDINGS_SELECTED_LAYER_ID))
-    map.setFilter(FLOOD_BUILDINGS_SELECTED_LAYER_ID, buildingId ? ["==", ["get", "building_id"], buildingId] : NONE);
+export function selectFloodBuilding(map: MapLibreMap, buildingId: string | null, kind: FloodKind = "flood"): void {
+  for (const k of FLOOD_KINDS)
+    if (map.getLayer(BUILDINGS_SELECTED_LAYER_IDS[k]))
+      map.setFilter(
+        BUILDINGS_SELECTED_LAYER_IDS[k],
+        buildingId && k === kind ? ["==", ["get", "building_id"], buildingId] : NONE
+      );
 }
 
 // --- popups -----------------------------------------------------------------------
 
 // A flooded building: the return periods whose zone it's in (a tile's
 // `t<rp>` flags: 1/0, absent where that period isn't mapped).
-export function renderFloodBuildingPopupHtml(props: Record<string, unknown>, i18n: I18n): string {
+export function renderFloodBuildingPopupHtml(
+  props: Record<string, unknown>,
+  i18n: I18n,
+  kind: FloodKind = "flood"
+): string {
   const { t } = i18n;
-  const rows = RETURN_PERIODS.map((rp) => {
+  const rows = KIND_RETURN_PERIODS[kind].map((rp) => {
     const flag = props[`t${rp}`];
     const value =
       flag === 1 ? t("flood.popup.inZone") : flag === 0 ? t("flood.popup.notInZone") : t("flood.popup.notMapped");
@@ -502,7 +564,7 @@ export function renderFloodBuildingPopupHtml(props: Record<string, unknown>, i18
     `<strong>${escapeHtml(t("flood.popup.buildingTitle"))}</strong>` +
     `<div style="font-size:0.75rem;color:var(--text-subtle)">${escapeHtml(String(props.building_id ?? ""))}</div>` +
     `<table style="font-size:0.8rem;margin-top:0.3rem">${rows}</table>` +
-    `<div style="font-size:0.7rem;color:var(--text-subtle);margin-top:0.3rem">${escapeHtml(t("flood.source"))}</div>`
+    `<div style="font-size:0.7rem;color:var(--text-subtle);margin-top:0.3rem">${escapeHtml(t(kind === "coast" ? "coast.source" : "flood.source"))}</div>`
   );
 }
 

@@ -183,8 +183,12 @@ export function FloodSidebar({
             )}
           </>
         )}
-        <p style={{ fontSize: "0.7rem", color: "var(--text-subtle)" }}>{t("flood.coverageNote")}</p>
-        <p style={{ fontSize: "0.7rem", color: "var(--text-subtle)", marginTop: 0 }}>{t("flood.source")}</p>
+        <p style={{ fontSize: "0.7rem", color: "var(--text-subtle)" }}>
+          {t(result.hazard === "coast" ? "coast.coverageNote" : "flood.coverageNote")}
+        </p>
+        <p style={{ fontSize: "0.7rem", color: "var(--text-subtle)", marginTop: 0 }}>
+          {t(result.hazard === "coast" ? "coast.source" : "flood.source")}
+        </p>
       </div>
     </aside>
   );

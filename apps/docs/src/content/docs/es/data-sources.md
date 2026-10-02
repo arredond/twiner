@@ -54,6 +54,7 @@ biblioteca `hazardlib` de OpenQuake (Fundación GEM, AGPL-3.0).
 | Conjunto de datos | Organismo | Cobertura | Recurso |
 |---|---|---|---|
 | Zonas inundables asociadas a periodos de retorno, segundo ciclo | Ministerio para la Transición Ecológica (MITECO), SNCZI | Tramos de río estudiados. Península y Baleares para T = 10, 50, 100 y 500 años; Canarias para T = 100 y 500 | [Página de descarga](https://www.miteco.gob.es/es/cartografia-y-sig/ide/descargas/agua/zi-lamina.html) |
+| Zonas inundables de origen marino, estudios de 2014 | Ministerio para la Transición Ecológica (MITECO), SNCZI | Tramos de costa estudiados (ARPSI), toda España, incluidas Canarias, Baleares, Ceuta y Melilla, para T = 100 y 500 años | [Página de descarga](https://www.miteco.gob.es/es/cartografia-y-sig/ide/descargas/costas-medio-marino/zi-origen-marino.html) |
 
 ## Infraestructuras críticas
 
